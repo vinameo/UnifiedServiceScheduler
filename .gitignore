@@ -29,3 +29,10 @@ Homestead.json
 .env.production
 .phpactor.json
 auth.json
+
+# Frontend
+web/dist
+web/coverage
+
+# TLS certificates for docker-compose.prod.yml
+docker/nginx/certs/

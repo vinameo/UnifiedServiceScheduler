@@ -28,19 +28,23 @@ Source documents (read the relevant part before you build a feature):
 
 | Layer | Choice |
 | --- | --- |
-| Backend | Laravel (PHP 8.3+), API only, served by **PHP-FPM** |
+| Backend | Laravel 13 (PHP 8.4), API only, served by **PHP-FPM** |
 | Auth | Laravel Sanctum, SPA cookie mode (same domain behind Nginx) |
-| Frontend | React + TypeScript + Vite, **Mantine** UI kit, TanStack Query, React Router |
-| Database | **PostgreSQL 16+** with the `btree_gist` extension |
+| Frontend | React 19 + TypeScript 6.0 + Vite, **Mantine 9** UI kit, TanStack Query, React Router |
+| Database | **PostgreSQL 17** with the `btree_gist` extension |
 | Web server | **Nginx**: serves the React build, sends `/api`, `/sanctum`, `/health` to PHP-FPM |
-| Local run | Docker Compose |
+| Run | Docker Compose: `docker-compose.yml` (local), `docker-compose.prod.yml` (deploy) |
 
-Exact versions are pinned in `backend/composer.json`, `frontend/package.json` and `docker-compose.yml`. Do not upgrade a major version without asking.
+Exact versions are pinned in `api/composer.json`, `web/package.json` and the Dockerfiles. Do not upgrade a major version without asking.
+TypeScript stays on 6.0.x: `typescript-eslint` does not support TypeScript 7 yet.
 
 ## Repository layout
 
 ```
-backend/                     Laravel app (API only, no Blade views)
+api/                         Laravel app (API only, no Blade views)
+  app/Models/                Eloquent models (used only by repositories)
+  app/Domain/<Module>/Repositories/  XxxRepositoryInterface + XxxRepository (Eloquent)
+  app/Domain/<Module>/Services/      XxxServiceInterface + XxxService (business rules)
   app/Domain/Booking/        appointments, status rules, version checks (F02, F04, F07, F09, F10)
   app/Domain/Allocation/     candidate search and ranking (F03). Plain PHP, no HTTP, no Eloquent
   app/Domain/Workshop/       check-in, overruns, reassign (F12)
@@ -51,39 +55,57 @@ backend/                     Laravel app (API only, no Blade views)
   app/Http/Requests/         FormRequest validation
   app/Http/Resources/        JSON output (camelCase)
   app/Http/Middleware/       Idempotency, IfMatch, CorrelationId
-  app/Support/Problem/       RFC 9457 problem+json rendering
+  app/Providers/DomainServiceProvider.php  binds every Repository/Service interface to its class
+  app/Support/Problem/       RFC 9457 problem+json rendering (Problem, ProblemException, ProblemRenderer)
+  routes/api.php             feature routes, all under /api/v1
+  routes/health.php          /health/live, /health/ready (no session)
   database/migrations/       schema, including raw SQL for EXCLUDE and tstzrange
   database/seeders/          demo data and seed staff accounts
   tests/Unit/                pure logic (Allocation ranking, status rules)
   tests/Feature/             HTTP + real PostgreSQL
-frontend/
+web/                         React app (Vite)
   src/customer/              customer app screens (mobile-first)
   src/staff/                 staff web screens (desktop)
   src/shared/                API client, auth, error handling, Mantine theme
-docker/nginx/default.conf
-docker/php/Dockerfile        php-fpm with pdo_pgsql, opcache
-docker-compose.yml           nginx, php, scheduler, postgres, node (build)
+docker/nginx/snippets/app.conf   shared nginx locations (SPA, /api, /sanctum, /health, /metrics blocked)
+docker/nginx/default.conf    local, HTTP
+docker/nginx/production.conf HTTPS + redirect from HTTP
+docker/nginx/Dockerfile      production web image (React build + nginx)
+docker/php/Dockerfile        php-fpm 8.4 with pdo_pgsql, opcache; targets development / production
+docker/php/entrypoint.sh     local bootstrap (.env, composer install, key) and RUN_MIGRATIONS / RUN_SEEDERS
+docker/postgres/init/        creates the scheduler_testing database on first start
+docker-compose.yml           local: nginx, php, scheduler, postgres, node (build)
+docker-compose.prod.yml      deploy: images with code baked in, one-shot migrate service
 docs/                        SDD PDF, design PNGs
 ```
 
 ## Commands
 
 ```bash
-docker compose up -d --build                         # start nginx, php-fpm, scheduler, postgres
-docker compose exec php php artisan migrate --seed   # schema + demo data + seed accounts
+docker compose up -d --build                         # start everything; migrates and seeds; http://localhost:8088
+docker compose exec php php artisan migrate --seed   # run again by hand after adding a migration
 docker compose exec php php artisan test             # all backend tests (real PostgreSQL)
 docker compose exec php ./vendor/bin/pint            # format PHP
 docker compose exec php ./vendor/bin/phpstan analyse # static analysis (Larastan)
 
-cd frontend
+cd web
 npm ci
-npm run dev        # Vite dev server, proxies /api and /sanctum to nginx
-npm run build      # output to frontend/dist, served by nginx
+npm run dev        # Vite dev server on :5173, proxies /api, /sanctum, /health to nginx (:8088)
+npm run build      # output to web/dist, served by nginx
 npm run test       # Vitest + React Testing Library
 npm run lint       # ESLint + TypeScript check
 ```
 
 Run the backend tests and the frontend lint before you say a task is done.
+
+Deploy (code baked into images, HTTPS only):
+
+```bash
+cp .env.production.example .env.production   # fill in APP_KEY, DB_PASSWORD, domains, seed passwords
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+`TLS_CERT_DIR` must hold `fullchain.pem` and `privkey.pem`. The `migrate` service runs migrations (and seeders when `RUN_SEEDERS=true`) before `php` and `scheduler` start.
 
 ## The core rules (never break these)
 
@@ -177,14 +199,21 @@ if ($affected === 0) {
 
 ## Backend conventions
 
-- Controllers are thin: FormRequest in, Domain action, API Resource out.
-- Business logic lives in `app/Domain`. `Allocation` must stay free of HTTP and Eloquent so it is unit-testable.
+- Layers: **Eloquent Model → Repository → Service → Controller**. Each Repository and Service is an interface plus a class in the same folder (`UserRepositoryInterface` + `UserRepository`, `UserServiceInterface` + `UserService`), bound in `DomainServiceProvider::$bindings`.
+  - Repository: the only layer that uses Eloquent or `DB`. Returns models or plain values. No business rules.
+  - Service: business rules and transactions. Depends on repository interfaces, never on Eloquent query calls.
+  - Controller: thin. FormRequest in, service interface call, API Resource out. Never calls a repository.
+  - Type-hint interfaces in constructors, never the concrete class.
+- `Allocation` services must stay free of HTTP and Eloquent so they are unit-testable; their repositories load the data.
+- The single appointment update method (core rule 2) lives in `AppointmentRepository`.
+- Business errors throw a `ProblemException` subclass with a stable code; `ProblemRenderer` turns every exception into problem+json. Validation errors are `400 VALIDATION_ERROR`.
 - Database names are snake_case and plural (`appointments`, `resource_allocations`, `idempotency_keys`, `outbox_messages`). JSON is camelCase.
 - Status values are PHP backed enums. Allowed transitions live in one place (`AppointmentStatus::canMoveTo()`).
 - Errors are RFC 9457 `application/problem+json` with a stable `code` (list in the requirements doc, "Shared rules"). Map exceptions in `bootstrap/app.php`.
 - Every response carries `X-Correlation-Id`. Logs are JSON, include `correlationId`, `dealershipId`, `userId`, `appointmentId`, and never contain passwords, tokens, phone numbers or emails.
 - Transactions use the default READ COMMITTED level. Do not switch to SERIALIZABLE.
 - Never edit a migration that has already run; add a new one.
+- Seeders run on every `docker compose up`, so they must be idempotent (`updateOrCreate` / `firstOrCreate`).
 
 ## Frontend conventions
 
@@ -202,33 +231,32 @@ if ($affected === 0) {
 
 ## Nginx and PHP-FPM
 
-`docker/nginx/default.conf` follows this shape:
+`docker/nginx/snippets/app.conf` holds the locations; `default.conf` (HTTP) and `production.conf` (HTTPS) include it. Its shape:
 
 ```nginx
-server {
-    listen 80;
-    root /var/www/frontend/dist;
-    index index.html;
+root /var/www/web/dist;
 
-    location ~ ^/(api|sanctum|health)/ {
-        root /var/www/backend/public;
-        try_files $uri /index.php?$query_string;
-    }
+location ^~ /metrics { return 404; }             # never public (FR-08.5)
 
-    location = /index.php {
-        root /var/www/backend/public;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
-        fastcgi_param HTTP_X_REQUEST_ID $request_id;
-        fastcgi_pass php:9000;
-    }
+location ~ ^/(api|sanctum|health)(/|$) {
+    root /var/www/api/public;
+    try_files $uri /index.php?$query_string;
+}
 
-    location / {
-        try_files $uri /index.html;   # React SPA fallback
-    }
+location = /index.php {
+    root /var/www/api/public;
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+    fastcgi_param HTTP_X_REQUEST_ID $request_id;  # becomes the correlation id
+    fastcgi_pass php:9000;
+}
+
+location / {
+    try_files $uri /index.html;                   # React SPA fallback
 }
 ```
 
+- Locations use `expires`, not `add_header`: an `add_header` inside a location drops the security headers set above it.
 - `/metrics` must not be reachable from outside the Docker network.
 - PHP-FPM workers are short-lived and many: never keep locks, holds or caches in PHP memory or static properties.
 - Enable opcache in the production image; keep `display_errors=Off`.
@@ -236,7 +264,7 @@ server {
 ## Testing rules
 
 - Backend tests run on **real PostgreSQL** (`DB_CONNECTION=pgsql` in `phpunit.xml`). Never use SQLite for booking tests: it has no EXCLUDE constraint.
-- Name tests after the requirement they prove, for example `test_AC_04_1_only_one_of_twenty_parallel_bookings_wins`.
+- Name tests after the requirement they prove, for example `test_AC_04_1_only_one_of_twenty_parallel_bookings_wins`. `pint.json` turns off `php_unit_method_casing` so Pint keeps these names.
 - Concurrency tests (AC-04.1, AC-04.2, AC-04.6, AC-10.3) need real parallel work. Start N separate PHP processes with `Process::pool()` (or parallel HTTP requests to nginx) that all wait on the same start time. These tests must **not** use `RefreshDatabase`, because its wrapping transaction hides data from other processes; use `DatabaseTruncation` instead.
 - After each booking test, assert that no two active allocations overlap (one SQL query must return 0 rows).
 - Never skip, delete or weaken a test to make the build green.

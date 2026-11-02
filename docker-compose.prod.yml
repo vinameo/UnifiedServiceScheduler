@@ -1,0 +1,94 @@
+# Production-style deploy: code is baked into the images, nothing is bind-mounted.
+#
+#   cp .env.production.example .env.production   # then fill in the secrets
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# TLS certificates (fullchain.pem, privkey.pem) are read from ${TLS_CERT_DIR}.
+name: service-scheduler-prod
+
+x-php: &php
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+    target: production
+  image: ${IMAGE_PREFIX:-service-scheduler}-php:${IMAGE_TAG:-latest}
+  env_file: .env.production
+  environment:
+    DB_HOST: postgres
+    DB_PORT: 5432
+    # Only the `migrate` service changes the schema or seeds.
+    RUN_MIGRATIONS: "false"
+    RUN_SEEDERS: "false"
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:?set DB_DATABASE in .env.production}
+      POSTGRES_USER: ${DB_USERNAME:?set DB_USERNAME in .env.production}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env.production}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # One-shot: applies migrations (and seeders when RUN_SEEDERS=true), then exits.
+  migrate:
+    <<: *php
+    command: ["php", "artisan", "migrate:status"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      RUN_MIGRATIONS: "true"
+      RUN_SEEDERS: ${RUN_SEEDERS:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  php:
+    <<: *php
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  scheduler:
+    <<: *php
+    command: ["php", "artisan", "schedule:work"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+      target: production
+    image: ${IMAGE_PREFIX:-service-scheduler}-web:${IMAGE_TAG:-latest}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ${TLS_CERT_DIR:-./docker/nginx/certs}:/etc/nginx/certs:ro
+    depends_on:
+      php:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health/live"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:

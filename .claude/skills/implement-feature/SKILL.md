@@ -15,7 +15,7 @@ You orchestrate the work. The `deep-coder` subagent implements each ticket. You 
 
 - The target can be an absolute path, a path relative to the repo, a directory name (`12-add-member-to-project`) or a number (`12`). Resolve it to one directory `docs/features/<n>-<feature>/`.
 - That directory must contain `tickets/README.md`. If it does not, stop and suggest the `write-feature-spec` skill.
-- Read `tickets/README.md`: the ticket table (Blocked by, Status), "Thứ tự làm" and "Quyết định nền". Find the tracer-bullet ticket (its name or the order section says "tracer").
+- Read `tickets/README.md`: the ticket table (Blocked by, Status), "Build order" and "Foundation decisions". Find the tracer-bullet ticket (its name or the order section says "tracer").
 
 Done when you have the ticket order and the tracer ticket.
 
@@ -31,7 +31,7 @@ If the branch already exists, run `git log develop..HEAD` and read the ticket st
 
 Run tickets in the order from step 1, one after another. Do not run them in parallel: they share one working tree. For each ticket:
 
-1. Start `deep-coder` in the foreground. Pass the feature directory, the ticket path, the branch name, whether this is the tracer ticket, and the "Quyết định nền" table.
+1. Start `deep-coder` in the foreground. Pass the feature directory, the ticket path, the branch name, whether this is the tracer ticket, and the "Foundation decisions" table.
 2. When it returns, check its report against `git log -1` and `git status`. The commit must exist and the tree must be clean.
 3. If it reports red checks, a blocker or no commit, stop and report to the user. Do not start the next ticket.
 4. After the tracer ticket, run `/code-review` on the branch (`develop...HEAD`). Send each finding to `deep-coder` to fix and commit, or record why you skip it. Later tickets copy what the tracer sets up.

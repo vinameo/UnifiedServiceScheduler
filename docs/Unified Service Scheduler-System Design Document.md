@@ -1,7 +1,5 @@
 # Unified Service Scheduler · System Design Document
 
-Nov 2, 2026 · @Kai Tran
-
 ## 1. Summary
 
 The Unified Service Scheduler lets customers and service advisors book a service appointment. Each appointment needs three things at the same time: a technician with the right skill, a service bay of the right type, and the customer's vehicle.
