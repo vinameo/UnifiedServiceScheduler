@@ -59,7 +59,7 @@ Alerts, central log storage, tracing outside the booking flow.
 | ID | Decision |
 | --- | --- |
 | D-08.1 | Logs: default channel `stderr`, formatter `Monolog\Formatter\JsonFormatter`; a processor adds `correlationId`, `userId`, `dealershipId`, `appointmentId`, `outcome`; a processor removes personal data (D-08.2). |
-| D-08.2 | Redaction: drop every context key matching `password|token|secret|authorization|cookie|phone|email` (case-insensitive, nested too); replace email-like strings with `[email]` and runs of ≥ 9 digits (with optional spaces/dots/dashes) with `[phone]` in `message` and string values. |
+| D-08.2 | Redaction: drop every context key matching `password|token|secret|authorization|cookie|phone|email` (case-insensitive, nested too); replace email-like strings with `[email]` and phone-like strings with `[phone]` in `message` and string values. A phone-like string is 9–15 digits, optionally starting with `+`, separated only by single spaces, dots or dashes, and **not** touching a letter, digit, `-` or `_` on either side (regex `(?<![\w-])\+?\d(?:[ .-]?\d){8,14}(?![\w-])`). Values of keys ending in `Id`/`_id`, plus `correlationId`, `reference`, `route` and `occurredAt`, are never rewritten: ids (UUID v7 such as `01935512-7712-…`) and references (`APT-20261102-0042`) must stay in the logs (`CLAUDE.md`). |
 | D-08.3 | Each request writes exactly one "request" log line when it ends (`method`, `route`, `status`, `code`, `outcome`, `durationMs`). |
 | D-08.4 | Table `api_events` stores every `POST /appointments` (for counting) and every response ≥ 400 (for the error list), plus outbox `DELIVERY_FAILED` errors (written by F11). Kept 7 days, `monitoring:prune` daily. |
 | D-08.5 | Prometheus counters are monotonic counters stored in a `metric_counters` table (never PHP-FPM memory, `CLAUDE.md`), incremented with `INSERT … ON CONFLICT DO UPDATE SET value = value + :n` after the response was sent (`terminate`). |
@@ -131,7 +131,7 @@ Exists from the start: `CorrelationId` middleware (`api/app/Http/Middleware/Corr
 | `docker/nginx/default.conf`, `docker/nginx/production.conf` | Internal server `listen 9100;` with only `location = /metrics`. |
 | `api/composer.json` | D-08.8 (2 packages). |
 | `api/app/Support/Tracing/{Tracer,OtelTracer,NullTracer}.php`, `api/app/Providers/TracingServiceProvider.php` | D-08.8. |
-| `api/app/Domain/Booking/Actions/CreateBooking.php` | Wrap 3 steps with `Tracer::span`. |
+| `api/app/Domain/Booking/Services/BookingService.php` (`create`) | Wrap 3 steps with `Tracer::span`. |
 | `api/app/Http/Controllers/Api/V1/MonitoringController.php`, `Resources/{MonitoringSummary,ApiEvent}Resource.php` | API. |
 | `api/routes/console.php` | `monitoring:prune` daily. |
 | `web/src/staff/monitoring/*` | WEB. |
@@ -213,4 +213,4 @@ Every TC green; README §8 green; `docker compose up` does not expose port 9100 
 | R-08.1 | `terminate()` does not run when PHP-FPM is killed | One data point lost; accepted |
 | R-08.2 | Writing `metric_counters` on every request creates hot-row contention | Short upserts outside business transactions; measure; if needed, aggregate per minute |
 | R-08.3 | OTel packages incompatible with PHP 8.4/Laravel 13 | `Tracer` seam + `NullTracer`; if the package fails, keep `NullTracer` and record it |
-| R-08.4 | The phone regex wipes long numeric ids | Applied to strings only; UUIDs contain letters so they do not match; TC-08-14 |
+| R-08.4 | The phone regex wipes ids, references or dates | Id-like keys are skipped and the regex needs a non-word boundary on both sides (D-08.2); TC-08-14 covers a reference, an all-digit-prefix UUID v7 and an ISO time |

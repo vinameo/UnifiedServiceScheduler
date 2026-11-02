@@ -6,7 +6,7 @@
 
 F04 adds no endpoint for users. It sets the **header rules** every writing endpoint follows:
 
-- Every `POST` that writes sends `Idempotency-Key: <UUID>` (one key per user action; resending that action reuses the key).
+- Every `POST` that writes sends `Idempotency-Key: <UUID>` (one key per attempt of a user action; resending after no response, a 5xx or 409 `REQUEST_IN_PROGRESS` reuses the key, any other answer is final for that key — README D-G.15).
 - Every change to an existing appointment sends `If-Match: "<version>"` taken from the `ETag` of the last read.
 - Every read/write of an appointment returns `ETag: "<version>"`.
 

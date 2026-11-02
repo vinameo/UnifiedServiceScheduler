@@ -66,7 +66,7 @@ Changing service/vehicle/dealership, moving holds, moving several bookings at on
 | D-09.2 | Advisors (own dealership) and customers (own bookings) may reschedule; foremen and admins → 403 (README §4). |
 | D-09.3 | Only `CONFIRMED` (BR-09.1). Any other status → 422 `INVALID_STATUS_TRANSITION`. |
 | D-09.4 | Customers: `current start − now ≥ 2 hours` (BR-09.1, same as F07 D-07.3), else 422 `TOO_LATE_TO_RESCHEDULE` (new code) with `dealershipPhone`. Uses `CustomerChangePolicy` (F07). |
-| D-09.5 | `newStart` equal to the current start → 422 `RESCHEDULE_SAME_TIME` (new code). |
+| D-09.5 | `newStart` equal to the current start → 422 `RESCHEDULE_SAME_TIME` (new code), except for a booking displaced by an overrun (F12 D-12.9: no active allocations), which may be rescheduled to its own time to get a bay and technician back. |
 | D-09.6 | `keepTechnician` (default `true`; customers cannot set it) → F03 `preferTechnicianId` = the current technician; the current bay is always preferred (`preferBayId`), so a small move keeps the bay when free. |
 | D-09.7 | The search ignores the booking's own allocations (`excludeAppointmentId`), and the write follows `AppointmentWriter::moveTo` (F04 INV-04.7): versioned update → deactivate old → insert new → outbox → commit. |
 | D-09.8 | The reference (`APT-…`) and the id never change. The history row `RESCHEDULED` stores `{from: {start, end, technicianId, bayId}, to: {…}}`. |
@@ -100,7 +100,7 @@ Assumes F00–F08 are merged: `AppointmentWriter::moveTo`, `updateVersioned`, `f
 | ID | In scope |
 | --- | --- |
 | S-09.1 | `POST /api/v1/appointments/{appointment}/reschedule`. |
-| S-09.2 | Action `RescheduleAppointment`; exceptions `TooLateToReschedule`, `RescheduleSameTime`. |
+| S-09.2 | `BookingServiceInterface::reschedule()` — the operation the specs call `RescheduleAppointment` (README §6.3); exceptions `TooLateToReschedule`, `RescheduleSameTime`. |
 | S-09.3 | Staff web: Reschedule screen + "Reschedule" button on details + "Reschedule existing booking" in the F02 card. |
 | S-09.4 | Customer web: Change time screen + "Change time" button. |
 
@@ -132,11 +132,11 @@ Edge cases:
 
 | File | Change |
 | --- | --- |
-| `api/app/Domain/Booking/Actions/RescheduleAppointment.php` | B7. |
+| `api/app/Domain/Booking/Services/BookingService.php`, `BookingServiceInterface.php` | Add `reschedule()` = B7 (`RescheduleAppointment`). |
 | `api/app/Domain/Booking/Exceptions/{TooLateToReschedule,RescheduleSameTime}.php` | README §5. |
 | `api/app/Http/Requests/RescheduleAppointmentRequest.php` | API §B2. |
 | `api/app/Http/Controllers/Api/V1/AppointmentController.php` | Add `reschedule`. |
-| `api/app/Providers/AuthServiceProvider.php` | Ability `reschedule-appointment` (advisor, customer). |
+| `api/app/Providers/AppServiceProvider.php` (`boot()`) | Ability `reschedule-appointment` (advisor, customer). |
 | `api/routes/api.php` | Route with `auth:sanctum`, `can:reschedule-appointment`, `idempotent`, `if-match`. |
 | `web/src/staff/appointments/ReschedulePage.tsx`, `web/src/customer/bookings/ChangeTimePage.tsx`, `web/src/shared/api/appointments.ts` (`useRescheduleAppointment`) | WEB. |
 | `web/src/staff/appointments/AppointmentDetailsPage.tsx`, `web/src/customer/bookings/BookingDetailsPage.tsx`, `web/src/shared/booking/BookingErrorCard.tsx` | Buttons (D-09.11). |
@@ -147,8 +147,9 @@ Edge cases:
 
 ```php
 // illustrative — INV-09.1–09.8
-final class RescheduleAppointment {
-    public function __invoke(User $actor, string $appointmentId, int $expectedVersion,
+interface BookingServiceInterface {
+    /** `RescheduleAppointment`. */
+    public function reschedule(User $actor, string $appointmentId, int $expectedVersion,
                              CarbonImmutable $newStart, bool $keepTechnician, CarbonImmutable $now): Appointment;
 }
 ```
@@ -164,7 +165,7 @@ New: none shared. `RescheduleAppointment` is the template F12 extend follows (ti
 1. `appointment = findVisibleTo(actor, id)` (404).
 2. `status ≠ CONFIRMED` → if `version ≠ expected` → 412; else 422 `INVALID_STATUS_TRANSITION`.
 3. Customer and `!CustomerChangePolicy::allows(appointment, now)` → 422 `TOO_LATE_TO_RESCHEDULE`.
-4. `newStart == appointment.start` → 422 `RESCHEDULE_SAME_TIME`.
+4. `newStart == appointment.start` and the booking has active allocations → 422 `RESCHEDULE_SAME_TIME` (a displaced booking may keep its time, D-09.5).
 5. `newRange = BookingTimeRules::check(newStart, serviceType.duration, openingHours, now)` (400/422).
 6. Snapshot for the new local day → `find(AllocationRequest(newRange, excludeAppointmentId = id, preferTechnicianId = keepTechnician ? technician_id : null, preferBayId = bay_id))` → none → 409 `NO_AVAILABILITY` with `reason` and `alternatives = AlternativeTimesFinder::near(…, excludeAppointmentId = id)`.
 7. `AppointmentWriter::moveTo(id, expected, newRange, pairs, RESCHEDULED, AppointmentRescheduled, now)`:

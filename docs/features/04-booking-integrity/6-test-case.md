@@ -65,6 +65,8 @@ Every TC green; the concurrency TCs pass 3 runs in a row (no flakiness).
 | AC-04.21, D-03.7 | TC-04-27 |
 | AC-04.22, INV-04.4 | TC-04-22 |
 | AC-04.23, INV-04.14 | TC-04-28 |
+| AC-04.24, INV-04.15 | TC-04-42 |
+| AC-04.25, D-04.20 (F01 disable with the real reader) | TC-01-17, TC-01-18, TC-01-19 (written in F04, listed in F01) |
 | INV-04.1 | TC-04-01, 04-02, 04-31 + `AssertsNoOverlap` after every test |
 | INV-04.7 | TC-04-32 |
 | INV-04.8 | TC-04-21 |
@@ -78,7 +80,8 @@ Every TC green; the concurrency TCs pass 3 runs in a row (no flakiness).
 | D-04.18 | TC-04-10, TC-04-03, TC-04-22 (events dispatched) |
 | DB-04.1–04.5 CHECKs | TC-04-30 |
 | 412 before 422 | TC-04-26 |
-| WEB-04.1–04.6 | TC-04-35…TC-04-39 |
+| WEB-04.1–04.6, README D-G.15 | TC-04-35…TC-04-40 |
+| D-04.16 with many bays (F03 D-03.3) | TC-04-41 |
 
 ## B2. Test cases
 
@@ -87,7 +90,7 @@ Backend in `api/tests/Feature/Booking/Integrity/` unless noted. Tests marked "Co
 | ID | Proves | Level | Given | When | Then | Fails if | Where |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | TC-04-01 | AC-04.1 | Concurrency | `World` with only An + K1 (OIL); 20 customers, 20 vehicles | 20 processes `POST /_testing/appointments` 09:00 at the same moment | Exactly 1 × 201, 19 × 409 `NO_AVAILABILITY`; 1 `appointments` row; overlap query 0 | EXCLUDE removed or replaced by a SELECT | `ParallelBookingTest::test_AC_04_1_only_one_of_twenty_parallel_bookings_wins` |
-| TC-04-02 | AC-04.2 | Concurrency | 2 BASIC technicians, 2 QUICK bays; 10 vehicles | 10 processes, same time | Exactly 2 × 201; 2 different technicians, 2 different bays | Next pair not tried after 23P01 | `…::test_AC_04_2_two_pairs_give_exactly_two_bookings` |
+| TC-04-02 | AC-04.2 | Concurrency | 2 technicians who qualify for OIL, 2 QUICK bays; 10 vehicles | 10 processes, same time | Exactly 2 × 201; 2 different technicians, 2 different bays | Next pair not tried after 23P01 | `…::test_AC_04_2_two_pairs_give_exactly_two_bookings` |
 | TC-04-03 | AC-04.3, INV-04.10 | Integration | `POST /_testing/appointments` with K → 201 | Send the identical request with K | 201, same `id`, `Location`, `ETag`; header `Idempotent-Replayed: true`; 1 booking; `IdempotentReplayed` dispatched once | Writer runs again | `IdempotencyTest::test_AC_04_3_same_key_same_body_replays` |
 | TC-04-04 | AC-04.4 | Integration | K used with vehicle v1 | Send K with vehicle v2 | 422 `IDEMPOTENCY_KEY_MISMATCH`; no new booking | Hash not compared | `…::test_AC_04_4_same_key_different_body_is_422` |
 | TC-04-05 | AC-04.5, D-04.12 | Integration | First request with K returns 409 (no slot) | Free the slot, send K again | Still the saved 409 (not 201); the writer does not run (`_testing/echo` counter or spy) | Only 2xx saved | `…::test_AC_04_5_saved_409_is_replayed` |
@@ -99,7 +102,7 @@ Backend in `api/tests/Feature/Booking/Integrity/` unless noted. Tests marked "Co
 | TC-04-11 | AC-04.11 | Integration | 5 pairs; every technician in them already has an overlapping allocation inserted by hand | `create` | 409, `reason: SLOT_TAKEN`; exactly 3 tries (`AllocationRetried` = 3) | More than 3 tries | `…::test_AC_04_11_three_tries_then_slot_taken` |
 | TC-04-12 | AC-04.12, D-04.10 | Concurrency | — | 10 processes, same K, same body | 1 booking; every response is 201 with the same `id` or 409 `REQUEST_IN_PROGRESS`; ≥ 1 × 201 | Key inserted inside the business transaction | `ParallelIdempotencyTest::test_AC_04_12_same_key_in_parallel_books_once` |
 | TC-04-13 | AC-04.13, D-04.7 | Integration | Appointment at version 1 | `DB::table('appointments')->update(['status' => 'CANCELLED'])` without changing the version; then `version = version + 2` | Both throw `QueryException` (P0001) | Trigger missing | `VersionTriggerTest::test_AC_04_13_update_without_increment_is_rejected` |
-| TC-04-14 | AC-04.14, INV-04.5, INV-04.6 | Integration | One appointment per path: CONFIRMED→CANCELLED; HELD→EXPIRED; CONFIRMED→NO_SHOW; CONFIRMED→CHECKED_IN→IN_PROGRESS→COMPLETED | `TransitionAppointment` along the path | At the final status: 0 active allocations, `deactivated_at` set; 1 history row per step; M-04.2 returns 0 rows | One status forgets to deactivate | `TransitionTest::test_AC_04_14_freeing_statuses_release_allocations` (data provider) |
+| TC-04-14 | AC-04.14, INV-04.5, INV-04.6 | Integration | One appointment per path: CONFIRMED→CANCELLED; HELD→EXPIRED (with a vehicle, and without one); HELD→CANCELLED without a vehicle; CONFIRMED→NO_SHOW; CONFIRMED→CHECKED_IN→IN_PROGRESS→COMPLETED | `TransitionAppointment` along the path | At the final status: 0 active allocations, `deactivated_at` set; 1 history row per step; M-04.2 returns 0 rows | One status forgets to deactivate | `TransitionTest::test_AC_04_14_freeing_statuses_release_allocations` (data provider) |
 | TC-04-15 | AC-04.15, D-04.8 | Unit | — | `canMoveTo` for all 8×8 pairs | Matches D-04.8; `holdsSlot` matches `CONTEXT.md` | One cell wrong | `api/tests/Unit/Booking/AppointmentStatusTest::test_AC_04_15_transition_table` |
 | TC-04-16 | AC-04.16, D-04.11 | Integration | User A used K → 201 | User B sends K with B's body | 201 with **B's** booking (different id) | Global keys | `IdempotencyTest::test_AC_04_16_keys_are_per_user` |
 | TC-04-17 | AC-04.17 | Integration | `POST /_testing/echo?fail=500` with K | Send K without `fail` | The second request really runs (counter up), 200 | 500 saved | `…::test_AC_04_17_server_errors_are_not_saved` |
@@ -115,16 +118,19 @@ Backend in `api/tests/Feature/Booking/Integrity/` unless noted. Tests marked "Co
 | TC-04-27 | AC-04.21, D-03.7, INV-04.13 | Integration | A `HELD` appointment with `expires_at = now - 1s` holds An 09–10; app clock frozen | `AllocationSnapshotRepository::forDay` | An not busy 09–10; a still-valid `HELD` is busy | SQL `now()` used, or no filter | `BusyIntervalReaderTest::test_AC_04_21_expired_holds_are_not_busy` |
 | TC-04-28 | AC-04.23, INV-04.14 | Integration | Boot the app with `APP_ENV=local` (child process) | `php artisan route:list --json` | No route starts with `api/v1/_testing`; `testing:request` not in `list` | Provider registered unconditionally | `TestingRoutesTest::test_AC_04_23_testing_routes_only_in_testing` |
 | TC-04-29 | D-04.17, R-04.2 | Integration | Cause a real 23P01 for each resource type | Parser reads the `QueryException` | Returns `TECHNICIAN`, `BAY`, `VEHICLE` correctly; an unknown string → `TECHNICIAN` + warning log | Parser tied to an old format | `ExclusionViolationParserTest` |
-| TC-04-30 | DB-04.1–04.5 | Integration | — | Insert: `period` `(]`; empty `period`; `HELD` without `expires_at`; `CONFIRMED` without vehicle; `version = 0`; two active allocations of one type for one appointment | Each fails with `23514` or `23505` | Missing CHECK/unique | `SchemaChecksTest::test_schema_checks` (data provider) |
+| TC-04-30 | DB-04.1–04.5 | Integration | — | Insert: `period` `(]`; empty `period`; `HELD` without `expires_at`; `CONFIRMED` without vehicle (fails); `EXPIRED` and `CANCELLED` without vehicle (allowed); `version = 0`; two active allocations of one type for one appointment | Each fails with `23514` or `23505` | Missing CHECK/unique | `SchemaChecksTest::test_schema_checks` (data provider) |
 | TC-04-31 | INV-04.1 | Integration | Active BAY allocation K1 09:00–10:00 | Insert by hand K1 09:59–10:30 active; K1 10:00–11:00 active; K1 09:30 inactive | 23P01; ok; ok | `WHERE active` missing or closed ranges | `ExclusionConstraintTest::test_INV_04_1_db_rejects_active_overlap_only` |
 | TC-04-32 | INV-04.7 | Integration | Appointment An+K2 10:00–11:00 v1 | `moveTo` 10:30–11:30 with pair (An,K2); a second time with the first pair taken and `expected` = 1 | First: 200, v2, no self-clash; second: tries the next pair with the same `expected` (no false 412) | Inserts before deactivating the old rows | `AppointmentWriterTest::test_INV_04_7_move_frees_old_before_taking_new` |
 | TC-04-33 | INV-04.11 | Integration | — | Create, `touch`, `transition` | Each operation adds exactly 1 `appointment_events` row, `version` matches `appointments.version` | History forgotten | `AppointmentEventsTest::test_INV_04_11_one_event_per_write` |
 | TC-04-34 | D-04.6 | Integration | Dealership at UTC+7 | Create 2 bookings: 2026-11-02 06:30 local (= 01-11 23:30Z) and 2026-11-03 | `reference` matches `^APT-20261102-\d{4,}$` and `^APT-20261103-\d{4,}$`; they differ | UTC date used | `ReferenceTest::test_D_04_6_reference_uses_local_date` |
-| TC-04-35 | WEB-04.1 | Web unit | — | Call the hook with input A, A, then B, then `reset()` | Same key for A; new for B; new after reset | New key every render | `web/src/shared/idempotency/useIdempotencyKey.test.ts` |
+| TC-04-35 | WEB-04.1 | Web unit | — | Call the hook with input A, A, then B, then `reset()`; then `settle()` with a no-response, a 503, a 409 `REQUEST_IN_PROGRESS`, a 412, a 409 `NO_AVAILABILITY`, a 201 | Same key for A; new for B; new after reset; kept after no-response/503/`REQUEST_IN_PROGRESS`; new after 412, `NO_AVAILABILITY`, 201 | New key every render | `web/src/shared/idempotency/useIdempotencyKey.test.ts` |
 | TC-04-36 | WEB-04.2, WEB-04.4 | Web component | Fake API: first call times out, second 201 | Submit; see the panel; tap "Retry" | Panel "No response from the server yet"; the second call sends the **same** `Idempotency-Key` | Retry makes a new key | `…/IdempotentRetryPanel.test.tsx` |
 | TC-04-37 | WEB-04.3 | Web component | Fake API hangs | Click submit twice quickly | Exactly 1 request; the button shows "Confirming…" and is `disabled` | No button lock | `…/SubmitButton.test.tsx` |
 | TC-04-38 | WEB-04.5, WEB-04.6 | Web component | `before` CONFIRMED 09:00 An; `latest` CANCELLED 09:00 An | Render the alert | "Status: Confirmed → Cancelled"; no Time/Technician rows; the button calls `onReview(latest, '"4"')`; no request sent | Automatic retry | `…/AppointmentModifiedAlert.test.tsx`, `diffAppointment.test.ts` |
 | TC-04-39 | WEB §B2 | Web component | Fake API returns 409 `REQUEST_IN_PROGRESS` | Submit | `inProgress.body` copy; "Retry" uses the same key | Treated as a final error | `…/IdempotentRetryPanel.test.tsx` |
+| TC-04-40 | WEB-04.1, README D-G.15, D-04.12 | Web component | Fake API: first cancel → 412 with `latest` (`ETag "4"`), second → 200 | Submit cancel (`If-Match "3"`), tap "Review and retry", submit again | The second request has `If-Match "4"` and a **different** `Idempotency-Key`; 200 shown | Key reused after 412 → saved 412 replayed forever | `web/src/shared/idempotency/useIdempotencyKey.test.ts` (with `AppointmentModifiedAlert`) |
+| TC-04-41 | D-04.16, F03 D-03.3 | Integration | `World` with 2 active technicians An, Dũng and 5 QUICK bays; An's allocation 09:00–10:00 inserted by hand after the snapshot | `create` with the 5 stale pairs | 201 with Dũng; 1 `AllocationRetried` | Top 5 pairs all use An → `SLOT_TAKEN` | `AppointmentWriterTest::test_D_04_16_conflict_on_a_technician_moves_to_the_next_one` |
+| TC-04-42 | AC-04.24, INV-04.15 | Integration | Pairs (An,K1),(Dũng,K1) from a snapshot; then An set `active = false` | `create` with those pairs | 201 with Dũng; 0 allocations for An | Writer trusts the stale snapshot | `AppointmentWriterTest::test_INV_04_15_disabled_technician_is_never_allocated` |
 
 ## B3. Fixtures
 

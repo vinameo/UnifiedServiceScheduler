@@ -75,7 +75,10 @@ Every TC below is green; M1–M8 pass by hand, with the result recorded in table
 | INV-00.2 | TC-00-17 |
 | INV-00.3 | TC-00-04, TC-00-31 |
 | INV-00.4 | TC-00-07, TC-00-08 |
-| INV-00.5 | TC-00-09, TC-00-10, TC-00-11 |
+| INV-00.5 | TC-00-09, TC-00-10, TC-00-11, TC-00-32 |
+| R-00.1 (shared cache) | TC-00-32, TC-00-33 |
+| D-00.4, D-00.13 | TC-00-20 |
+| WEB §B3 (one source of rules) | TC-00-34 |
 | INV-00.6 | TC-00-05, TC-00-14 |
 | INV-00.7 | TC-00-05 |
 | INV-00.8 | TC-00-12, TC-00-18 |
@@ -124,6 +127,9 @@ Every TC below is green; M1–M8 pass by hand, with the result recorded in table
 | TC-00-29 | AC-00.5, WEB §B3 | Web component | Fake API returns 429, `Retry-After: 840` | Submit Sign-in | "Too many attempts. Try again in 14 minutes." | `Retry-After` ignored | `…SignInPage.test.tsx` |
 | TC-00-30 | API §B4 | Integration | Stateful request without the XSRF header | `POST /auth/customer/sign-in` | 419 `CSRF_TOKEN_MISMATCH` | CSRF off | `…AuthAdversarialInputTest::test_missing_xsrf_is_419` |
 | TC-00-31 | INV-00.3 | Integration | The `customers` insert is forced to fail (fake repository breaks the phone CHECK) | Sign up | 500; no `users` row left | The two inserts are not in one transaction | `…CustomerSignUpTest::test_INV_00_3_sign_up_is_all_or_nothing` |
+| TC-00-32 | INV-00.5 | Concurrency | Customer; `CACHE_STORE=database` passed to the child processes | 10 processes sign in with a wrong password at the same moment (`Parallel`) | At most 5 responses are 401, the rest 429; at most 5 `Hash::check` calls (counted in the request log lines) | Counter read before the check and increased after | `Feature/Auth/ParallelSignInTest::test_INV_00_5_parallel_attempts_cannot_bypass_the_lock` |
+| TC-00-33 | R-00.1 | Unit | — | Read `config('cache.default')` with the `.env.example` values | `database` | Cache in worker memory or a per-process store | `Unit/Config/SharedCacheStoreTest` |
+| TC-00-34 | WEB §B3 | Web unit | — | `rules.ts` against each sign-up row of API §B4 | Same accept/reject as the API table | Client and server rules drift | `web/src/shared/auth/rules.test.ts` |
 
 ## B3. Fixtures
 

@@ -56,7 +56,7 @@ Should. Within F07: endpoint + rules are the core; the customer UI is Should.
 | --- | --- | --- | --- |
 | M-07.1 | Cancellations by reason and channel (30 days) | `SELECT cancel_reason, source, count(*) FROM appointments WHERE status = 'CANCELLED' AND cancelled_at > now() - interval '30 days' GROUP BY 1, 2;` | Watch |
 | M-07.2 | Customers blocked for being too late | `SELECT count(*) FROM api_events WHERE code = 'TOO_LATE_TO_CANCEL' AND occurred_at > now() - interval '7 days';` | Watch |
-| M-07.3 | Cancelled slots booked again | New bookings with the same technician and an overlapping range, created after `cancelled_at` | Watch |
+| M-07.3 | Cancelled slots booked again | `SELECT count(DISTINCT c.id) FROM appointments c JOIN appointments n ON n.technician_id = c.technician_id AND tstzrange(n.start_at, n.end_at, '[)') && tstzrange(c.start_at, c.end_at, '[)') AND n.created_at > c.cancelled_at WHERE c.status = 'CANCELLED' AND c.cancelled_at > now() - interval '30 days';` divided by the cancellations of the same period | Watch |
 
 ## B3. Future constraints
 

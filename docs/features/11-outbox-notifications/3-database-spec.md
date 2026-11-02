@@ -20,13 +20,14 @@ F11 adds no tables. It reads and updates `outbox_messages` (created in F04): cla
 
 No new tables. Columns used (F04 DB-04.5): `status` (`PENDING`, `SENT`, `FAILED`, `SKIPPED`), `attempts`, `next_attempt_at`, `last_error`, `sent_at`, `dedupe_key`, `payload`, `event_id`, `channel`, `dealership_id`, `appointment_id`.
 
-A migration MAY add `CHECK (attempts BETWEEN 0 AND 5)` (pre-check: `SELECT count(*) FROM outbox_messages WHERE attempts > 5` = 0; `down()` drops the CHECK).
+A migration MAY add `CHECK (attempts BETWEEN 0 AND 5)` — safe because the claim only takes `attempts < 5` (RQ INV-11.4) (pre-check: `SELECT count(*) FROM outbox_messages WHERE attempts > 5` = 0; `down()` drops the CHECK).
 
 ## B2. Main queries
 
 | Query (illustrative) | Index |
 | --- | --- |
-| Claim: `SELECT id FROM outbox_messages WHERE status = 'PENDING' AND next_attempt_at <= :now ORDER BY next_attempt_at LIMIT 50 FOR UPDATE SKIP LOCKED` + `UPDATE … SET attempts = attempts + 1, next_attempt_at = :now + interval '60 seconds'` | `(next_attempt_at) WHERE status = 'PENDING'` (F04) |
+| Abandoned attempts: `UPDATE … SET status = 'FAILED', last_error = 'NO_RESULT' WHERE status = 'PENDING' AND attempts >= 5 AND next_attempt_at <= :now` | `(next_attempt_at) WHERE status = 'PENDING'` (F04) |
+| Claim: `SELECT id FROM outbox_messages WHERE status = 'PENDING' AND attempts < 5 AND next_attempt_at <= :now ORDER BY next_attempt_at LIMIT 50 FOR UPDATE SKIP LOCKED` + `UPDATE … SET attempts = attempts + 1, next_attempt_at = :now + interval '60 seconds'` | `(next_attempt_at) WHERE status = 'PENDING'` (F04) |
 | Record result: `UPDATE outbox_messages SET … WHERE id = :id AND status = 'PENDING'` | PK |
 | Reminder candidates: `SELECT id, start_at FROM appointments WHERE status = 'CONFIRMED' AND reminder_opt_in AND start_at >= :from AND start_at < :to` | `appointments_dealership_start_idx` is per dealership; MAY add `(start_at) WHERE status = 'CONFIRMED' AND reminder_opt_in` if the job is slow |
 | Insert reminder: `INSERT … ON CONFLICT (dedupe_key) DO NOTHING` | unique `dedupe_key` |

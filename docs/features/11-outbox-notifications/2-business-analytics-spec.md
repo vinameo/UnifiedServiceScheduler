@@ -27,7 +27,7 @@ Could (requirements). Within F11: the relay with retries is the core; reminders 
 | ID | Risk | Handling |
 | --- | --- | --- |
 | RB-11.1 | A customer gets a confirmation for a booking already cancelled | Relevance check (D-11.7) |
-| RB-11.2 | Duplicate SMS after a crash | At least once by design; receivers dedupe by `eventId` |
+| RB-11.2 | Duplicate SMS after a crash | At least once by design; receivers dedupe by `eventId`. Owner: product owner. Revisit when M-11.2 or complaints show duplicates more than once a week. |
 | RB-11.3 | Failed messages go unnoticed | "Failed, needs action" card; `DELIVERY_FAILED` in the monitoring screen (F08) |
 
 ---

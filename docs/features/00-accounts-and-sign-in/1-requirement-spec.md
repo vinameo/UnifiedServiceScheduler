@@ -66,7 +66,7 @@ See A1 "What it does not do". Also: changing email, changing password, editing t
 | D-00.1 | The `dealerships` table is created in F00 (not F01) because staff accounts must belong to a dealership. F01 adds opening hours and the rest. |
 | D-00.2 | `users` gets `role` and `dealership_id`. Staff must have a dealership; customers must not (CHECK constraint). |
 | D-00.3 | A `customers` table, 1–1 with `users` (`user_id` unique). Email lives only on `users`. Every customer has an account. |
-| D-00.4 | Password: 8–72 characters, ≥ 1 letter, ≥ 1 digit. Weak → `422 WEAK_PASSWORD`; missing or > 72 characters → `400 VALIDATION_ERROR`. 72 is the bcrypt limit. |
+| D-00.4 | Password: at least 8 characters and at most **72 bytes** (UTF-8; bcrypt only uses the first 72 bytes), ≥ 1 letter, ≥ 1 digit. Weak → `422 WEAK_PASSWORD`; missing or > 72 bytes → `400 VALIDATION_ERROR`. |
 | D-00.5 | Phone: digits, spaces, `+`, `-`, `.`, `(`, `)` allowed; stored normalised (digits only, leading `+` kept); 9–15 digits. Not unique. |
 | D-00.6 | Sign-in lock per email: failed attempts counted in the shared cache (`CACHE_STORE=database`), keyed by the SHA-256 of the normalised email. Plus a limit of 30 requests/minute per IP on sign-in and sign-up. |
 | D-00.7 | Only Sanctum SPA cookie sessions. Personal access tokens for external clients (second half of FR-00.5) are deferred: the `personal_access_tokens` table exists, no endpoint issues tokens yet. |
@@ -75,7 +75,8 @@ See A1 "What it does not do". Also: changing email, changing password, editing t
 | D-00.10 | A sign-in on the wrong portal (staff on the customer app, customer on the staff web) counts as a failure and returns the same `401 INVALID_CREDENTIALS`. |
 | D-00.11 | Home after sign-in: customer → `/book`; advisor → `/staff` (New booking); foreman → `/staff/workshop`; admin → `/staff/master-data`. A page that does not exist yet falls back to `/staff`. A valid `returnTo` wins. |
 | D-00.12 | Sign-up/sign-in/sign-out need no `Idempotency-Key` (README D-G.8). |
-| D-00.13 | Ticket 01 fixes the `api/`, `web/` paths in `CLAUDE.md` (README D-G.1). |
+| D-00.13 | Emails are ASCII only (`email:rfc` plus `^[\x21-\x7E]+$`); non-ASCII → 400. Lower-casing is then the same in PHP and PostgreSQL, so `CHECK (email = lower(email))` can never fail on valid input. |
+| D-00.14 | Sign-up answers 409 `EMAIL_ALREADY_USED` for a known email, so sign-up reveals which emails have an account (sign-in does not). Accepted for usability (BA ADR-00.5); limited by the per-IP limit and watched by M-00.5. |
 
 ## A8. Open questions (with defaults)
 
@@ -120,17 +121,17 @@ Missing: roles, dealerships, customers, auth routes, Gates, sign-in screens.
 | S-00.4 | Sign-in limits per email and per IP. |
 | S-00.5 | Seeders for the dealership, staff and customers (safe to rerun). |
 | S-00.6 | Web: 3 sign-in/sign-up screens, `useMe`, `RequireRole`, global 401 handling, staff header, `errorCopy.ts`. |
-| S-00.7 | Fix `CLAUDE.md` paths; add `SEED_CUSTOMER_PASSWORD` to `.env.example`. |
+| S-00.7 | Add `SEED_CUSTOMER_PASSWORD` to `.env.example`. |
 
 ## B3. Invariants
 
 | ID | Invariant | Where and when it is read |
 | --- | --- | --- |
-| INV-00.1 | Emails are stored trimmed and lower case. No two users share an email. | Normalised in the FormRequest before validation; the DB has `CHECK (email = lower(email))` and the existing unique index. Two sign-ups with the same email at once: one loses on the unique index (`23505`) → mapped to `409 EMAIL_ALREADY_USED`, never 500. |
+| INV-00.1 | Emails are stored trimmed and lower case. No two users share an email. | Normalised in the FormRequest before validation (ASCII only, D-00.13); the DB has `CHECK (email = lower(email))` and the existing unique index. Two sign-ups with the same email at once: one loses on the unique index (`23505`) → mapped to `409 EMAIL_ALREADY_USED`, never 500. |
 | INV-00.2 | Passwords are stored only as a hash (`Hash`, bcrypt), never in a response, log, exception message or `api_events`. | Existing `hashed` cast; the request log never writes the body of auth routes. |
 | INV-00.3 | Sign-up creates `users` + `customers` in **one** transaction; on any failure no row is left. | `DB::transaction` around both inserts. |
 | INV-00.4 | The sign-in error is identical for: unknown email, wrong password, wrong portal. Response time does not reveal whether the email exists: with no user, `Hash::check` still runs against a dummy hash. | In `SignInService`. |
-| INV-00.5 | After 5 failures in 15 minutes for one email, every attempt (even correct) gets `429 TOO_MANY_ATTEMPTS` with `Retry-After` until the 15 minutes pass. A correct sign-in (while not locked) clears the counter. | The counter is read **before** the password check, in the cache shared by all PHP-FPM workers (never PHP memory). |
+| INV-00.5 | After 5 failures in 15 minutes for one email, every attempt (even correct) gets `429 TOO_MANY_ATTEMPTS` with `Retry-After` until the 15 minutes pass. A correct sign-in (while not locked) clears the counter. | Every attempt first **increments** the counter atomically (`RateLimiter::hit`, cache shared by all PHP-FPM workers, never PHP memory), then checks it: a value above 5 → 429 without checking the password. A correct sign-in then clears it. So parallel attempts can never run more than 5 password checks per window. |
 | INV-00.6 | `role` is one of 4 values; staff have a `dealership_id`, customers do not. | CHECK constraints in the DB; sign-up always sets `role = CUSTOMER` and ignores `role`/`dealershipId` in the body. |
 | INV-00.7 | The customer id always comes from `auth()->user()->customer`, never from the body or query. | Seam `CurrentCustomer` (B6). Applies to every later feature. |
 | INV-00.8 | Sign-in regenerates the session id (no session fixation). Sign-out invalidates the session and regenerates the CSRF token; `GET /me` with the old cookie → 401. | `session()->regenerate()` / `invalidate()` + `regenerateToken()`. |
@@ -142,7 +143,8 @@ Edge cases of the write decisions:
 | Decision | Edge case | TC |
 | --- | --- | --- |
 | Account creation (INV-00.1, 00.3) | Different letter case; two sign-ups with one email at once; the `customers` insert fails | TC-00-02, TC-00-03, TC-00-31 |
-| Sign-in (INV-00.4, 00.5) | Unknown email; wrong portal; right password while locked; lock ends after 15 minutes; success clears the counter | TC-00-06…TC-00-11 |
+| Sign-in (INV-00.4, 00.5) | Unknown email; wrong portal; right password while locked; lock ends after 15 minutes; success clears the counter; 10 attempts in parallel | TC-00-06…TC-00-11, TC-00-32 |
+| Input (D-00.4, D-00.13) | Non-ASCII email; password of 30 characters but > 72 bytes | TC-00-20 |
 | Permissions (INV-00.7, 00.10) | Body carries `customerId`/`role`; customer calls a staff route | TC-00-05, TC-00-13 |
 
 ## B4. File-by-file changes
@@ -157,7 +159,7 @@ Edge cases of the write decisions:
 | `api/app/Domain/Auth/Services/SignUpService.php`, `SignInService.php` (+ interfaces, bindings) | New. |
 | `api/app/Domain/Auth/Exceptions/*.php` | `InvalidCredentials` (401), `EmailAlreadyUsed` (409), `WeakPassword` (422), `TooManyAttempts` (429, `Retry-After` header) — all extend `ProblemException`. |
 | `api/app/Domain/Auth/CurrentCustomer.php` | New. Seam that returns the signed-in user's customer; 403 when the user is not a customer. |
-| `api/app/Providers/AuthServiceProvider.php` (or `AppServiceProvider::boot`) | Gates `customer`, `staff`. The only place abilities are defined; later features add theirs here. |
+| `api/app/Providers/AppServiceProvider.php` (`boot()`, README D-G.14) | Gates `customer`, `staff`. The only place abilities are defined; later features add theirs here. |
 | `api/app/Http/Requests/Auth/*.php` | `CustomerSignUpRequest`, `SignInRequest`. |
 | `api/app/Http/Controllers/Api/V1/AuthController.php`, `MeController.php` | New, thin. |
 | `api/app/Http/Resources/MeResource.php` | New. API §B2. |
@@ -165,7 +167,6 @@ Edge cases of the write decisions:
 | `api/database/seeders/AccountSeeder.php`, `DatabaseSeeder.php` | Seed dealership, staff, customers (D-00.8, D-00.9) with `updateOrCreate`. |
 | `api/database/factories/*` | `UserFactory` states `customer()`, `advisor($d)`, `foreman($d)`, `admin($d)`; `DealershipFactory`, `CustomerFactory`. |
 | `api/.env.example`, `docker-compose.yml` | Add `SEED_CUSTOMER_PASSWORD`. |
-| `CLAUDE.md` | Layout `backend/` → `api/`, `frontend/` → `web/`. |
 | `web/src/**` | WEB §B. |
 
 ## B5. Contracts
@@ -206,9 +207,9 @@ FCs from BA: FC-00.1 (staff account screen later) → `AccountSeeder` shares a `
 
 **Sign-in (portal `CUSTOMER` or `STAFF`)**
 1. Validate format → 400.
-2. Rate-limit key `sha256(email)`: 5 failures already in 15 minutes → 429 + `Retry-After`.
-3. Find the user by email. None → `Hash::check` against a dummy hash, count a failure, 401.
-4. Wrong password, or the role does not match the portal (CUSTOMER ↔ customer portal, staff ↔ staff portal) → count a failure, 401.
+2. Rate-limit key `sha256(email)`: `hit` (atomic increment, 15-minute window) **first**; the new value > 5 → 429 + `Retry-After`, no password check.
+3. Find the user by email. None → `Hash::check` against a dummy hash, 401 (the attempt is already counted).
+4. Wrong password, or the role does not match the portal (CUSTOMER ↔ customer portal, staff ↔ staff portal) → 401 (already counted).
 5. Correct → clear the counter, `Auth::login`, `session()->regenerate()`, 200 `MeResource`.
 
 **Sign-out**: `Auth::guard('web')->logout()`, `session()->invalidate()`, `session()->regenerateToken()`, 204.
@@ -245,7 +246,7 @@ FCs from BA: FC-00.1 (staff account screen later) → `AccountSeeder` shares a `
 
 ## B10. Implementation order
 
-1. Ticket 01 (prefactor): fix `CLAUDE.md`, `Role` enum, empty Gates, factories; nothing users can see.
+1. Ticket 01 (prefactor): `Role` enum, empty Gates in `AppServiceProvider::boot()`, factories; nothing users can see.
 2. Migrations + models + seeder.
 3. Tracer bullet: staff sign-in + `GET /me` + Staff sign-in screen + header.
 4. Sign-up + customer sign-in + customer screens.
@@ -262,6 +263,6 @@ FCs from BA: FC-00.1 (staff account screen later) → `AccountSeeder` shares a `
 
 | ID | Risk | Mitigation |
 | --- | --- | --- |
-| R-00.1 | The rate limit lives in worker memory → each worker counts alone | Cache store `database` (shared); TC-00-09 runs through real HTTP |
+| R-00.1 | The rate limit lives in worker memory → each worker counts alone | Cache store `database` (shared). Tests use `CACHE_STORE=array` in one process, so TC-00-33 checks the configured store and TC-00-32 runs real parallel processes on the `database` store |
 | R-00.2 | Sanctum stateful does not recognise a request whose domain is missing from `SANCTUM_STATEFUL_DOMAINS` → confusing 401 | Documented in the dev README; the Vite proxy uses `localhost:5173`, already in the env |
 | R-00.3 | The default log writes exceptions that contain the email (for example a unique `QueryException`) | Do not `report()` mapped `23505` errors; F08 adds a log filter |

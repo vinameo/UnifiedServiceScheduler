@@ -57,7 +57,7 @@ RQ §B8.
 | 10.1 | Advisor sends `mode: HOLD` | 422 `HOLD_NOT_ALLOWED` |
 | 10.1 | `mode: "hold"` (lower case) / `"LOCK"` | 400 |
 | 10.1 | `vehicleId` of another customer with `HOLD` | 404 `VEHICLE_NOT_FOUND` |
-| 10.1 | Two holds in parallel by one customer | One 201, the other 201 (it ended the first) or 409 `REQUEST_IN_PROGRESS`; never two `HELD` |
+| 10.1 | Two holds in parallel by one customer (with or without a current hold) | Both 201; the later one ended the earlier one; never two `HELD`, never 412 |
 | 10.2 | Missing `vehicleId` | 400 |
 | 10.2 | `vehicleId` of another customer | 404 `VEHICLE_NOT_FOUND` |
 | 10.2 | `{appointment}` of another customer | 404 `APPOINTMENT_NOT_FOUND` |

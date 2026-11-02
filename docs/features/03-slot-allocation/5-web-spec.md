@@ -31,13 +31,13 @@ An unknown `reason` → the `SLOT_TAKEN` copy. It is built in the first F02 tick
 
 ## B2. Copy
 
-| `reason` | Copy |
-| --- | --- |
-| `NO_QUALIFIED_TECHNICIAN` | No technician at this dealership can do this service right now. Call the dealership to arrange it. |
-| `NO_TECHNICIAN_AVAILABLE` | No qualified technician is free from {start} to {end}. Your appointment was not created. |
-| `NO_BAY_AVAILABLE` | No {bayType} bay is free from {start} to {end}. Your appointment was not created. |
-| `SLOT_TAKEN` | This time was just taken by another booking. Your appointment was not created. |
+| `reason` | Heading | Copy |
+| --- | --- | --- |
+| `NO_QUALIFIED_TECHNICIAN` | This service can't be booked right now | No technician at this dealership can do this service right now. Call the dealership to arrange it. |
+| `NO_TECHNICIAN_AVAILABLE` | The {time} slot was just taken | No qualified technician is free from {start} to {end}. Your appointment was not created. |
+| `NO_BAY_AVAILABLE` | The {time} slot was just taken | No {bayType} bay is free from {start} to {end}. Your appointment was not created. |
+| `SLOT_TAKEN` | The {time} slot was just taken | This time was just taken by another booking. Your appointment was not created. |
 
-The heading (same for every reason, README §5): "The {time} slot was just taken".
+The heading follows the reason (README §5): "The {time} slot was just taken" (the draft's wording) whenever the time is the problem, and "This service can't be booked right now" when no technician has a high enough level, because then no other time helps either.
 
 `{start}`, `{end}`, `{time}` are `HH:mm` in the dealership's time zone (`formatInZone`, F02).

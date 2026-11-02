@@ -56,10 +56,10 @@ Response: `AppointmentResource` (F04 API §B2).
 
 ### API-02.2 `CustomerSummary`
 
-`query`: required, trimmed, 3–100 characters. Returns at most 20, ordered by `fullName`.
+`query`: required, trimmed, 3–100 characters. Returns at most 20, ordered by `fullName`; `meta.total` is the real number of matches (D-02.15).
 
 ```json
-{ "data": [ { "id": "…", "fullName": "Nguyễn Văn Hùng", "phone": "0903123218", "email": "hung@example.test", "vehicleCount": 1 } ] }
+{ "data": [ { "id": "…", "fullName": "Nguyễn Văn Hùng", "phone": "0903123218", "email": "hung@example.test", "vehicleCount": 1 } ], "meta": { "total": 1 } }
 ```
 
 ### `Vehicle` (API-02.3, 02.4, 02.5)

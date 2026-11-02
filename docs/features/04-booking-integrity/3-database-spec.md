@@ -36,7 +36,7 @@ No F04 table uses soft deletes; history is kept through statuses and `active = f
 | `reference` | `varchar(32)` | NOT NULL UNIQUE (D-04.6) |
 | `dealership_id` | `uuid` | NOT NULL FK `dealerships` |
 | `customer_id` | `uuid` | NOT NULL FK `customers` |
-| `vehicle_id` | `uuid` | NULL FK `vehicles` (NULL only while `HELD`, F10) |
+| `vehicle_id` | `uuid` | NULL FK `vehicles` (NULL only for a hold made without a vehicle: `HELD`, and `EXPIRED`/`CANCELLED` when that hold ends, F10) |
 | `service_type_id` | `uuid` | NOT NULL FK `service_types` |
 | `technician_id` | `uuid` | NOT NULL FK `technicians` (current assignment) |
 | `bay_id` | `uuid` | NOT NULL FK `bays` |
@@ -51,12 +51,12 @@ No F04 table uses soft deletes; history is kept through statuses and `active = f
 | `cancel_note` | `varchar(500)` | NULL (F07) |
 | `cancelled_at` | `timestamptz` | NULL |
 | `cancelled_by_user_id` | `bigint` | NULL FK `users` |
-| `contact_required_reason` | `varchar(32)` | NULL, CHECK `TECHNICIAN_ABSENT`/`BAY_OUT_OF_SERVICE`/`OVERRUN` (F12) |
+| `contact_required_reason` | `varchar(32)` | NULL, CHECK `OVERRUN` (F12; the only reason now that absences and bay outages are out of scope, README D-G.16) |
 | `checked_in_at`, `started_at`, `completed_at` | `timestamptz` | NULL (F12) |
 | `created_at`, `updated_at` | `timestamptz` | NOT NULL |
-| — | | `CHECK (status = 'HELD' OR vehicle_id IS NOT NULL)` |
+| — | | `CHECK (vehicle_id IS NOT NULL OR status IN ('HELD','EXPIRED','CANCELLED'))` — a confirmed booking always has a vehicle; a hold without one can still end (INV-04.5) |
 
-Indexes:
+Indexes (FK columns `vehicle_id`, `technician_id`, `bay_id`, `service_type_id`, `created_by_user_id`, `cancelled_by_user_id` have no index on purpose: their parent rows are never deleted — every FK is `RESTRICT` and no feature deletes vehicles, technicians, bays, service types or users. A feature that adds such a delete adds the index first):
 - `appointments_dealership_start_idx (dealership_id, start_at, id)` — day list (F05).
 - `appointments_customer_start_idx (customer_id, start_at, id)` — My bookings (F05).
 - `appointments_held_expiry_idx (expires_at) WHERE status = 'HELD'` — expiry job (F10).
@@ -129,6 +129,8 @@ The third index serves the busy-intervals query for a whole dealership day (F03 
 
 `CHECK (status <> 'COMPLETED' OR response_status IS NOT NULL)`.
 
+Personal data (D7): `response_body` holds the saved answer, which for appointment endpoints includes the customer's name, phone and the VIN. Only the middleware reads it, only for the same `user_id`; rows are deleted by `idempotency:prune` after 24 hours. Never log it.
+
 ### DB-04.4 · `appointment_events`
 
 | Column | Type | Note |
@@ -162,7 +164,7 @@ The third index serves the busy-intervals query for a whole dealership day (F03 
 | `sent_at` | `timestamptz` | NULL |
 | `dedupe_key` | `varchar(120)` | NULL, UNIQUE (F11 uses it for reminders) |
 | `created_at`, `updated_at` | `timestamptz` | NOT NULL |
-| index | | `(next_attempt_at) WHERE status = 'PENDING'`; `(dealership_id, status, created_at)` |
+| index | | `(next_attempt_at) WHERE status = 'PENDING'`; `(dealership_id, status, created_at)`; `(appointment_id)` (FK, and the F11 filter by appointment) |
 
 Channels per event (D-04.4): Confirmed, Cancelled, Rescheduled → SMS, EMAIL, DMS; Reassigned → SMS, DMS; Reminder → SMS.
 
@@ -194,4 +196,4 @@ Finding the resource type from a 23P01 error (D-04.17): the detail looks like `K
 
 ## B4. DB tests
 
-TC-04-01, 04-02 (concurrency), TC-04-09 (one transaction), TC-04-13 (trigger), TC-04-30 (CHECKs on `period`, `vehicle_id`, `expires_at`), TC-04-29 (23P01 parser with a real error).
+TC-04-01, 04-02 (concurrency), TC-04-09 (one transaction), TC-04-13 (trigger), TC-04-30 (CHECKs on `period`, `vehicle_id`, `expires_at`), TC-04-14 (a hold without a vehicle can expire), TC-04-29 (23P01 parser with a real error).

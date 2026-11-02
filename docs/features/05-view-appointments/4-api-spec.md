@@ -33,7 +33,7 @@ All under `auth:sanctum`. No write headers.
 
 | Endpoint | Parameter | Rule (400 if broken) |
 | --- | --- | --- |
-| 05.3 | `date` | Required, `YYYY-MM-DD`, a valid date |
+| 05.3 | `date` | Required, `YYYY-MM-DD`, a valid date. Optional when `contactRequired=true` (F12): then the list covers every flagged booking with `start_at ≥` today's local midnight |
 | 05.3 | `technicianId`, `bayId` | Optional, UUID |
 | 05.3 | `status` | Optional, comma-separated list, each value one of the 8 statuses; default every status except `EXPIRED` |
 | 05.3, 05.4 | `limit` | 1–200, default 50 |
@@ -43,8 +43,10 @@ All under `auth:sanctum`. No write headers.
 ### Page
 
 ```json
-{ "data": [ AppointmentListItem… ], "meta": { "nextCursor": "eyJz…" | null, "limit": 50 } }
+{ "data": [ AppointmentListItem… ], "meta": { "nextCursor": "eyJz…" | null, "limit": 50, "total": 120 } }
 ```
+
+`meta.total` is the real number of rows matching the filters (one `count(*)` with the same `WHERE`, without the cursor), README D-G.12. `/me/appointments` returns it too.
 
 `AppointmentListItem`:
 

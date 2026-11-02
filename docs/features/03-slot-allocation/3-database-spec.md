@@ -25,7 +25,7 @@ No new tables. No migrations.
 | # | Reads | Tables | Index (F01) |
 | --- | --- | --- | --- |
 | 1 | Dealership + time zone + opening hours | `dealerships`, `dealership_opening_hours` | PK, unique `(dealership_id, weekday)` |
-| 2 | Technicians (all statuses, to tell "nobody has the skill" from "inactive") + skills + shifts of the searched **weekday** | `technicians`, `technician_skills`, `technician_shifts` | `(dealership_id, name)`, skills PK, `(technician_id, weekday, starts_at)` |
+| 2 | Technicians with their level (all statuses) | `technicians` | `(dealership_id, name)` |
 | 3 | Bays | `bays` | `(dealership_id, bay_type) WHERE active` |
 | 4 | Busy intervals within the UTC window of the local day | through `BusyIntervalReader` (F04: `resource_allocations` ⋈ `appointments`) | EXCLUDE GiST (F04) |
 

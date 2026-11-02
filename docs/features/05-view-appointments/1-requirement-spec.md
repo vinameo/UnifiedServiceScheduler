@@ -33,7 +33,7 @@ Drafts: `Admin/04-appointment-list.png`, `Admin/05-appointment-details.png`, `Cu
 | Draft | Spec | Reason |
 | --- | --- | --- |
 | Check in, Reschedule, Cancel, Mark no-show… buttons on the details page | F05 builds an empty actions area; F07, F09, F12 add the buttons | Build order |
-| "Technician: Trần Minh An · Basic skill" | "Trần Minh An" | The appointment API does not return skills |
+| "Technician: Trần Minh An · Basic skill" | "Trần Minh An" | Technicians have a level, not skills (README D-G.16); the details page shows only the name |
 | "View notification log" | Added by F11 | F11 owns it |
 | Customer "Signed in as 0903 *** 218" | "Signed in as {email}" | Q-00.c |
 | Customer details: Cancel / Change time buttons | Added by F07 / F09 | Build order |
@@ -58,7 +58,8 @@ Free-text search, print, CSV export, push notifications when a booking changes.
 
 | ID | Decision |
 | --- | --- |
-| D-05.1 | Staff list: `date` is required (`YYYY-MM-DD`, local date); a booking belongs to the date when `start_at` is within local `[00:00, 24:00)`. |
+| D-05.1 | Staff list: `date` is required (`YYYY-MM-DD`, local date) unless `contactRequired=true` (F12), which lists every flagged booking from today on; a booking belongs to the date when `start_at` is within local `[00:00, 24:00)`. The page carries `meta.total` (README D-G.12). |
+| D-05.9 | Every route with `{appointment}` loads it through one explicit route binding that calls `findVisibleTo(auth()->user(), $id)`. Controllers and services never load an appointment by id themselves. |
 | D-05.2 | The staff list shows every status except `EXPIRED` by default; `status` accepts several values (`status=CONFIRMED,CHECKED_IN`). |
 | D-05.3 | Upcoming = `status ∈ {CONFIRMED, CHECKED_IN, IN_PROGRESS}` and `end_at > now`, by `start_at` ascending. Past = `status ∈ {COMPLETED, CANCELLED, NO_SHOW}` or (`status ∈ {CONFIRMED, CHECKED_IN, IN_PROGRESS}` and `end_at <= now`), by `start_at` descending. `HELD` and `EXPIRED` are never shown to customers. |
 | D-05.4 | History (`appointment_events`) is staff only: `GET /appointments/{id}/history`. |
@@ -93,7 +94,7 @@ Assumes F00–F04 and F02 are merged: `AppointmentRepository` (`find`), `Appoint
 | ID | In scope |
 | --- | --- |
 | S-05.1 | `GET /appointments/{appointment}`, `GET /appointments/{appointment}/history`, `GET /dealerships/{dealership}/appointments`, `GET /me/appointments`. |
-| S-05.2 | Seam `AppointmentRepository::findVisibleTo(User, id)` + exception `AppointmentNotFound` (404) + `AppointmentPolicy`. |
+| S-05.2 | Seam `AppointmentRepository::findVisibleTo(User, id)` + the explicit `{appointment}` route binding (D-05.9) + exception `AppointmentNotFound` (404) + `AppointmentPolicy`. |
 | S-05.3 | `AppointmentListItemResource`, `AppointmentEventResource`, cursor helper `CursorPaginator`. |
 | S-05.4 | Web: Appointment list, Appointment details (staff); My bookings, Details (customer); `appointmentQuery` keeping the `ETag`. |
 | S-05.5 | Web: the D-05.8 links. |
@@ -102,19 +103,19 @@ Assumes F00–F04 and F02 are merged: `AppointmentRepository` (`find`), `Appoint
 
 | ID | Invariant | Where and when it is read |
 | --- | --- | --- |
-| INV-05.1 | Customers read only bookings with `customer_id` = their customer; staff read only bookings with `dealership_id` = their dealership. Out of scope → 404 `APPOINTMENT_NOT_FOUND`, identical to a missing booking (BR-00.2, BR-00.3, AC-00.8). | `findVisibleTo` puts the scope in the **query** (`WHERE id = ? AND customer_id = ?`), never read-then-compare. |
+| INV-05.1 | Customers read only bookings with `customer_id` = their customer; staff read only bookings with `dealership_id` = their dealership. Out of scope → 404 `APPOINTMENT_NOT_FOUND`, identical to a missing booking (BR-00.2, BR-00.3, AC-00.8). | `findVisibleTo` puts the scope in the **query** (`WHERE id = ? AND customer_id = ?`), never read-then-compare; it is called only from the `{appointment}` route binding (D-05.9), so a new route cannot skip it. |
 | INV-05.2 | `GET /appointments/{id}` returns `ETag` = the `version` of exactly the row it read (FR-05.1). | `AppointmentResponder::ok`. |
 | INV-05.3 | `date` is read in `dealerships.timezone`; the local window `[00:00, 24:00)` is converted to UTC with Carbon (DST-safe). | List controller. |
 | INV-05.4 | Lists have a stable order: staff `(start_at ASC, id ASC)`; Upcoming `(start_at ASC, id ASC)`; Past `(start_at DESC, id DESC)`. The cursor uses exactly that key, so paging never duplicates or skips. | `CursorPaginator`. |
 | INV-05.5 | `limit` ∈ [1, 200]; default 50 (FR-05.4). | FormRequest. |
 | INV-05.6 | `technicianId`, `bayId` filters of another dealership → empty list (no error, nothing revealed). | `dealership_id` is always in the query. |
-| INV-05.7 | History contains no personal data (F04 DB-04.4); staff only. | Gate `staff` on the history route. |
+| INV-05.7 | History contains no personal data (F04 DB-04.4); staff only, and only for bookings of their dealership. | Gate `staff` on the history route + the `{appointment}` binding (D-05.9). |
 
 Edge cases:
 
 | Decision | Edge case | TC |
 | --- | --- | --- |
-| INV-05.1 | Customer B reads A's booking; D2 staff read a D1 booking; missing id; malformed id | TC-05-04, 05-05, 05-03, 05-11 |
+| INV-05.1 | Customer B reads A's booking; D2 staff read a D1 booking or its history; missing id; malformed id | TC-05-04, 05-05, 05-20, 05-03, 05-11 |
 | INV-05.3 | 06:30 local = 23:30 UTC the day before | TC-05-02 |
 | INV-05.4 | Two bookings with the same `start_at`; page 2 | TC-05-07 |
 | D-05.3 | A past `CONFIRMED`; a `HELD`; an `EXPIRED` | TC-05-06 |
@@ -127,7 +128,9 @@ Edge cases:
 | `api/app/Domain/Booking/Exceptions/AppointmentNotFound.php` | 404 `APPOINTMENT_NOT_FOUND`. |
 | `api/app/Policies/AppointmentPolicy.php` | `view` (used by `findVisibleTo`; never read first and `authorize` after). |
 | `api/app/Support/Pagination/CursorPaginator.php` | Encode/decode cursors; 400 when bad. |
-| `api/app/Http/Controllers/Api/V1/{AppointmentController (show, history), DealershipAppointmentController, MyAppointmentController}.php` | Thin. |
+| `api/app/Providers/AppServiceProvider.php` | `Route::bind('appointment', fn (string $id) => app(AppointmentRepositoryInterface::class)->findVisibleTo(auth()->user(), $id))` (D-05.9). |
+| `api/app/Domain/Booking/Services/AppointmentQueryService(.php, Interface.php)` | `show`, `history`, `listForDealershipDay`, `listForCustomer` (README §6.3); bound in `DomainServiceProvider`. |
+| `api/app/Http/Controllers/Api/V1/{AppointmentController (show, history), DealershipAppointmentController, MyAppointmentController}.php` | Thin; receive the bound `Appointment`, call `AppointmentQueryServiceInterface`. |
 | `api/app/Http/Requests/{DealershipAppointmentsRequest,MyAppointmentsRequest}.php` | API §B2. |
 | `api/app/Http/Resources/{AppointmentListItemResource,AppointmentEventResource}.php` | API §B2. |
 | `api/routes/api.php` | 4 routes. |
@@ -148,7 +151,7 @@ public function findVisibleTo(User $user, string $id): Appointment; // throws Ap
 
 | Seam | Reused in |
 | --- | --- |
-| `findVisibleTo` | F07, F09, F10, F12 (every change reads the appointment through it first) |
+| `findVisibleTo` + the `{appointment}` route binding (D-05.9) | F07, F09, F10, F12 (every route with `{appointment}` gets a visible booking or 404) |
 | `CursorPaginator` | F11 (outbox), F08 (recent errors) |
 | Web `appointmentQuery` + `withIfMatch` + `setAppointment(queryClient, appointment, etag)` | F07, F09, F10, F12 |
 | Web `AppointmentDetailsLayout` (`actions` area, banner) | F07, F09, F11, F12 |
@@ -203,5 +206,5 @@ Every TC green; README §8 green.
 
 | ID | Risk | Mitigation |
 | --- | --- | --- |
-| R-05.1 | Implicit Eloquent route model binding for `{appointment}` skips the scope | No implicit binding for `{appointment}`; the controller calls `findVisibleTo` |
+| R-05.1 | Implicit Eloquent route model binding for `{appointment}` skips the scope | No implicit binding; the explicit binding of D-05.9 calls `findVisibleTo`; TC-05-20 checks every `{appointment}` route |
 | R-05.2 | A cursor holding `start_at` as a string loses microsecond precision | Encode ISO with microseconds; TC-05-07 uses equal `start_at` values |

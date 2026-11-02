@@ -37,7 +37,7 @@ F04 has no screen of its own. It delivers three shared pieces that every writing
 
 | ID | Seam | File | Behaviour |
 | --- | --- | --- | --- |
-| WEB-04.1 | `useIdempotencyKey(actionInput)` | `web/src/shared/idempotency/useIdempotencyKey.ts` | Returns `{ key, reset }`. A new key (`crypto.randomUUID()`) when `actionInput` changes (deep compare with stable JSON); the same key when the same input is resent after a network error, 409 `REQUEST_IN_PROGRESS`, or 5xx; `reset()` after success or when the user starts a new action. The key lives only in component state (never localStorage). |
+| WEB-04.1 | `useIdempotencyKey(actionInput)` | `web/src/shared/idempotency/useIdempotencyKey.ts` | Returns `{ key, reset }`. A new key (`crypto.randomUUID()`) when `actionInput` changes (deep compare with stable JSON); the same key when the same input is resent after a network error, 409 `REQUEST_IN_PROGRESS`, or 5xx; `settle(result)` resets the key after every other answer (2xx and every other 4xx, including 409 `NO_AVAILABILITY`, 412 and 422), so trying again never replays a saved answer (README D-G.15). Change mutations put the `etag` they send into `actionInput`. `reset()` is also called when the user starts a new action. The key lives only in component state (never localStorage). |
 | WEB-04.2 | `idempotentPost(url, body, key, options)` | `web/src/shared/idempotency/idempotentPost.ts` | Adds `Idempotency-Key` and `If-Match` (when given); 15 s timeout; returns `{ kind: 'ok' | 'problem' | 'no-response', … }`. "No response" = an axios error with no `response` (timeout, network). |
 | WEB-04.3 | `SubmitButton` | `web/src/shared/idempotency/SubmitButton.tsx` | Mantine `Button`, `loading` + `disabled` while pending; a pending label (for example "Confirming…"). A second click while pending sends nothing. |
 | WEB-04.4 | `IdempotentRetryPanel` | `web/src/shared/idempotency/IdempotentRetryPanel.tsx` | Shown on `no-response` or 409 `REQUEST_IN_PROGRESS`. "Retry" resends the **same key and body**; a secondary button comes from the screen (for example "Check appointment list"). The `staff` variant shows the shortened key (first 4 + "…" + last 4 characters); the `customer` variant hides it. |
@@ -47,6 +47,7 @@ F04 has no screen of its own. It delivers three shared pieces that every writing
 ## B2. Rules
 
 - One user action = one key (`CLAUDE.md`). Changing any field that affects the body → a new key.
+- A key is reused only to resend after no response, a 5xx or 409 `REQUEST_IN_PROGRESS`. Any other answer (2xx, 409 `NO_AVAILABILITY`, 412, 422…) is final for that key: the hook resets, so the next try gets a new key (README D-G.15). Otherwise the server replays the saved answer (D-04.12).
 - Never resend a mutation automatically (`AppProviders` already sets `mutations.retry: false`). Resend only when the user taps "Retry".
 - Never retry a 412 automatically (BR-04.2).
 - A 428 is a programming error: show the `PRECONDITION_REQUIRED` copy and `console.error` with the `correlationId`.

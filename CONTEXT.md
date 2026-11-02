@@ -8,11 +8,10 @@ Glossary for specs, code, UI copy and tests. One term means one thing everywhere
 | --- | --- |
 | Dealership | One branch, for example "Saigon Auto · District 7". Has a time zone, opening hours and a phone number. Every operational row belongs to one dealership. |
 | Opening hours | Per weekday, in the dealership's local time. A booking `[start, end)` must fit inside one day's opening hours. |
-| Service type | What the customer books: name, duration in minutes, one required skill, one required bay type. |
-| Skill | What a technician can do: `BASIC`, `GENERAL_MAINTENANCE`, `EV_HIGH_VOLTAGE`. |
+| Service type | What the customer books: name, duration in minutes, one required level, one required bay type. |
+| Level | A technician's trade grade (bậc nghề), 1 (lowest) to 7 (highest). A service type requires one level; a technician can do every service whose required level is at or below their own. |
 | Bay | A service bay of one bay type: `QUICK`, `STANDARD`, `EV`. |
-| Technician | Works shifts, has skills, may be inactive ("Not taking bookings"). |
-| Shift | Weekday + start + end in local time. A technician can have several. |
+| Technician | Has one level. Works whenever the dealership is open (no shifts, attendance or leave in this version). An admin can disable a technician ("Not taking bookings") when they have no upcoming appointments. |
 | Customer | A person with a customer account (email + password). Owns vehicles. |
 | Vehicle | Owned by one customer. Licence plate unique; VIN unique when given. |
 | Appointment / booking | One service, for one vehicle, at one time, with one technician and one bay. "Booking" is the user word; `appointment` is the code word. |
@@ -32,10 +31,8 @@ Glossary for specs, code, UI copy and tests. One term means one thing everywhere
 | No-show | `NO_SHOW`; frees the slot; only after the start time. |
 | Overrun | An `IN_PROGRESS` job whose end time has passed. |
 | Extend | Push the end time of a running job later. |
-| Absence | A technician cannot work for a time range. |
-| Out of service | A bay cannot be used for a time range. |
-| Reassign | Give an affected appointment another technician or bay at the same time. |
-| Contact required | An appointment the system could not reassign; staff must call the customer. Never cancelled automatically. |
+| Reassign | Give an appointment another technician or bay at the same time (when an overrun takes its bay or technician). |
+| Contact required | An appointment the system could not reassign after an overrun; staff must call the customer. Never cancelled automatically. |
 | Version | `appointments.version`; sent as `ETag`, expected back in `If-Match`. |
 | Idempotency key | UUID the client makes for one user action, sent as `Idempotency-Key`. |
 | Outbox message | A row in `outbox_messages`, written in the same transaction as the change, sent later by the relay. |

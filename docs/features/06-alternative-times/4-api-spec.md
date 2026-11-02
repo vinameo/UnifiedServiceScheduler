@@ -83,6 +83,6 @@ RQ §B8.
 | Bound | Value |
 | --- | --- |
 | Date asked | today … today + 90 |
-| Suggestions | ≤ 3, within 8 days (the wanted day + 7) |
-| `next` | within 7 days after `after` |
+| Suggestions | ≤ 3, within 8 days (the wanted day + 7), never after today + 90 |
+| `next` | within 7 days after `after`, never after today + 90 |
 | Rate limit | 120/minute per user |

@@ -52,10 +52,10 @@ Suggestions by favourite technician, other dealerships, notifications when a tim
 | D-06.1 | `GET /dealerships/{d}/availability?serviceTypeId=&date=` returns **every** slot (free or not) with `available` and `reason`, so the web can strike them through (FR-06.5). |
 | D-06.2 | The `reason` of a taken slot: `PAST`, or an F03 reason (`NO_QUALIFIED_TECHNICIAN`, `NO_TECHNICIAN_AVAILABLE`, `NO_BAY_AVAILABLE`). |
 | D-06.3 | `date` before today → 422 `START_IN_PAST`; after today + 90 → 422 `START_TOO_FAR_AHEAD` (F02 rules). A closed day → 200, `closed: true`, `slots: []`. |
-| D-06.4 | Suggestion order (FR-06.3): free slots of the same day by distance from the wanted time (absolute; ties → earlier first), skipping past times and the wanted time itself; if fewer than 3, add days +1…+7 in time order (earliest first). At most 3 in total. |
+| D-06.4 | Suggestion order (FR-06.3): free slots of the same day by distance from the wanted time (absolute; ties → earlier first), skipping past times and the wanted time itself; if fewer than 3, add days +1…+7 in time order (earliest first). At most 3 in total. Never a slot after the booking horizon (today + 90 days, `BookingTimeRules::MAX_DAYS_AHEAD`), so every suggestion can be booked. |
 | D-06.5 | Suggestions are computed **after** the failed transaction rolled back, outside it, on a fresh snapshot. |
 | D-06.6 | `excludeAppointmentId` (optional) ignores that booking when computing free times, so F09's reschedule sees its own slot as free. The caller must be able to see that booking (`findVisibleTo`), otherwise 404 `APPOINTMENT_NOT_FOUND`. |
-| D-06.7 | `GET /dealerships/{d}/availability/next?serviceTypeId=&after=` returns the first free slot after `after` within 7 days (for the "Next available slot" card), or `null`. |
+| D-06.7 | `GET /dealerships/{d}/availability/next?serviceTypeId=&after=` returns the first free slot after `after` within 7 days and within the booking horizon (today + 90) (for the "Next available slot" card), or `null`. |
 | D-06.8 | 120 requests/minute per user on both availability endpoints. |
 | D-06.9 | The web replaces `TimeGrid` (F02) with `SlotGrid`; the F02 flow does not change. |
 
@@ -98,7 +98,7 @@ Assumes F00–F05 are merged: `CandidateFinder`, `OpeningHours`, `AllocationSnap
 | INV-06.2 | First slot = opening time; last slot = closing − duration; 15-minute step (FR-06.1). | `OpeningHours` + `BookingTimeRules::STEP_MINUTES`. |
 | INV-06.3 | The DB query count for one day is fixed, whatever the number of slots (FR-06.4). | `forDay` calls `AllocationSnapshotRepository::forDay` **once**. |
 | INV-06.4 | No cache between requests (SDD §12). | — |
-| INV-06.5 | Suggestions hold only slots that were `available: true` when computed, ≤ 3, per D-06.4, no duplicates, never the wanted time. | `AlternativeTimesFinder`. |
+| INV-06.5 | Suggestions hold only slots that were `available: true` when computed, ≤ 3, per D-06.4, no duplicates, never the wanted time, never after today + 90 days. | `AvailabilityServiceInterface::near()` (`AlternativeTimesFinder`). |
 | INV-06.6 | Staff only ask about their own dealership (404 `DEALERSHIP_NOT_FOUND`); customers ask about any dealership but only `active` services (404 `SERVICE_TYPE_NOT_FOUND`). | Route binding `{dealership}` (F01) + the service read. |
 | INV-06.7 | `excludeAppointmentId` takes effect only if the caller may see that booking; otherwise 404, never silently ignored. | `findVisibleTo` before computing. |
 
@@ -107,7 +107,7 @@ Edge cases:
 | Decision | Edge case | TC |
 | --- | --- | --- |
 | INV-06.1 | The only technician busy 09–10; past times; slot touching closing; a valid / expired hold | TC-06-01, 06-04, 06-02, TC-10-xx (F10) |
-| INV-06.5 | Same day has 3; same day short; 7 days all full; two slots equally far from the wanted time | TC-06-03, 06-07, 06-08, 06-09 |
+| INV-06.5 | Same day has 3; same day short; 7 days all full; two slots equally far from the wanted time; wanted day near the 90-day horizon | TC-06-03, 06-07, 06-08, 06-09, 06-21 |
 | INV-06.6 | Staff of another dealership; customer with an inactive service | TC-06-06 |
 | INV-06.7 | Customer excludes someone else's booking | TC-06-11 |
 
@@ -115,10 +115,9 @@ Edge cases:
 
 | File | Change |
 | --- | --- |
-| `api/app/Domain/Booking/Availability/AvailabilityCalculator.php` | S-06.1. |
-| `api/app/Domain/Booking/Availability/AlternativeTimesFinder.php` | S-06.2. |
+| `api/app/Domain/Booking/Services/AvailabilityService(.php, Interface.php)` | `forDay` = S-06.1 (`AvailabilityCalculator`), `near`/`next` = S-06.2 (`AlternativeTimesFinder`); README §6.3; bound in `DomainServiceProvider`. |
 | `api/app/Domain/Booking/Exceptions/NoAvailability.php` | Adds `alternatives` (array of `{start, end}`), default `[]`. |
-| `api/app/Domain/Booking/Actions/CreateBooking.php` | Catches `NoAvailability`, computes suggestions (D-06.5), rethrows with `alternatives`. |
+| `api/app/Domain/Booking/Services/BookingService.php` (`create`) | Catches `NoAvailability`, computes suggestions (D-06.5), rethrows with `alternatives`. |
 | `api/app/Http/Controllers/Api/V1/AvailabilityController.php`, `Requests/AvailabilityRequest.php`, `Resources/AvailabilityResource.php` | API. |
 | `api/routes/api.php` | 2 routes + `throttle:120,1`. |
 | `web/src/shared/booking/SlotGrid.tsx`, `web/src/shared/api/availability.ts` | WEB. |
@@ -130,11 +129,10 @@ Edge cases:
 
 ```php
 // illustrative — INV-06.1, 06.3
-final class AvailabilityCalculator {
-    /** @return list<SlotState> SlotState{start: CarbonImmutable, available: bool, reason: ?string} */
+interface AvailabilityServiceInterface {
+    /** `AvailabilityCalculator`. @return DayAvailability with list<SlotState{start, available, reason}> */
     public function forDay(string $dealershipId, ServiceType $type, string $localDate, CarbonImmutable $now, ?string $excludeAppointmentId = null): DayAvailability;
-}
-final class AlternativeTimesFinder {
+    // `AlternativeTimesFinder`:
     /** @return list<TimeRange> ≤ $limit — INV-06.5 */
     public function near(string $dealershipId, ServiceType $type, CarbonImmutable $wanted, CarbonImmutable $now, ?string $excludeAppointmentId = null, int $limit = 3): array;
     public function next(string $dealershipId, ServiceType $type, CarbonImmutable $after, CarbonImmutable $now): ?TimeRange;

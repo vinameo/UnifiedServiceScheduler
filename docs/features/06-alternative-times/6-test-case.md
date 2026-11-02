@@ -61,6 +61,7 @@ Every TC green; M1–M4 pass.
 | AC-06.13, FR-06.5 | TC-06-14 |
 | AC-06.14 | TC-06-15 |
 | AC-06.15 | TC-06-16 |
+| INV-06.5 horizon | TC-06-21 |
 | AC-06.16, NFR-02 | TC-06-13 |
 | D-06.5 | TC-06-03 (a 409 with suggestions means they were computed outside the failed transaction) |
 | D-06.8, API §B4 | TC-06-17 |
@@ -94,6 +95,7 @@ Backend in `api/tests/Feature/Booking/Availability/`.
 | TC-06-18 | BR-06.1, INV-06.4 | Integration | Get availability (10:00 free); another user books 10:00 | Get availability again | 10:00 `false` at once (no cache) | Cached | `AvailabilityTest::test_list_is_a_hint_and_never_cached` |
 | TC-06-19 | F04 + F06 | Integration | `POST` 09:00 with K → 409 with suggestions | Change data so suggestions would differ; resend K | The same 409 and the old `alternatives` | Suggestions recomputed on replay | `AlternativesOnConflictTest::test_replayed_409_keeps_saved_alternatives` |
 | TC-06-20 | All | Manual | Stack running | M1–M4 | As A2 | — | Record in A2 |
+| TC-06-21 | INV-06.5, D-06.4, D-06.7 | Integration | Clock 2026-11-02; day 2027-01-29 (88 days ahead) full; 2027-02-01 free | `POST` for 2027-01-29 09:00; `availability/next?after=2027-01-29T09:00+07:00` | `alternatives` hold nothing after 2027-01-31; `next` is `null` or ≤ 2027-01-31 | Suggests a slot the booking rejects with `START_TOO_FAR_AHEAD` | `AlternativesOnConflictTest::test_INV_06_5_suggestions_stay_within_the_horizon` |
 
 ## B3. Fixtures
 

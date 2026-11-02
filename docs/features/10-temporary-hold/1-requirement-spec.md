@@ -61,11 +61,11 @@ Staff holds, longer or extendable holds, a waiting list.
 | D-10.1 | `POST /appointments` accepts `mode: HOLD` for customers only; staff sending `HOLD` → 422 `HOLD_NOT_ALLOWED` (new code). `vehicleId` is optional for `HOLD`. |
 | D-10.2 | A hold without a vehicle holds only `TECHNICIAN` and `BAY` (`appointments.vehicle_id` NULL, allowed only while `HELD`, F04 CHECK). With a vehicle it also holds `VEHICLE`. Confirm inserts (or swaps) the `VEHICLE` allocation; a clash → 409 `VEHICLE_ALREADY_BOOKED` and the hold stays. This deviates from SDD "3 rows per booking" for holds only. |
 | D-10.3 | `expires_at = now + HOLD_MINUTES` (env, default 5) from the app clock. Confirm sets `expires_at = NULL`. |
-| D-10.4 | One hold per customer: a partial unique index `(customer_id) WHERE status = 'HELD'` (migration in F10). Creating a hold first expires the customer's current hold **in the same transaction**; if the new hold fails (409), the old hold is kept. Two parallel hold requests: the loser hits `23505`, retries the whole transaction once, then returns 409 `REQUEST_IN_PROGRESS`. |
+| D-10.4 | One hold per customer: a partial unique index `(customer_id) WHERE status = 'HELD'` (migration in F10). Creating a hold first expires the customer's current hold **in the same transaction**; if the new hold fails (409), the old hold is kept. Holds of one customer are serialised: the hold transaction starts with `SELECT … FROM customers WHERE id = ? FOR UPDATE`, so a parallel second hold waits, then sees the first one and ends it like any current hold (both get 201; the later one wins). The unique index is the safety net: a `23505` there is a bug (500), never a business answer. |
 | D-10.5 | `POST /appointments/{id}/confirm` with body `{ vehicleId, reminderOptIn }`, headers `If-Match`, `Idempotency-Key`. Customer (own hold) only. |
 | D-10.6 | Confirm on a hold whose `expires_at <= now` → expire it (versioned) and return 410 `HOLD_EXPIRED`. |
 | D-10.7 | Confirm that loses a race with the job gets 412 `APPOINTMENT_MODIFIED` whose `appointment.status` is `EXPIRED` (AC-10.3 "the loser gets 412"); the web treats it like 410. |
-| D-10.8 | Job `holds:expire`, `everyThirtySeconds()->withoutOverlapping()`, takes up to 500 expired holds ordered by `expires_at`, and moves each to `EXPIRED` through `TransitionAppointment` with its read version (`WHERE status = 'HELD' AND version = :v`); a 412 means "the customer just confirmed" → skip. One transaction per hold. |
+| D-10.8 | Job `holds:expire [--now=<ISO>]` (`--now` accepted only when `APP_ENV=testing`, so race tests can give the job a later clock than the confirm), `everyThirtySeconds()->withoutOverlapping()`, takes up to 500 expired holds ordered by `expires_at`, and moves each to `EXPIRED` through `TransitionAppointment` with its read version (`WHERE status = 'HELD' AND version = :v`); a 412 means "the customer just confirmed" → skip. One transaction per hold. |
 | D-10.9 | Seam `ExpiredHoldReleaser::releaseBlocking(dealershipId, range, vehicleId?, now)`: expires holds with `expires_at <= now` whose active allocations overlap `range` for any resource of that dealership (or the vehicle). Called before the write in `CreateBooking` (F02, both modes), `RescheduleAppointment` (F09) and F12 moves. |
 | D-10.10 | Expiring a hold writes no outbox message; confirming writes `AppointmentConfirmed`. |
 | D-10.11 | Web countdown uses the server clock: offset = server `Date` header − browser time, measured on the hold response (seam `useServerClock`). |
@@ -121,7 +121,7 @@ Edge cases:
 | --- | --- | --- |
 | Confirm (INV-10.4) | Hold 6 minutes old; confirm exactly at `expires_at`; vehicle busy; another customer's hold; already confirmed with the same key / another key | TC-10-02, TC-10-08, TC-10-09, TC-10-10, TC-10-11 |
 | Race (INV-10.3) | Job and confirm at the same moment, 100 runs | TC-10-03 |
-| One hold (INV-10.2) | Second hold ends the first; second hold fails → first kept; two holds in parallel | TC-10-05, TC-10-06, TC-10-07 |
+| One hold (INV-10.2) | Second hold ends the first; second hold fails → first kept; two holds in parallel with no current hold; two holds in parallel while one is already held | TC-10-05, TC-10-06, TC-10-07, TC-10-21 |
 | Release (INV-10.6) | Expired hold blocks the only technician; job not running | TC-10-12 |
 
 ## B4. File-by-file changes
@@ -129,15 +129,15 @@ Edge cases:
 | File | Change |
 | --- | --- |
 | `api/database/migrations/2026_11_10_000001_add_one_hold_per_customer_index.php` | DB. |
-| `api/app/Domain/Booking/Actions/CreateBooking.php` | `mode HOLD` branch (D-10.1–10.4), calls `ExpiredHoldReleaser`. |
-| `api/app/Domain/Booking/Actions/ConfirmHold.php` | B7. |
-| `api/app/Domain/Booking/ExpiredHoldReleaser.php` | D-10.9. |
+| `api/app/Domain/Booking/Services/BookingService.php` (`create`) | `mode HOLD` branch (D-10.1–10.4), calls `ExpiredHoldReleaser`. |
+| `api/app/Domain/Booking/Services/BookingService.php`, `BookingServiceInterface.php` | Add `confirmHold()` = B7 (`ConfirmHold`). |
+| `api/app/Domain/Booking/Services/ExpiredHoldReleaser(.php, Interface.php)` | D-10.9; bound in `DomainServiceProvider`. |
 | `api/app/Domain/Booking/Exceptions/{HoldExpired,HoldNotAllowed}.php` | 410, 422. |
 | `api/app/Console/Commands/ExpireHolds.php`, `api/routes/console.php` | `holds:expire` → `Schedule::command('holds:expire')->everyThirtySeconds()->withoutOverlapping()`. |
 | `api/app/Http/Requests/{CreateAppointmentRequest,ConfirmHoldRequest}.php` | `mode: HOLD`; confirm body. |
 | `api/app/Http/Controllers/Api/V1/AppointmentController.php` | Add `confirm`. |
-| `api/app/Providers/AuthServiceProvider.php` | Ability `confirm-hold` (customer). |
-| `api/app/Domain/Booking/Actions/RescheduleAppointment.php` | Call `ExpiredHoldReleaser` before `moveTo`. |
+| `api/app/Providers/AppServiceProvider.php` (`boot()`) | Ability `confirm-hold` (customer). |
+| `api/app/Domain/Booking/Services/BookingService.php` (`reschedule`) | Call `ExpiredHoldReleaserInterface` before `moveTo`. |
 | `web/src/customer/booking/{ChooseTimePage,HoldPage}.tsx`, `web/src/shared/time/useServerClock.ts`, `web/src/shared/api/appointments.ts` (`useCreateHold`, `useConfirmHold`) | WEB. |
 
 ## B5. Contracts
@@ -146,11 +146,12 @@ Edge cases:
 
 ```php
 // illustrative
-final class ConfirmHold {
-    public function __invoke(User $actor, string $appointmentId, int $expectedVersion,
+interface BookingServiceInterface {
+    /** `ConfirmHold`. */
+    public function confirmHold(User $actor, string $appointmentId, int $expectedVersion,
                              string $vehicleId, bool $reminderOptIn, CarbonImmutable $now): Appointment; // throws HoldExpired, AppointmentModified, VehicleAlreadyBooked, InvalidStatusTransition
 }
-final class ExpiredHoldReleaser {
+interface ExpiredHoldReleaserInterface {
     /** INV-10.6. Returns the number of holds expired. Each in its own transaction, before the caller's write. */
     public function releaseBlocking(string $dealershipId, TimeRange $range, ?string $vehicleId, CarbonImmutable $now): int;
 }
@@ -168,10 +169,10 @@ FCs: FC-10.1 (staff holds for phone calls) → `HoldNotAllowed` is the only gate
 ## B7. Algorithms
 
 **Create a hold (`CreateBooking`, `mode HOLD`)**
-1. Same checks as F02 D-07 order (vehicle optional; if given, ownership checked).
+1. Same checks in the F02 D-02.7 order (vehicle optional; if given, ownership checked).
 2. `ExpiredHoldReleaser::releaseBlocking(dealership, range, vehicleId, now)`.
 3. Snapshot + `find` → no pair → 409 (+ alternatives, F06).
-4. Transaction (up to 2 attempts on `23505`): if the customer has a `HELD` appointment → `TransitionAppointment(EXPIRED)` with its read version (inside this transaction) → `AppointmentWriter` insert of the new `HELD` (`expires_at = now + HOLD_MINUTES`) with the pair loop of F04 → commit. 23P01 on any try rolls back the old hold's expiry too.
+4. Transaction: lock the customer row (`FOR UPDATE`, D-10.4); then if the customer has a `HELD` appointment (read **after** the lock) → `TransitionAppointment(EXPIRED)` with its read version (inside this transaction) → `AppointmentWriter` insert of the new `HELD` (`expires_at = now + HOLD_MINUTES`) with the pair loop of F04 → commit. 23P01 on any try rolls back the old hold's expiry too.
 5. 201 `AppointmentResource` (`status HELD`, `expiresAt`) + `ETag: "1"`.
 
 **Confirm (`ConfirmHold`)**
@@ -195,7 +196,6 @@ FCs: FC-10.1 (staff holds for phone calls) → `HoldNotAllowed` is the only gate
 | Vehicle not the customer's | 404 | `VEHICLE_NOT_FOUND` |
 | No slot for the hold | 409 | `NO_AVAILABILITY` |
 | Vehicle busy at the held time | 409 | `VEHICLE_ALREADY_BOOKED` |
-| Parallel holds by one customer, retry failed | 409 | `REQUEST_IN_PROGRESS` |
 | Hold already ended | 410 | `HOLD_EXPIRED` |
 | Old version (including losing to the job) | 412 | `APPOINTMENT_MODIFIED` |
 | Not `HELD` (e.g. already confirmed) | 422 | `INVALID_STATUS_TRANSITION` |

@@ -28,7 +28,7 @@ Should (requirements). Within F06: the grid + suggestions on 409 are the core; `
 | ID | Risk | Handling |
 | --- | --- | --- |
 | RB-06.1 | Users think the grid is a promise | The line "Times can be taken by someone else until you confirm." under the grid (customer) |
-| RB-06.2 | A suggestion 7 days away does not suit the customer | Accepted; the customer can pick another day on the grid |
+| RB-06.2 | A suggestion 7 days away does not suit the customer | Accepted; the customer can pick another day on the grid. Owner: product owner. Revisit when M-06.2 < 20% over 30 days. |
 
 ---
 
@@ -61,7 +61,7 @@ Should (requirements). Within F06: the grid + suggestions on 409 are the core; `
 | --- | --- | --- | --- |
 | M-06.1 | Availability p95 | `api_events` route `GET api/v1/dealerships/{dealership}/availability` (F08) | < 300 ms |
 | M-06.2 | Share of 409s whose suggestion was used (rebooked within 5 minutes at a suggested time) | Join `api_events` 409 (`detail->alternatives`) with later bookings by the same user | Watch |
-| M-06.3 | Share of 409 `NO_AVAILABILITY` with empty `alternatives` | `SELECT count(*) FILTER (WHERE jsonb_array_length(detail->'alternatives') = 0)::float / count(*) FROM api_events WHERE code = 'NO_AVAILABILITY' AND occurred_at > now() - interval '7 days';` | Alert > 20% (capacity shortage) |
+| M-06.3 | Share of 409 `NO_AVAILABILITY` with empty `alternatives` | `SELECT count(*) FILTER (WHERE (detail->>'alternativesCount')::int = 0)::float / count(*) FROM api_events WHERE code = 'NO_AVAILABILITY' AND occurred_at > now() - interval '7 days';` | Alert > 20% (capacity shortage). F08 writes `alternativesCount` into `detail` for this code. |
 
 ## B3. Future constraints
 

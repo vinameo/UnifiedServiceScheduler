@@ -75,7 +75,7 @@ A 404 from the API → a "We couldn't find this appointment." page with a button
 - Filters live in the URL (`?date=2026-11-02&technicianId=…&status=CONFIRMED`) so links can be shared and F5 keeps them. `date` defaults to today in the dealership's time zone (not the browser's).
 - Technician/Bay `Select` from `useTechnicians`, `useBays` (F01); "All" by default. Status `Select` has the 8 statuses + "All".
 - Time column "09:00–10:00"; Customer · Vehicle on two lines (name bold; "{make} {model} · {plate}" dimmed); Status = `AppointmentStatusBadge`; Actions = a "View" link.
-- Footer: "Showing the first {n} appointments, sorted by start time" (n = rows shown); "Load more" while `nextCursor` exists.
+- Footer: "Showing {n} of {total} appointments, sorted by start time" (`n` = rows shown, `total` = `meta.total`); "Load more" while `nextCursor` exists.
 - Empty: "No appointments on this day."
 - "New booking" button for advisors only.
 
@@ -108,7 +108,7 @@ A 404 from the API → a "We couldn't find this appointment." page with a button
 | `list.filters.*` | Date · Technician · Bay · Status · All |
 | `list.columns.*` | Time · Customer · Vehicle · Service · Technician · Bay · Status · Actions |
 | `list.view` | View |
-| `list.footer` | Showing the first {n} appointments, sorted by start time |
+| `list.footer` | Showing {n} of {total} appointments, sorted by start time |
 | `list.loadMore` | Load more |
 | `list.empty` | No appointments on this day. |
 | `details.closed` | This appointment is closed and can no longer be changed. Its bay and technician have been released for this time slot. |

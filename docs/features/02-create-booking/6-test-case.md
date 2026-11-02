@@ -77,6 +77,8 @@ Every TC green; M1–M9 pass and are recorded.
 | INV-02.4 | TC-02-03, TC-02-13, TC-02-14 |
 | INV-02.5 | TC-02-02, TC-02-12, TC-02-15, TC-02-16 |
 | INV-02.6, D-02.7 | TC-02-31 (error order) |
+| D-02.15 (`meta.total`, cap 20) | TC-02-36 |
+| WEB §B3 date in the dealership's zone | TC-02-37 |
 | INV-02.9, D-02.3 | TC-02-35 |
 | D-02.2 | TC-02-31 (`mode: HOLD` → 400) |
 | D-02.11 | TC-02-32 |
@@ -123,11 +125,13 @@ Backend in `api/tests/Feature/Booking/CreateBooking/` unless noted.
 | TC-02-28 | WEB-02.6 | Web component | Fake API: 409 `NO_AVAILABILITY` (`NO_BAY_AVAILABLE`); 422 `VEHICLE_NOT_OWNED_BY_CUSTOMER` | Confirm | Card heading "The 09:00 slot was just taken" + "No Quick service bay is free from 09:00 to 10:00…"; the second error shows under the Vehicle field | `reason` ignored | `web/src/shared/booking/BookingErrorCard.test.tsx` |
 | TC-02-29 | WEB-02.1–02.3 | Web unit | — | `formatInZone('2026-11-01T23:30:00Z','Asia/Ho_Chi_Minh','dayLong')`; `localSlotsForDay` Saturday (08–12), 60 min; `maskPhone('0903123218')` | "Monday, 2 Nov 2026"; 08:00…11:00 (13 times); "0903 *** 218" | Machine time zone used | `web/src/shared/format/*.test.ts` |
 | TC-02-30 | NFR-02, M-02.1 | Integration (`@group performance`) | Dealership with 20 bays, 30 technicians, 200 bookings that day | 50 sequential `POST /appointments` (different times) | p95 < 300 ms | N+1 snapshot or missing index | `CreateBookingPerformanceTest` |
-| TC-02-31 | API §B4, INV-02.6, D-02.7 | Integration | — | Each row of the adversarial input table; plus a body with both a wrong service and a past time | Status + `code` as in the table; the double case → 404 `SERVICE_TYPE_NOT_FOUND` (first error per D-02.7) | Different check order | `CreateBookingAdversarialInputTest` (data provider) |
+| TC-02-31 | API §B4, INV-02.6, D-02.7 | Integration | — | Each row of the adversarial input table; plus a body with both a wrong service and a past time; plus a wrong service and `09:07` | Status + `code` as in the table; wrong service + past → 404 `SERVICE_TYPE_NOT_FOUND`; wrong service + 09:07 → 400 (the step is a format check, D-02.7) | Different check order | `CreateBookingAdversarialInputTest` (data provider) |
 | TC-02-32 | D-02.11 | Web component | Draft at step 3 | Unmount + mount again (simulated F5); fake API returns 409 `NO_AVAILABILITY` on confirm | The draft survives; on 409 back to `/book/time` with an Alert, the old time unselected | Draft only in memory | `BookingFlow.test.tsx` |
 | TC-02-33 | All | Manual | Stack running | M1–M9 | As A2 | — | Record in A2 |
 | TC-02-34 | D-02.12, D-02.3 | Integration + Web | Two dealerships | Customer books without `dealershipId`; with a missing `dealershipId`; web step 1 | 400; 404 `DEALERSHIP_NOT_FOUND`; the web shows the "Dealership" field | — | `CreateBookingTest::test_customer_must_name_a_dealership`, `ChooseServicePage.test.tsx` |
 | TC-02-35 | INV-02.9, D-02.3 | Integration | Advisor of D1 | Sends `dealershipId: D2` | 201; the booking belongs to D1 | Body `dealershipId` used | `CreateBookingTest::test_advisor_dealership_comes_from_account` |
+| TC-02-36 | D-02.15 | Integration | 25 customers named "Nguyễn …" | Advisor `?query=nguy` | 20 rows; `meta.total` 25 | Total = page length | `Feature/Customers/CustomerSearchTest::test_D_02_15_total_is_the_real_count` |
+| TC-02-37 | WEB §B3 | Web component | Clock 2026-11-02T18:30Z (01:30 on 3 Nov in Ho Chi Minh); browser `TZ=America/New_York` | Render New booking | The date picker's minimum is 2026-11-03 | Browser date used | `web/src/staff/booking/NewBookingPage.test.tsx` |
 
 ## B3. Fixtures
 

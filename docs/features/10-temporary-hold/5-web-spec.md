@@ -69,7 +69,7 @@ Expired state:
 - Step 3: countdown from `expiresAt` using the server clock; under 1 minute the timer turns red. At 00:00 the form is disabled and the expired state shows (no API call needed).
 - The vehicle picker and "Add a new vehicle" work as in F02 (new vehicle saved first with its own key, then confirm).
 - "Pick a time again" → `/book/time` with service, date and vehicle kept in `BookingDraft`; the old time is unselected.
-- `REQUEST_IN_PROGRESS` / no response → `IdempotentRetryPanel` (customer variant).
+- `REQUEST_IN_PROGRESS` (from the idempotency middleware only) / no response → `IdempotentRetryPanel` (customer variant).
 
 ## B4. Copy
 

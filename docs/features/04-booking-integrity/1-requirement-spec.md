@@ -59,13 +59,14 @@ Per-dealership-and-day lock (SDD phase 2), a queue (phase 3), SERIALIZABLE.
 | D-04.9 | Every status change goes through one seam, `TransitionAppointment` (check `canMoveTo` → versioned write → deactivate allocations when the new status does not hold the slot → history row). |
 | D-04.10 | Same key while the first request is **still running**: the later request gets `409 REQUEST_IN_PROGRESS` (FR-04.8). A request arriving **after** the first finished gets the saved answer. (SDD §13 says "all 10 get the same answer" — the FR is more specific and wins.) |
 | D-04.11 | A key belongs to **one user**: unique `(user_id, key)`. The same key from another user is a new request of that user and never returns the first user's answer. |
-| D-04.12 | Save the answer for every status < 500 (2xx and business 4xx, including 409, 412, 422). Status ≥ 500 → delete the key row so a retry really runs. |
+| D-04.12 | Save the answer for every status < 500 (2xx and business 4xx, including 409, 412, 422). Status ≥ 500 → delete the key row so a retry really runs. A saved answer is final for that key: clients use a new key to try the action again after any answer other than no response, 5xx or 409 `REQUEST_IN_PROGRESS` (README D-G.15, WEB-04.1). |
 | D-04.13 | An `IN_PROGRESS` key row has `locked_until = now + 60s`; once that passes (worker died), a later request takes it over with one atomic `UPDATE`. |
 | D-04.14 | Body hash = SHA-256 of `METHOD \n path \n canonical JSON body (keys sorted recursively)`. `If-Match` is not part of it. A key reused on another endpoint → different hash → 422. |
 | D-04.15 | `If-Match` accepts only the strong form `"N"` (integer N ≥ 1). Missing → 428; malformed (`*`, `W/"3"`, `abc`) → 400 `VALIDATION_ERROR`. |
-| D-04.16 | After 23P01 on resource X, drop every remaining pair using X, then try the next pair. After 3 tries → `409 NO_AVAILABILITY` with `reason: "SLOT_TAKEN"`. |
+| D-04.16 | After 23P01 on resource X, drop every remaining pair using X, then try the next pair. After 3 tries → `409 NO_AVAILABILITY` with `reason: "SLOT_TAKEN"`. This works because F03 orders pairs so the first 5 spread over several technicians and bays (F03 D-03.3). |
 | D-04.17 | A 23P01 error is mapped to a resource type by reading `resource_type` in PostgreSQL's error detail (`CLAUDE.md`). Unreadable → treat as `TECHNICIAN` (try the next pair) and log a warning. |
 | D-04.18 | F04 dispatches the Laravel events `AllocationRetried`, `IdempotentReplayed`, `AppointmentModifiedDetected` for F08 to count; F04 does not depend on F08. |
+| D-04.20 | F04 completes F01's technician disable (F01 D-01.11, D-01.13): it binds `UpcomingAssignmentsReader` to a reader over `resource_allocations` (active `TECHNICIAN` rows with `upper(period) > now`, expired holds excluded), and every allocation write reads its technician `FOR SHARE`, treating an inactive one like a 23P01 on that technician. |
 | D-04.19 | F04 owns `AppointmentResource` (the JSON shape of an appointment) because 412 must return "the latest data". F02 reuses it for 201. |
 
 ## A7. Open questions
@@ -96,7 +97,7 @@ Assumes F00, F01, F03 are merged: `CandidateFinder`, `AllocationSnapshotReposito
 | S-04.1 | Migrations: `appointments`, `resource_allocations` (EXCLUDE), `idempotency_keys`, `appointment_events`, `outbox_messages`, sequence `appointment_reference_seq`, version trigger (DB). |
 | S-04.2 | Enums `AppointmentStatus` (`canMoveTo`, `holdsSlot`), `ResourceType`, `AppointmentEventType`, `OutboxEventType`, `OutboxChannel`. |
 | S-04.3 | `AppointmentRepository` (`insert`, `find`, `updateVersioned`), `ResourceAllocationRepository` (`insertFor`, `deactivateFor`, `deactivateType`; implements `BusyIntervalReader`). |
-| S-04.4 | `AppointmentWriter::create()` (3-try loop, 23P01 mapping), `TransitionAppointment`, `AppointmentEventRecorder`, `OutboxWriter`. |
+| S-04.4 | Internal services (README §6.3): `AppointmentWriterInterface::create()` (3-try loop, 23P01 mapping), `AppointmentTransitionInterface::transition()` (the operation the specs call `TransitionAppointment`), `AppointmentEventRecorderInterface`, `OutboxWriterInterface`. |
 | S-04.5 | Middleware `Idempotency`, `IfMatch`; `ExpectedVersion::from($request)`; daily `idempotency:prune` command. |
 | S-04.6 | Exceptions: `NoAvailability` (409), `VehicleAlreadyBooked` (409), `AppointmentModified` (412), `InvalidStatusTransition` (422), `IdempotencyKeyRequired` (400), `IdempotencyKeyMismatch` (422), `RequestInProgress` (409), `PreconditionRequired` (428). |
 | S-04.7 | `AppointmentResource` + `AppointmentResponder` (body + `ETag`). |
@@ -121,11 +122,13 @@ Assumes F00, F01, F03 are merged: `CandidateFinder`, `AllocationSnapshotReposito
 | INV-04.12 | An outbox row exists only if the business change committed (same transaction). No SMS/email/DMS call inside a request. | `OutboxWriter::append` only works inside a transaction (`DB::transactionLevel() > 0`, else `LogicException`). |
 | INV-04.13 | Every time comparison (hold expiry, key lock expiry) uses the app's `now()` passed into SQL (README D-G.6). | Repositories take `CarbonImmutable $now`. |
 | INV-04.14 | The `/_testing/*` routes and the `testing:request` command exist only when `APP_ENV=testing`. | The provider checks the environment in `register()`. |
+| INV-04.15 | No allocation is ever written for an inactive technician, even when the technician is disabled at the same moment (F01 INV-01.7). | Inside the allocation transaction of `create` and `moveTo`, before inserting the `TECHNICIAN` row: `SELECT active FROM technicians WHERE id = ? FOR SHARE`; inactive → roll back and drop that technician's pairs (D-04.16), like a 23P01 on `TECHNICIAN`. The `FOR SHARE` lock waits for a running disable (`FOR UPDATE`) and blocks it until this transaction ends. |
 
 Edge cases:
 
 | Decision | Edge case | TC |
 | --- | --- | --- |
+| Technician disabled (INV-04.15, D-04.20) | Pair's technician disabled after the snapshot; booking and disable at the same moment; disable with an upcoming / only an expired-hold appointment | TC-04-42, TC-01-18, TC-01-17, TC-01-19 |
 | Create (INV-04.1, 04.2) | 20 parallel for 1 pair; 10 parallel for 2 pairs; vehicle clash; technician clash from a stale snapshot; forced failure mid-way; 3 tries used up | TC-04-01, 04-02, 04-08, 04-10, 04-09, 04-11 |
 | Versioned change (INV-04.3, 04.4) | Two parallel changes on v3; old version; missing `If-Match`; malformed `If-Match`; direct UPDATE without increment | TC-04-06, 04-22, 04-07, 04-23, 04-13 |
 | Freeing the slot (INV-04.5, 04.6) | Each of `CANCELLED`, `COMPLETED`, `NO_SHOW`, `EXPIRED`; wrong transition order | TC-04-14, TC-04-15 |
@@ -139,13 +142,15 @@ Edge cases:
 | `api/database/migrations/2026_11_05_*` | 5 tables + sequence + trigger ([3-database-spec.md](3-database-spec.md)). |
 | `api/app/Domain/Booking/AppointmentStatus.php`, `ResourceType.php`, `AppointmentEventType.php` | Enums. |
 | `api/app/Domain/Booking/Repositories/AppointmentRepository(.php, Interface.php)` | `insert`, `find`, `updateVersioned(string $id, int $expected, array $changes, CarbonImmutable $now): int` (returns the new version). |
-| `api/app/Domain/Booking/Repositories/ResourceAllocationRepository(.php, Interface.php)` | `insertFor`, `deactivateFor`, `deactivateType`, `forDealership` (BusyIntervalReader). Replaces the `NoBusyIntervals` binding. |
-| `api/app/Domain/Booking/AppointmentWriter.php` | `create(NewAppointment $data, list<CandidatePair> $pairs): Appointment`, `moveTo(…)` (B5). |
-| `api/app/Domain/Booking/TransitionAppointment.php` | D-04.9. |
-| `api/app/Domain/Booking/AppointmentEventRecorder.php` | INV-04.11. |
+| `api/app/Domain/Booking/Repositories/ResourceAllocationRepository(.php, Interface.php)` | `insertFor`, `deactivateFor`, `deactivateType`, `forDealership` (BusyIntervalReader), `upcomingForTechnician` (`UpcomingAssignmentsReader`, D-04.20). Replaces the `NoBusyIntervals` and `NoUpcomingAssignments` bindings. |
+| `api/app/Domain/MasterData/Repositories/TechnicianRepository(.php, Interface.php)` | `lockForAllocation(string $id): bool` (`FOR SHARE`, returns `active`), INV-04.15. |
+| `api/app/Domain/Booking/Services/AppointmentWriter(.php, Interface.php)` | `create(NewAppointment $data, list<CandidatePair> $pairs, now): Appointment`, `moveTo(…)` (B5). |
+| `api/app/Domain/Booking/Services/AppointmentTransition(.php, Interface.php)` | `transition(…)`, D-04.9. |
+| `api/app/Domain/Booking/Services/AppointmentEventRecorder(.php, Interface.php)` | INV-04.11. |
 | `api/app/Domain/Booking/Exceptions/*.php` | S-04.6. Rendered through the existing `ProblemException`. |
 | `api/app/Domain/Booking/Events/{AllocationRetried,IdempotentReplayed,AppointmentModifiedDetected}.php` | D-04.18. |
-| `api/app/Domain/Notifications/OutboxWriter.php`, `OutboxEventType.php`, `OutboxChannel.php` | D-04.3, D-04.4. |
+| `api/app/Domain/Notifications/Services/OutboxWriter(.php, Interface.php)`, `api/app/Domain/Notifications/OutboxEventType.php`, `OutboxChannel.php` | D-04.3, D-04.4. |
+| `api/app/Providers/DomainServiceProvider.php` | Bind the four interfaces above (README D-G.13). |
 | `api/app/Http/Middleware/Idempotency.php`, `IfMatch.php`; `api/app/Http/ExpectedVersion.php` | Aliases `idempotent`, `if-match` in `bootstrap/app.php`. |
 | `api/app/Domain/Booking/Repositories/IdempotencyKeyRepository.php` | Reads/writes `idempotency_keys`. |
 | `api/routes/console.php` | `idempotency:prune` → `Schedule::command(...)->daily()`. |
@@ -161,7 +166,7 @@ HTTP and headers: [4-api-spec.md](4-api-spec.md). Tables: [3-database-spec.md](3
 Seam shapes (_illustrative_):
 
 ```php
-final class AppointmentWriter {
+interface AppointmentWriterInterface {
     /** INV-04.1, 04.2, D-04.16, D-04.17. @param list<CandidatePair> $pairs */
     public function create(NewAppointment $data, array $pairs, CarbonImmutable $now): Appointment; // throws NoAvailability, VehicleAlreadyBooked
 
@@ -171,9 +176,9 @@ final class AppointmentWriter {
                            CarbonImmutable $now): Appointment; // throws AppointmentModified, NoAvailability, VehicleAlreadyBooked
 }
 
-final class TransitionAppointment {
+interface AppointmentTransitionInterface {   // the specs call this operation `TransitionAppointment`
     /** D-04.8, D-04.9, INV-04.5. $changes: extra columns (cancel_reason, checked_in_at…) */
-    public function __invoke(string $id, int $expectedVersion, AppointmentStatus $to, array $changes,
+    public function transition(string $id, int $expectedVersion, AppointmentStatus $to, array $changes,
                              ?OutboxEventType $outbox, ?User $actor, CarbonImmutable $now): Appointment;
 }
 ```
@@ -198,7 +203,7 @@ FCs from BA: FC-04.1 (per-dealership-and-day lock) → one line in `AppointmentW
 1. Take the pairs from F03 (the caller already checked opening hours, permissions, vehicle ownership).
 2. `tries = 0`. While pairs remain and `tries < 3`:
    1. `tries++`. Take the first pair.
-   2. Transaction: insert `appointments` (version 1, `reference` per D-04.6, `technician_id`, `bay_id` from the pair) → insert allocations `TECHNICIAN`, `BAY`, and `VEHICLE` when there is a vehicle, all with `period = tstzrange(start, end, '[)')` → history row (`CREATED` or `HELD`) → if `CONFIRMED`: `OutboxWriter::append(AppointmentConfirmed)` → commit → return the appointment.
+   2. Transaction: read the pair's technician `FOR SHARE` (INV-04.15); inactive → roll back, drop its pairs, loop → insert `appointments` (version 1, `reference` per D-04.6, `technician_id`, `bay_id` from the pair) → insert allocations `TECHNICIAN`, `BAY`, and `VEHICLE` when there is a vehicle, all with `period = tstzrange(start, end, '[)')` → history row (`CREATED` or `HELD`) → if `CONFIRMED`: `OutboxWriter::append(AppointmentConfirmed)` → commit → return the appointment.
    3. Catch `QueryException` with `getCode() === '23P01'`: read the resource type (D-04.17).
       - `VEHICLE` → throw `VehicleAlreadyBooked` (with the appointment holding the vehicle if found, B8). No more tries.
       - `TECHNICIAN`/`BAY` → drop every pair using that resource (D-04.16), dispatch `AllocationRetried`, loop.
@@ -274,6 +279,8 @@ The `/_testing/*` routes are described in [4-api-spec.md](4-api-spec.md) §B5.
 | AC-04.21 (new) | An expired `HELD` appointment holds the only technician | Read the snapshot | That range is not busy | TC-04-27 |
 | AC-04.22 (new) | An appointment at version 4 | Change with `If-Match: "3"` | 412 with `appointment.version = 4` and `ETag: "4"` | TC-04-22 |
 | AC-04.23 (new) | `APP_ENV=local` | List routes | No `/_testing/*` | TC-04-28 |
+| AC-04.24 (new) | The snapshot offered An; An is disabled before the write | Create | 201 with the next technician; no allocation for An | TC-04-42 |
+| AC-04.25 (new) | Chi has a booking tomorrow | Admin disables Chi (F01 API-01.6) | 409 `TECHNICIAN_HAS_BOOKINGS` (F01 AC-01.8 with the real reader) | TC-01-17 |
 
 ## B10. Implementation order
 

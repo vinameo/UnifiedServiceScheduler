@@ -6,7 +6,7 @@
 
 ## A1. Why
 
-The schedule is only a plan. On the day, the foreman needs to record reality (arrived, started, finished, did not come), absorb overruns, and react to absences and broken bays. Done by hand, these moves are where double bookings and forgotten customers happen. FR-12.5 sets the tone: the system never cancels a customer on its own.
+The schedule is only a plan. On the day, the foreman needs to record reality (arrived, started, finished, did not come) and absorb overruns. Absences and broken bays are out of scope in this version (README D-G.16). Done by hand, these moves are where double bookings and forgotten customers happen. FR-12.5 sets the tone: the system never cancels a customer on its own.
 
 ## A2. Evidence
 
@@ -16,18 +16,18 @@ The schedule is only a plan. On the day, the foreman needs to record reality (ar
 | E-12.2 | SDD §6 | "Foreman extends a late job while the advisor marks it completed" — a lost-update case. |
 | E-12.3 | SDD §10 | Extend: version + EXCLUDE; reassign: version per appointment, 412 only for that one. |
 | E-12.4 | Workshop board draft | Timeline by bay, legend (Completed, In progress, Checked in, Confirmed, On hold, Overrun), technicians table, overrun alert with "Extend 30 min". |
-| E-12.5 | Reassign draft | Absence form, "Find affected appointments", per-booking proposal, "Apply reassignment", SMS note. |
+| E-12.5 | User decision 2026-11-03 | No attendance, leave or bay outages; technicians are disabled in Master data (F01). The reassign draft is not built. |
 
 ## A3. Priorities
 
-Could (requirements). Within F12: status actions are Must-like (they free slots); absence/reassign is the core value; extend with displacement and the board are Should.
+Could (requirements). Within F12: status actions are Must-like (they free slots); extend with displacement and the board are Should; the contact list is Should.
 
 ## A4. Business risks
 
 | ID | Risk | Handling |
 | --- | --- | --- |
 | RB-12.1 | A displaced customer is not called and arrives anyway | Contact list (F05 filter) + banner on the booking |
-| RB-12.2 | Customers dislike a technician change | `AppointmentReassigned` SMS (F11); keep the same bay when possible |
+| RB-12.2 | Customers dislike a technician change after an overrun | `AppointmentReassigned` SMS (F11); keep the same technician or bay when possible |
 | RB-12.3 | Foremen extend "just in case" and block later customers | Extend only while checked in/in progress; history records who extended |
 
 ---
@@ -42,22 +42,13 @@ Could (requirements). Within F12: status actions are Must-like (they free slots)
 
 ## B1. ADRs
 
-### ADR-12.1 · Absences as unavailability, not fake allocations
+### ADR-12.2 · Extend in one transaction
 
-- **Options:** (a) separate `technician_absences`/`bay_outages` tables read by F03; (b) insert `resource_allocations` rows without an appointment.
-- **Chosen: (a).** `resource_allocations.appointment_id` is NOT NULL and every allocation belongs to a booking (INV-04.6). F03's `BusyIntervalReader` was designed for extra sources (ADR-03.3).
-
-### ADR-12.2 · Extend in one transaction, reassignments of an absence one by one
-
-- Extend changes one job and its direct neighbours; doing it atomically avoids a state where the job is extended but the neighbour still holds the bay (which EXCLUDE would refuse anyway). An absence can touch many bookings across a day; FR-12.4 requires independence so one 412 does not block the rest.
+- Extend changes one job and its direct neighbours; doing it atomically avoids a state where the job is extended but the neighbour still holds the bay (which EXCLUDE would refuse anyway). If absences come back (FC-12.2), each of their reassignments gets its own transaction (FR-12.4).
 
 ### ADR-12.3 · Displace, never cancel
 
 - When an overrun physically takes the bay and nothing else is free, the next booking cannot keep its slot, but cancelling is forbidden (FR-12.5). Displacement (flag + no allocations) is honest about reality and keeps the customer visible for a call.
-
-### ADR-12.4 · Preview then apply
-
-- The draft shows a proposal before "Apply". The preview is read-only and may be stale; apply recomputes (same reasoning as F06 BR-06.1).
 
 ## B2. Metrics
 
@@ -73,5 +64,5 @@ Could (requirements). Within F12: status actions are Must-like (they free slots)
 | ID | Constraint | Seam |
 | --- | --- | --- |
 | FC-12.1 | Manual technician choice | `Reassigner` forced pair |
-| FC-12.2 | Planned leave entered ahead | Absences already support future ranges (≤ 14 days; raise the bound) |
+| FC-12.2 | Absences, planned leave, bay outages | Extra `BusyIntervalReader` source (F03 ADR-03.3) + `Reassigner` loop, one transaction per booking (deferred, README D-G.16) |
 | FC-12.3 | Notify displaced customers automatically | Outbox event on `CONTACT_REQUIRED` |

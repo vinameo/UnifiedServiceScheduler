@@ -70,16 +70,16 @@ Deviations from the drafts: RQ §A3.
 | WEB-02.4 | `AppointmentStatusBadge` | `web/src/shared/appointments/AppointmentStatusBadge.tsx` | Colour by status: HELD yellow, CONFIRMED blue, CHECKED_IN cyan, IN_PROGRESS indigo, COMPLETED green, CANCELLED gray, NO_SHOW red, EXPIRED gray. Labels from `CONTEXT.md`. |
 | WEB-02.5 | `TimeGrid` | `web/src/shared/booking/TimeGrid.tsx` | Groups "Morning" (< 12:00) / "Afternoon"; single-select chips; past times `disabled`. Props let F06 pass per-chip state. |
 | WEB-02.6 | `BookingErrorCard` | `web/src/shared/booking/BookingErrorCard.tsx` | Takes a `Problem` → the draft's card for `NO_AVAILABILITY` (heading + F03 reason copy), `VEHICLE_ALREADY_BOOKED`, `OUTSIDE_OPENING_HOURS`, `START_IN_PAST`, `START_TOO_FAR_AHEAD`; an `actions` slot for F05/F06/F09 buttons. |
-| WEB-02.7 | `useCreateAppointment()` | `web/src/shared/api/appointments.ts` | Mutation using `idempotentPost` (F04) + `useIdempotencyKey(body)`. |
+| WEB-02.7 | `useCreateAppointment()` | `web/src/shared/api/appointments.ts` | Mutation using `idempotentPost` (F04) + `useIdempotencyKey(body)`; every answer goes through `settle()` (README D-G.15), so a retry after a 409/422 uses a new key. |
 | WEB-02.8 | `BookingDraft` | `web/src/customer/booking/BookingDraftContext.tsx` | `{ dealershipId, serviceTypeId, date, start, vehicleId?, newVehicle?, reminderOptIn }` stored in `sessionStorage` (wrapped in `try/catch`); cleared after confirming. |
 | WEB-02.9 | API hooks | `web/src/shared/api/customers.ts`, `vehicles.ts` | `useCustomerSearch(query)` (300 ms debounce, only with ≥ 3 characters), `useCustomerVehicles(id)`, `useMyVehicles()`, `useAddVehicle()`. |
 
 ## B3. Behaviour — New booking (staff)
 
-- **Customer**: searchable Mantine `Select` fed by `useCustomerSearch`; each row "{fullName} · {maskPhone(phone)}". Changing the customer clears the vehicle.
+- **Customer**: searchable Mantine `Select` fed by `useCustomerSearch`; each row "{fullName} · {maskPhone(phone)}". When `meta.total` > 20, the last row says "Showing 20 of {total} matches. Type more to narrow the search." Changing the customer clears the vehicle.
 - **Vehicle**: `Select` from `useCustomerVehicles`; rows "{make} {model} · {licencePlate}"; note "Only vehicles owned by the selected customer are shown." A `VEHICLE_NOT_OWNED_BY_CUSTOMER` error shows right under this field (draft: field-level), not as a card.
 - **Service**: `Radio.Card` from `useServiceTypes` (active only); meta "{duration} · {bayTypeLabel}".
-- **Date**: `TextInput type="date"` (no new package, README D-G.11) plus ‹ › buttons; shows "Monday, 2 Nov 2026"; min today, max today + 90; a closed day → "The dealership is closed on this day." and an empty grid.
+- **Date**: `TextInput type="date"` (no new package, README D-G.11) plus ‹ › buttons; shows "Monday, 2 Nov 2026"; min today, max today + 90 ("today" is the dealership's local date, from `formatInZone`, never the browser's); a closed day → "The dealership is closed on this day." and an empty grid.
 - **Time**: `TimeGrid` with `localSlotsForDay`; under it "Times in dealership time zone (GMT+7)." (offset computed with `Intl`, never hard-coded).
 - **Summary**: live; "Technician, bay — Assigned automatically on confirm".
 - **Confirm booking**: `SubmitButton` ("Confirming…"); `disabled` with "Choose a time to continue" when data is missing; `doubleSubmitNote` (F04) below it.
@@ -109,6 +109,7 @@ Deviations from the drafts: RQ §A3.
 | `staff.section1` | 1. Customer and vehicle |
 | `staff.customer` / `staff.vehicle` | Customer / Vehicle |
 | `staff.customerPlaceholder` | Search by name, phone or email |
+| `staff.searchMore` | Showing 20 of {total} matches. Type more to narrow the search. |
 | `staff.vehicleNote` | Only vehicles owned by the selected customer are shown. |
 | `staff.section2` | 2. Service |
 | `staff.section3` | 3. Date and time |

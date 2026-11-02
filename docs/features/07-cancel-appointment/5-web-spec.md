@@ -41,7 +41,7 @@ After cancelling: banner "You cancelled this appointment · The time slot has be
 
 | ID | Seam | File | Behaviour |
 | --- | --- | --- | --- |
-| WEB-07.1 | `useCancelAppointment(id)` | `web/src/shared/api/appointments.ts` | Mutation: reads the `etag` from `appointmentQuery`, sends `If-Match` + key (`useIdempotencyKey({id, reason, note})`). 200 → `setAppointment(…)` + invalidate the lists and availability. 412 → hands `latest` to `AppointmentModifiedAlert`. |
+| WEB-07.1 | `useCancelAppointment(id)` | `web/src/shared/api/appointments.ts` | Mutation: reads the `etag` from `appointmentQuery`, sends `If-Match` + key (`useIdempotencyKey({id, etag, reason, note})`, settled after every answer, README D-G.15). 200 → `setAppointment(…)` + invalidate the lists and availability. 412 → hands `latest` to `AppointmentModifiedAlert`. |
 | WEB-07.2 | `CancelAppointmentModal` | `web/src/staff/appointments/CancelAppointmentModal.tsx` | Mantine `Modal`. The body uses `bay.name`, `technician.name`, `range` of the booking on screen. Confirm is a red `SubmitButton` ("Cancelling…"). |
 | WEB-07.3 | `CancelBookingSheet` | `web/src/customer/bookings/CancelBookingSheet.tsx` | Mantine `Drawer position="bottom"`; a `Radio.Group` of reasons (none = null). "Other reason" opens a `Textarea` → `note`. |
 | WEB-07.4 | `canCustomerChange(appointment, now)` | `web/src/shared/appointments/changeWindow.ts` | Mirrors `CustomerChangePolicy`; F09 reuses it. `now` comes from a clock corrected by the server `Date` header (F10 builds it fully; F07 uses `Date.now()`). |

@@ -4,7 +4,7 @@
 
 # PART A · For readers
 
-Seven new tables: opening hours, service types, bays, technicians, technician skills, shifts, vehicles. The rules live in the DB (duration > 0, closing after opening, unique plates), so bad data cannot get in through any path. Demo data matches the drafts.
+Five new tables: opening hours, service types, bays, technicians, vehicles. A service needs one level (1–7); a technician has one level; there are no skill or shift tables (README D-G.16). The rules live in the DB (duration > 0, closing after opening, unique plates), so bad data cannot get in through any path. Demo data matches the drafts.
 
 ---
 
@@ -38,7 +38,7 @@ Every table: `id uuid PK`, `created_at`, `updated_at timestamptz` (unless noted)
 | `name` | `varchar(100)` | NOT NULL |
 | `description` | `varchar(200)` | NULL ("oil and oil filter") |
 | `duration_minutes` | `integer` | NOT NULL, `CHECK (duration_minutes > 0 AND duration_minutes % 15 = 0 AND duration_minutes <= 480)` |
-| `required_skill` | `varchar(32)` | NOT NULL, CHECK in enum `Skill` |
+| `required_level` | `smallint` | NOT NULL, `CHECK (required_level BETWEEN 1 AND 7)` |
 | `required_bay_type` | `varchar(16)` | NOT NULL, CHECK in enum `BayType` |
 | `active` | `boolean` | NOT NULL DEFAULT true |
 
@@ -53,13 +53,11 @@ Every table: `id uuid PK`, `created_at`, `updated_at timestamptz` (unless noted)
 | `active` | `boolean` | NOT NULL DEFAULT true |
 | index | | `(dealership_id, bay_type) WHERE active` |
 
-### DB-01.4 · `technicians`, `technician_skills`, `technician_shifts`
+### DB-01.4 · `technicians`
 
-`technicians`: `dealership_id` NOT NULL FK; `name varchar(100)` NOT NULL; `active boolean` NOT NULL DEFAULT true; unique `(dealership_id, name)` (natural key for the seeder; renaming a real person changes the seed key).
+`technicians`: `dealership_id` NOT NULL FK; `name varchar(100)` NOT NULL; `level smallint` NOT NULL `CHECK (level BETWEEN 1 AND 7)`; `active boolean` NOT NULL DEFAULT true; unique `(dealership_id, name)` (natural key for the seeder; renaming a real person changes the seed key). Index `(dealership_id, level) WHERE active` is not needed at this size (≤ 50 technicians per dealership); the snapshot reads the whole dealership.
 
-`technician_skills`: `technician_id uuid` FK `ON DELETE CASCADE`, `skill varchar(32)` CHECK enum; PK `(technician_id, skill)`; no `id`, no timestamps.
-
-`technician_shifts`: `technician_id` FK `ON DELETE CASCADE`; `weekday smallint` CHECK 1..7; `starts_at`, `ends_at time` `CHECK (ends_at > starts_at)`; unique `(technician_id, weekday, starts_at)`.
+No `technician_skills` or `technician_shifts` tables (README D-G.16): an active technician is available whenever the dealership is open.
 
 ### DB-01.5 · `vehicles`
 
@@ -84,7 +82,7 @@ Every table: `id uuid PK`, `created_at`, `updated_at timestamptz` (unless noted)
 | `create_dealership_opening_hours_table` | — | `dropIfExists` |
 | `create_service_types_table` | — | `dropIfExists` |
 | `create_bays_table` | — | `dropIfExists` |
-| `create_technicians_tables` (3 tables) | — | drop `technician_shifts`, `technician_skills`, `technicians` in that order |
+| `create_technicians_table` | — | `dropIfExists` |
 | `create_vehicles_table` | — | `dropIfExists` |
 
 CHECKs use `DB::statement`, named `<table>_<column>_check`. All tables are new, so no existing rows need checking.
@@ -97,25 +95,25 @@ Dealership `SGA-D7` (F00). The `updateOrCreate` key is in the "Key" column.
 
 **Service types** (key `dealership_id, code`):
 
-| code | name | description | minutes | skill | bay type |
+| code | name | description | minutes | level | bay type |
 | --- | --- | --- | --- | --- | --- |
-| `OIL_CHANGE` | Oil change | oil and oil filter | 60 | `BASIC` | `QUICK` |
-| `MAINT_20K` | 20,000 km service | full manufacturer checklist | 120 | `GENERAL_MAINTENANCE` | `STANDARD` |
-| `EV_BATTERY` | EV battery check | by a high-voltage certified technician | 90 | `EV_HIGH_VOLTAGE` | `EV` |
+| `OIL_CHANGE` | Oil change | oil and oil filter | 60 | 1 | `QUICK` |
+| `MAINT_20K` | 20,000 km service | full manufacturer checklist | 120 | 3 | `STANDARD` |
+| `EV_BATTERY` | EV battery check | by a level 5+ technician | 90 | 5 | `EV` |
 
 **Bays** (key `dealership_id, code`): `K1` Bay 1 `QUICK`; `K2` Bay 2 `QUICK`; `K3` Bay 3 `STANDARD`; `KEV` Bay EV `EV`. All active.
 
 **Technicians** (key `dealership_id, name`):
 
-| Name | Skills | Shifts | Active |
+| Name | Level | Active (on first insert) | Can do |
 | --- | --- | --- | --- |
-| Trần Minh An | BASIC | Mon–Sat 08:00–17:00 | ✓ |
-| Lý Hoàng Dũng | BASIC, GENERAL_MAINTENANCE | Mon–Sat 08:00–17:00 | ✓ |
-| Võ Thị Chi | BASIC, GENERAL_MAINTENANCE | Mon–Sat 08:00–17:00 | ✓ |
-| Ngô Bảo Em | BASIC, GENERAL_MAINTENANCE, EV_HIGH_VOLTAGE | Mon–Sat 08:00–17:00 | ✓ |
-| Huỳnh Tấn Phát | BASIC | Mon–Fri 08:00–12:00 | ✗ |
+| Trần Minh An | 2 | ✓ | Oil change |
+| Lý Hoàng Dũng | 3 | ✓ | Oil change, 20,000 km |
+| Võ Thị Chi | 4 | ✓ | Oil change, 20,000 km |
+| Ngô Bảo Em | 6 | ✓ | All three |
+| Huỳnh Tấn Phát | 1 | ✗ | (disabled) |
 
-The seeder syncs skills and shifts: delete extra rows, add missing ones (never delete-all-and-insert, so a rerun changes nothing).
+The seeder sets `level` on every run but writes `active` only when it creates the row, so a rerun never undoes an admin's disable or enable (INV-01.6).
 
 **Vehicles** (key `plate_key`):
 
@@ -131,11 +129,13 @@ If a seed customer is missing (F00 skipped it because its password variable was 
 
 | Query | Index |
 | --- | --- |
-| A dealership's technicians with skills and shifts (F03 snapshot) | `technicians (dealership_id, name)` unique; `technician_skills` PK; `technician_shifts (technician_id, weekday, starts_at)` |
+| A dealership's technicians (F03 snapshot) | `technicians (dealership_id, name)` unique |
+| Disable: lock one technician `WHERE id = ? AND dealership_id = ? FOR UPDATE` | PK |
+| Upcoming appointments of a technician (F04 reader): active `TECHNICIAN` allocations with `upper(period) > :now`, joined to `appointments` to drop expired holds | EXCLUDE GiST on `resource_allocations` (F04) |
 | Active bays by type | `bays (dealership_id, bay_type) WHERE active` |
 | A customer's vehicles | `vehicles (customer_id)` |
 | Vehicle by plate | `vehicles (plate_key)` unique |
 
 ## B5. DB tests
 
-TC-01-08 (unique plate/VIN), TC-01-09 (seeding twice), TC-01-10 (CHECKs reject 0 minutes, 50 minutes, closing ≤ opening). Details in [6-test-case.md](6-test-case.md).
+TC-01-08 (unique plate/VIN), TC-01-09 (seeding twice), TC-01-10 (CHECKs reject 0 minutes, 50 minutes, level 0 or 8, closing ≤ opening), TC-01-18 (disable vs booking race, after F04). Details in [6-test-case.md](6-test-case.md).

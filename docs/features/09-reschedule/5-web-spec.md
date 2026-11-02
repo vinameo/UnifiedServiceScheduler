@@ -56,7 +56,7 @@ Choose a time  12 free slots
 
 | ID | Seam | File | Behaviour |
 | --- | --- | --- | --- |
-| WEB-09.1 | `useRescheduleAppointment(id)` | `web/src/shared/api/appointments.ts` | Mutation: `If-Match` from `appointmentQuery`, key from `useIdempotencyKey({id, newStart, keepTechnician})`. 200 → `setAppointment`, invalidate lists + availability, navigate back to details with notification "Appointment moved to {dayShort}, {range}". 409 → `BookingErrorCard` with `AlternativeChips`. 412 → `AppointmentModifiedAlert`. |
+| WEB-09.1 | `useRescheduleAppointment(id)` | `web/src/shared/api/appointments.ts` | Mutation: `If-Match` from `appointmentQuery`, key from `useIdempotencyKey({id, etag, newStart, keepTechnician})`, settled after every answer (README D-G.15). 200 → `setAppointment`, invalidate lists + availability, navigate back to details with notification "Appointment moved to {dayShort}, {range}". 409 → `BookingErrorCard` with `AlternativeChips`. 412 → `AppointmentModifiedAlert`. |
 | WEB-09.2 | `SlotGrid` with `excludeAppointmentId` | F06 | The booking's own current slot shows as free and marked "Current" (outlined chip, not selectable as new time when it equals the current start). |
 
 ## B3. Behaviour

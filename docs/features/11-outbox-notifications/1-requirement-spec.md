@@ -109,7 +109,7 @@ Assumes F00–F10 are merged: table `outbox_messages` and `OutboxWriter` (F04), 
 | INV-11.1 | No SMS/email/DMS call ever runs inside an HTTP request (`CLAUDE.md` rule 4). | Only `OutboxRelay` calls channels; architecture test. |
 | INV-11.2 | A row is sent only after its booking transaction committed (it is not visible before) and is never lost: every `PENDING` row is eventually `SENT`, `FAILED` or `SKIPPED`. | F04 writes in the same transaction; the relay picks committed rows only. |
 | INV-11.3 | Two relay runs never send the same row at the same time: rows are claimed with `FOR UPDATE SKIP LOCKED` and a 60-second lease. A crash during send → the lease expires and the row is retried (at least once, FR-11.3). | `OutboxRelay::claim`. |
-| INV-11.4 | `attempts` never exceeds 5; the 5th failure sets `FAILED` (FR-11.2). | `OutboxRelay::recordFailure`. |
+| INV-11.4 | `attempts` never exceeds 5; the 5th failure sets `FAILED` (FR-11.2). An attempt whose run died before recording a result (crash, fatal error, killed worker) also counts: once its lease expires with `attempts = 5`, the row becomes `FAILED` (`last_error = 'NO_RESULT'`) instead of being claimed again. | `OutboxRelay::claim` only takes `attempts < 5`; `OutboxRelay::failAbandoned` handles the rest. |
 | INV-11.5 | `payload` and `last_error` hold no phone numbers or emails; recipients are resolved at send time. | `OutboxWriter` (F04) + `RedactPersonalData` on errors. |
 | INV-11.6 | Retrying a failed message changes only that outbox row; no appointment write, no version change (FR-11.5). | `RetryOutboxMessage`. |
 | INV-11.7 | One reminder per booking per start time, even if the reminder job runs several times. | Unique `dedupe_key`. |
@@ -119,7 +119,7 @@ Edge cases:
 
 | Decision | Edge case | TC |
 | --- | --- | --- |
-| Delivery (INV-11.2–11.4) | Channel down; down 5 times; crash mid-send; two relays at once | TC-11-02, TC-11-04, TC-11-07, TC-11-08 |
+| Delivery (INV-11.2–11.4) | Channel down; down 5 times; crash mid-send; crash on every attempt (poison message); two relays at once | TC-11-02, TC-11-04, TC-11-07, TC-11-18, TC-11-08 |
 | Relevance (D-11.7) | Booking cancelled before the confirmation was sent; rescheduled before the reminder | TC-11-09 |
 | Reminders (INV-11.7) | Job runs twice; booking rescheduled after the reminder was queued; opt-out | TC-11-10, TC-11-11 |
 | Retry (INV-11.6, D-11.8) | `FAILED`; `SENT`; another dealership; same key twice | TC-11-05, TC-11-12, TC-11-13 |
@@ -128,15 +128,15 @@ Edge cases:
 
 | File | Change |
 | --- | --- |
-| `api/app/Domain/Notifications/OutboxRelay.php` | Claim, send, record (B7). |
+| `api/app/Domain/Notifications/Services/OutboxRelay(.php, Interface.php)` | Claim, send, record (B7); bound in `DomainServiceProvider`. |
 | `api/app/Domain/Notifications/Channels/{NotificationChannel,LogChannel,FailingChannel,MailChannel}.php`, `ChannelRegistry.php` | D-11.3; drivers chosen by `config/outbox.php` (`OUTBOX_SMS_DRIVER`, `OUTBOX_EMAIL_DRIVER`, `OUTBOX_DMS_DRIVER`). |
 | `api/app/Domain/Notifications/RecipientResolver.php` | D-11.4. |
 | `api/app/Domain/Notifications/Mail/AppointmentNotification.php` | Plain-text mailable per event type. |
-| `api/app/Domain/Notifications/QueueReminders.php`, `api/app/Console/Commands/{RelayOutbox,QueueReminders}.php` | D-11.1, D-11.6. |
+| `api/app/Domain/Notifications/Services/ReminderQueue(.php, Interface.php)` (`QueueReminders`), `api/app/Console/Commands/{RelayOutbox,QueueReminders}.php` | D-11.1, D-11.6. |
 | `api/routes/console.php` | `outbox:relay` every 10 s `withoutOverlapping()`; `outbox:queue-reminders` hourly. |
-| `api/app/Domain/Notifications/Actions/RetryOutboxMessage.php`, `Exceptions/{OutboxMessageNotFound,OutboxNotRetryable}.php` | D-11.8, D-11.10. |
+| `api/app/Domain/Notifications/Services/OutboxService(.php, Interface.php)` (`list`, `summary`, `retry` = `RetryOutboxMessage`), `api/app/Domain/Notifications/Repositories/OutboxMessageRepository(.php, Interface.php)`, `Exceptions/{OutboxMessageNotFound,OutboxNotRetryable}.php` | D-11.8, D-11.10. |
 | `api/app/Http/Controllers/Api/V1/OutboxController.php`, `Resources/OutboxMessageResource.php` | API. |
-| `api/app/Providers/AuthServiceProvider.php` | Ability `admin` reused. |
+| `api/app/Providers/AppServiceProvider.php` (`boot()`) | Ability `admin` reused. |
 | `api/config/outbox.php`, `api/.env.example` | Driver settings, `DMS_WEBHOOK_URL` (optional). |
 | `web/src/staff/notifications/*`, `web/src/staff/monitoring/*` (View link), `web/src/staff/appointments/AppointmentDetailsPage.tsx` (link) | WEB. |
 
@@ -150,7 +150,7 @@ interface NotificationChannel {
     /** @throws DeliveryFailed */
     public function send(OutboxMessage $message, Recipient $recipient): void;
 }
-final class OutboxRelay {
+interface OutboxRelayInterface {
     /** INV-11.2–11.4. Returns counts per outcome. */
     public function runOnce(CarbonImmutable $now, int $batch = 50): RelayResult;
 }
@@ -168,7 +168,8 @@ FCs: FC-11.1 (real SMS/DMS providers) → a new `NotificationChannel`; FC-11.2 (
 ## B7. Algorithms
 
 **`runOnce(now)`**
-1. Transaction: `SELECT … FROM outbox_messages WHERE status = 'PENDING' AND next_attempt_at <= :now ORDER BY next_attempt_at LIMIT 50 FOR UPDATE SKIP LOCKED`; `UPDATE` those rows `attempts = attempts + 1, next_attempt_at = :now + 60s`; commit.
+0. `failAbandoned`: `UPDATE outbox_messages SET status = 'FAILED', last_error = 'NO_RESULT' WHERE status = 'PENDING' AND attempts >= 5 AND next_attempt_at <= :now` (+ one `api_events` `DELIVERY_FAILED` row per message).
+1. Transaction: `SELECT … FROM outbox_messages WHERE status = 'PENDING' AND attempts < 5 AND next_attempt_at <= :now ORDER BY next_attempt_at LIMIT 50 FOR UPDATE SKIP LOCKED`; `UPDATE` those rows `attempts = attempts + 1, next_attempt_at = :now + 60s`; commit.
 2. For each claimed row, outside any transaction:
    1. Relevance check (D-11.7) → `SKIPPED`.
    2. `RecipientResolver` → recipient; none (deleted account) → `SKIPPED` with `last_error = 'NO_RECIPIENT'`.

@@ -33,7 +33,7 @@ Booking is the main value the dealership sees. Two channels (desk, app) book int
 | --- | --- | --- |
 | RB-02.1 | Before F06, advisors guess free times → many 409s | The error card says why; F06 comes right after F05 |
 | RB-02.2 | A customer enters someone else's plate → 409 | The message tells them to call the dealership; the owner is never revealed |
-| RB-02.3 | Advisors searching customers see every customer's personal data | Accepted for staff (needed to book); never in logs; 20 results max, ≥ 3 characters, 60/minute |
+| RB-02.3 | Advisors searching customers see every customer's personal data | Accepted for staff (needed to book, D-02.15); never in logs; 20 results max, ≥ 3 characters, 60/minute. Owner: product owner. Revisit when one advisor hits the 60/minute limit more than 3 times a day (429 rows in `api_events`, F08). |
 
 ---
 

@@ -41,7 +41,7 @@ Time      Event                 Appointment                      Channel  Attemp
 | --- | --- | --- | --- |
 | WEB-11.1 | `useOutboxSummary()` | API-11.2 | `refetchInterval` 15 s |
 | WEB-11.2 | `useOutboxMessages(filters)` | API-11.1 | `useInfiniteQuery`; filters in the URL |
-| WEB-11.3 | `useRetryOutboxMessage()` | API-11.3 | One key per click (`useIdempotencyKey({id})`); success → invalidate WEB-11.1, WEB-11.2 |
+| WEB-11.3 | `useRetryOutboxMessage()` | API-11.3 | One key per click (`useIdempotencyKey({id})`, settled after every answer, README D-G.15); success → invalidate WEB-11.1, WEB-11.2 |
 
 ## B2. Behaviour
 

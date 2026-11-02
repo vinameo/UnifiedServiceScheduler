@@ -52,7 +52,7 @@ Every TC green; M1–M5 pass.
 | AC-11.3 | TC-04-20 (F04) |
 | AC-11.4, FR-11.5, INV-11.6 | TC-11-05 |
 | AC-11.5, FR-11.4, D-11.4, INV-11.5 | TC-11-01, TC-11-06 |
-| AC-11.6, FR-11.2, D-11.2, INV-11.4 | TC-11-04 |
+| AC-11.6, FR-11.2, D-11.2, INV-11.4 | TC-11-04, TC-11-18 |
 | AC-11.7, D-11.7 | TC-11-09 |
 | AC-11.8, D-11.6, INV-11.7 | TC-11-10, TC-11-11 |
 | AC-11.9, D-11.10, INV-11.8 | TC-11-12 |
@@ -86,6 +86,7 @@ Backend in `api/tests/Feature/Notifications/`.
 | TC-11-15 | D-11.9 | Unit | Rows with (PENDING, 0), (PENDING, 2), FAILED, SENT, SKIPPED | `displayStatus` | Pending, Retrying, Failed, Sent, Skipped | Wrong label | `api/tests/Unit/Notifications/DisplayStatusTest` |
 | TC-11-16 | API §B4 | Integration | — | Each row of the adversarial input table | As the table | A rule missing | `OutboxAdversarialInputTest` |
 | TC-11-17 | All | Manual | Stack running | M1–M5 | As A2 | — | Record in A2 |
+| TC-11-18 | INV-11.4 | Integration | One SMS row; the channel throws an `Error` that is not `DeliveryFailed` and the test aborts the run each time (simulated crash, no result recorded) | `runOnce` + `travel(61)->seconds()`, 6 times | `attempts` stops at 5; after the 5th lease expires the row is `FAILED`, `last_error 'NO_RESULT'`, one `DELIVERY_FAILED` event; the claim never sees it again | Poison message retried forever / attempts > 5 | `OutboxRelayTest::test_INV_11_4_abandoned_attempts_end_in_failed` |
 
 ## B3. Fixtures
 

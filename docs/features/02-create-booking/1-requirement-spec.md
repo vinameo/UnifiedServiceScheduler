@@ -84,7 +84,8 @@ Payments, pricing, parts; advisors creating new customers; several services in o
 | D-02.4 | Only `SERVICE_ADVISOR` and `CUSTOMER` create bookings. Foreman, admin → 403 (README §4). |
 | D-02.5 | A customer using a vehicle that is not theirs → 404 `VEHICLE_NOT_FOUND` (does not reveal the vehicle exists). An advisor using another customer's vehicle → 422 `VEHICLE_NOT_OWNED_BY_CUSTOMER` (AC-02.4). |
 | D-02.6 | Extra time rules: 15-minute step (wrong → 400 `VALIDATION_ERROR`), at most 90 days ahead (wrong → 422 `START_TOO_FAR_AHEAD`, new code). |
-| D-02.7 | Check order: format (400) → service type (404) → customer (404) → vehicle (404/422) → 15-minute step (400) → past (422) → too far (422) → opening hours (422) → F03 (409) → write (409/201). |
+| D-02.7 | Check order: format, including the 15-minute step (400, FormRequest, in the dealership's zone) → service type (404) → customer (404) → vehicle (404/422) → past (422) → too far (422) → opening hours (422) → F03 (409) → write (409/201). The step needs the dealership's time zone, so the FormRequest resolves the dealership first (advisor: own; customer: `dealershipId`, missing → 404 `DEALERSHIP_NOT_FOUND`). |
+| D-02.15 | Personal data: every advisor of every dealership can search every customer (README D-G.9) and sees full name, email and phone (needed to book and call). Search is capped (20 results, ≥ 3 characters, 60/minute per advisor), never logged with its `query`, and returns `meta.total` so advisors narrow the search instead of paging. Customer rows are kept while the account exists (no delete feature). |
 | D-02.8 | Extra endpoints: `GET /customers?query=` (advisor customer search, ≥ 3 characters, ≤ 20 results), `GET /customers/{id}/vehicles` (advisor), `GET /me/vehicles`, `POST /me/vehicles` (customer). |
 | D-02.9 | A customer's new vehicle: `licencePlate`, `make`, `model` required; `year`, `vin` optional. A plate that already exists (anyone's) → 409 `PLATE_ALREADY_REGISTERED`; an existing VIN → 409 `VIN_ALREADY_REGISTERED`. At most 10 vehicles per customer → 422 `VEHICLE_LIMIT_REACHED` (new code). |
 | D-02.10 | Customer search matches `full_name` (case-insensitive, contains), phone (digits, starts with), email (starts with). Uses the `pg_trgm` extension (PostgreSQL contrib, not a package) for the name index. |
@@ -122,7 +123,7 @@ Assumes F00, F01, F03, F04 are merged: `CurrentCustomer`, Gates, `DealershipAcce
 | S-02.1 | `POST /api/v1/appointments` (`CONFIRM`). |
 | S-02.2 | `GET /customers`, `GET /customers/{customer}/vehicles`, `GET /me/vehicles`, `POST /me/vehicles`. |
 | S-02.3 | Seam `BookingTimeRules` (step, past, 90 days, opening hours). |
-| S-02.4 | Action `CreateBooking` (the D-02.7 checks + F03 + F04). |
+| S-02.4 | `BookingServiceInterface::create()` — the operation the specs call `CreateBooking` (the D-02.7 checks + F03 + F04), README §6.3. |
 | S-02.5 | Migration: `pg_trgm` + customer search indexes. |
 | S-02.6 | Staff web: New booking, Booking confirmed, error cards. |
 | S-02.7 | Customer web: Choose a service, Choose date and time, Contact details, Booking confirmed. |
@@ -158,14 +159,14 @@ Edge cases:
 | File | Change |
 | --- | --- |
 | `api/app/Domain/Booking/BookingTimeRules.php` | `STEP_MINUTES = 15`, `MAX_DAYS_AHEAD = 90`; `check(CarbonImmutable $start, int $minutes, OpeningHours $hours, CarbonImmutable $now): TimeRange` throws per D-02.7. |
-| `api/app/Domain/Booking/Actions/CreateBooking.php` | B7. |
+| `api/app/Domain/Booking/Services/BookingService(.php, Interface.php)` | `create()` = B7 (`CreateBooking`); bound in `DomainServiceProvider`. |
 | `api/app/Domain/Booking/Exceptions/{StartInPast,StartTooFarAhead,OutsideOpeningHours,VehicleNotOwnedByCustomer,ServiceTypeNotFound,CustomerNotFound,VehicleNotFound}.php` | README §5. |
-| `api/app/Domain/Customers/CustomerSearch.php`, `Actions/AddVehicle.php` (+ exceptions `PlateAlreadyRegistered`, `VinAlreadyRegistered`, `VehicleLimitReached`) | D-02.8–02.10. |
+| `api/app/Domain/Customers/Services/CustomerService(.php, Interface.php)` (`search` = `CustomerSearch`, `vehiclesOf`, `addVehicle` = `AddVehicle`), `api/app/Domain/Customers/Repositories/CustomerRepository(.php, Interface.php)`, exceptions `PlateAlreadyRegistered`, `VinAlreadyRegistered`, `VehicleLimitReached` | D-02.8–02.10, D-02.15. |
 | `api/app/Http/Requests/CreateAppointmentRequest.php`, `AddVehicleRequest.php`, `CustomerSearchRequest.php` | API §B2. |
-| `api/app/Http/Controllers/Api/V1/{Appointment,Customer,MyVehicle}Controller.php` | Thin. |
+| `api/app/Http/Controllers/Api/V1/{Appointment,Customer,MyVehicle}Controller.php` | Thin; call `BookingServiceInterface`, `CustomerServiceInterface` only. |
 | `api/app/Http/Resources/{CustomerSummary,Vehicle}Resource.php` | API §B2. |
 | `api/routes/api.php` | 5 routes; gates `create-appointment`, `search-customers`, `customer`. |
-| `api/app/Providers/AuthServiceProvider.php` | Abilities `create-appointment` (advisor, customer), `search-customers` (advisor). |
+| `api/app/Providers/AppServiceProvider.php` (`boot()`) | Abilities `create-appointment` (advisor, customer), `search-customers` (advisor). |
 | `api/database/migrations/2026_11_06_000001_add_customer_search_indexes.php` | DB. |
 | `web/src/staff/booking/*`, `web/src/customer/booking/*`, `web/src/shared/format/*`, `web/src/shared/api/appointments.ts`, `vehicles.ts`, `customers.ts` | WEB. |
 
@@ -176,8 +177,9 @@ Edge cases:
 `CreateBooking` (_illustrative_, serves INV-02.1–02.7):
 
 ```php
-final class CreateBooking {
-    public function __invoke(User $actor, CreateBookingInput $in, CarbonImmutable $now): Appointment;
+interface BookingServiceInterface {
+    /** The operation the specs call `CreateBooking`. */
+    public function create(User $actor, CreateBookingInput $in, CarbonImmutable $now): Appointment;
 }
 // CreateBookingInput: dealershipId?, customerId?, vehicleId, serviceTypeId, desiredStart (CarbonImmutable with its original offset), reminderOptIn
 ```

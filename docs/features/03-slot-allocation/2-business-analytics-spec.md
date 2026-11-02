@@ -6,7 +6,7 @@
 
 ## A1. Why
 
-This is where "who does it, in which bay" is decided. If ranking picked multi-skilled people for easy jobs, the hard jobs (EVs) would run out of people early. So ranking prefers people with **fewer** skills.
+This is where "who does it, in which bay" is decided. If ranking picked high-level people for easy jobs, the hard jobs (EVs, level 5) would run out of people early. So ranking prefers the **lowest** level that qualifies.
 
 ## A2. Evidence
 
@@ -16,7 +16,7 @@ This is where "who does it, in which bay" is decided. If ranking picked multi-sk
 | E-03.2 | SDD §8 | A short list of pairs (top 5), try the next pair on 23P01. |
 | E-03.3 | `CLAUDE.md` | `app/Domain/Allocation` is plain PHP, no HTTP, no Eloquent. |
 | E-03.4 | New booking draft | "Technician, bay: Assigned automatically on confirm" — users do not pick. |
-| E-03.5 | Master data draft | Only Ngô Bảo Em has High voltage → the EV service depends on one person. |
+| E-03.5 | Seed (F01 DB §B3) | Only Ngô Bảo Em has level ≥ 5 → the EV service (level 5) depends on one person. |
 
 ## A3. Priorities
 
@@ -26,8 +26,8 @@ Must: filtering, reasons, ranking, strategy, `OpeningHours`, snapshot. Should: `
 
 | ID | Risk | Handling |
 | --- | --- | --- |
-| RB-03.1 | One person with the EV skill → EV is often "full" | Measured by M-03.2; fewest-skills-first keeps Em free for EV jobs |
-| RB-03.2 | Assigning by bay code keeps Bay 1 busier than Bay 2 | Accepted (Q-03.b) |
+| RB-03.1 | One person with level ≥ 5 → EV is often "full" | Measured by M-03.2; lowest-level-first keeps Em (level 6) free for EV jobs. Owner: workshop foreman. Revisit when > 20% of EV requests in a week get `NO_TECHNICIAN_AVAILABLE`. |
+| RB-03.2 | Assigning by bay code keeps Bay 1 busier than Bay 2 | Accepted (Q-03.b). Owner: workshop foreman. Revisit when one bay of a type has > 2× the booked minutes of another over 30 days (M-03.3 grouped by bay). |
 
 ---
 
@@ -47,14 +47,15 @@ Must: filtering, reasons, ranking, strategy, `OpeningHours`, snapshot. Should: `
 - **Chosen: (b).** F06 needs 36 searches for one day (FR-06.4 forbids one query per slot); unit tests need no DB.
 - **Constraint:** the snapshot is read-only; no cache between requests (SDD §12 "no cache"); F04's EXCLUDE is the final guard.
 
-### ADR-03.2 · Fewest skills first
+### ADR-03.2 · Lowest level first
 
-- Required by FR-03.4. Benefit: keeps versatile people for rare services. Swappable through `AllocationStrategy` (FR-03.5).
+- Replaces FR-03.4's "fewest skills first" now that technicians have a level instead of skills (README D-G.16, F01 ADR-01.1). Benefit: keeps high-level people for the services only they can do. Swappable through `AllocationStrategy` (FR-03.5).
+- **Cost accepted:** junior technicians get the most work on busy days; booked minutes break ties only within one level.
 
 ### ADR-03.3 · Busy intervals come through `BusyIntervalReader`
 
-- F03 is built before F04 (D-03.1) and F12 adds absences/outages. One interface for every source of "busy" keeps `CandidateFinder` unchanged when sources are added.
-- **Constraint:** F04 and F12 register sources by binding a composite reader (`CompositeBusyIntervalReader`) — never by editing `CandidateFinder`.
+- F03 is built before F04 (D-03.1), and shifts, leave or bay outages may come later (out of scope today, README D-G.16). One interface for every source of "busy" keeps `CandidateFinder` unchanged when sources are added.
+- **Constraint:** F04 (and any later source) registers by binding the reader (a composite once there are several sources) — never by editing `CandidateFinder`.
 
 ## B2. Metrics
 
@@ -62,7 +63,7 @@ Must: filtering, reasons, ranking, strategy, `OpeningHours`, snapshot. Should: `
 | --- | --- | --- | --- |
 | M-03.1 | `find()` time in a benchmark of 30 technicians × 20 bays × 36 slots | TC-03-21 | < 50 ms total |
 | M-03.2 | 409s by reason (after F04, F08) | `SELECT detail->>'reason', count(*) FROM api_events WHERE code = 'NO_AVAILABILITY' AND occurred_at > now() - interval '7 days' GROUP BY 1;` | Watch; any `NO_QUALIFIED_TECHNICIAN` means master data is missing something (M-01.1) |
-| M-03.3 | Spread of booked minutes between technicians with the same skill in a day | `SELECT resource_id, sum(upper(period)-lower(period)) FROM resource_allocations WHERE resource_type='TECHNICIAN' AND active AND lower(period)::date = :d GROUP BY 1;` | Watch |
+| M-03.3 | Spread of booked minutes between technicians of the same level in a day | `SELECT resource_id, sum(upper(period)-lower(period)) FROM resource_allocations WHERE resource_type='TECHNICIAN' AND active AND period && tstzrange(:dayStartUtc, :dayEndUtc, '[)') GROUP BY 1;` (`:dayStartUtc`/`:dayEndUtc` = the local day in the dealership's zone, DB §B3) | Watch |
 
 ## B3. Future constraints
 
@@ -71,4 +72,4 @@ Must: filtering, reasons, ranking, strategy, `OpeningHours`, snapshot. Should: `
 | FC-03.1 | Other ranking rules (load balancing, regular customers) | `AllocationStrategy` |
 | FC-03.2 | SDD phase 2: `pg_advisory_xact_lock` per dealership + day before picking a pair | In F04 `AppointmentWriter`, not F03 |
 | FC-03.3 | Lunch breaks, several opening intervals | `OpeningHours::windowFor` returns a list |
-| FC-03.4 | Absences, bay outages (F12) | `BusyIntervalReader` |
+| FC-03.4 | Shifts, leave, bay outages (out of scope, README D-G.16) | Extra `BusyIntervalReader` source |

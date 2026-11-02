@@ -71,7 +71,7 @@ Until F02 adds `/book`, F00 keeps the existing `customer/CustomerHomePage` behin
 ## B3. Screen behaviour
 
 **Sign-up**
-- Client-side checks mirror the server (format, strength, matching passwords) to warn early; the server stays the source of truth.
+- Client-side checks come from one module, `web/src/shared/auth/rules.ts` (email ASCII + format, password 8 characters / 72 bytes / letter + digit, phone 9–15 digits), which copies the numbers of API §B2; its unit test uses the same examples as the API adversarial table (TC-00-34). The server stays the source of truth.
 - "Create account" is `loading` and disabled while sending (no double submit).
 - 400 → attach `errors` to each field (`passwordConfirmation` → "Confirm password").
 - 422 `WEAK_PASSWORD` → error on "Password".

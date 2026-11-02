@@ -24,7 +24,7 @@
 
 ## A3. Test data
 
-`World`, `onlyTechnicians(['An'])` for single-pair cases; clock frozen, except in the concurrency test. The race test (TC-10-03) creates holds with the factory, sets `expires_at` to a real moment 1 second ahead, and starts both processes at that moment.
+`World`, `onlyTechnicians(['An'])` for single-pair cases; clock frozen, except in the concurrency test. The race test (TC-10-03) creates holds with the factory, sets `expires_at` to a real moment T about 2 seconds ahead, starts the confirm at T − 300 ms (so its read sees a valid hold) and runs `holds:expire --now=T+1s` at the same moment (so the job sees it expired); both reach the versioned update together.
 
 ## A4. Not tested
 
@@ -60,7 +60,7 @@ Every TC green; TC-10-03 green 3 runs in a row; M1–M6 pass.
 | AC-10.10, D-10.8, INV-10.5 | TC-10-13 |
 | AC-10.11, D-10.1 | TC-10-15 |
 | AC-10.12 | TC-10-16 |
-| INV-10.2 (parallel) | TC-10-07 |
+| INV-10.2 (parallel) | TC-10-07, TC-10-21 |
 | INV-10.7 | TC-10-10 |
 | INV-10.8 | TC-10-02, TC-10-11 |
 | D-10.11 | TC-10-18 |
@@ -76,11 +76,11 @@ Backend in `api/tests/Feature/Booking/Hold/`.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | TC-10-01 | AC-10.1 | Integration | Customer; clock 08:00 | `POST /appointments` `mode HOLD` 10:00, no vehicle | 201, `status HELD`, `expiresAt` = 08:05+07:00, `vehicle null`; 2 active allocations (TECHNICIAN, BAY) | No allocations for the hold | `HoldTest::test_AC_10_1_hold_blocks_the_slot` |
 | TC-10-02 | AC-10.2 | Integration | Hold created at 08:00 | `travel(6)->minutes()`; confirm with `If-Match "1"` | 410 `HOLD_EXPIRED`; status `EXPIRED`; allocations inactive | Confirms an expired hold | `ConfirmHoldTest::test_AC_10_2_expired_hold_cannot_be_confirmed` |
-| TC-10-03 | AC-10.3, INV-10.3 | Concurrency (`@group slow`) | 100 holds, each with `expires_at` = start moment | For each, process 1 runs `holds:expire`, process 2 confirms, at the same moment | Each booking ends `CONFIRMED` (with 3 active allocations) or `EXPIRED` (0 active); never mixed; the losing confirm got 412 (status `EXPIRED`) or 410 | Both writes apply | `ParallelHoldExpiryTest::test_AC_10_3_job_and_confirm_never_both_win` |
+| TC-10-03 | AC-10.3, INV-10.3 | Concurrency (`@group slow`) | 100 holds (half with a vehicle, half without), each with `expires_at` = T | For each, process 1 runs `holds:expire --now=T+1s`, process 2 confirms at T − 300 ms, released together | Each booking ends `CONFIRMED` (3 active allocations) or `EXPIRED` (0 active); never mixed; the losing confirm got 412 (status `EXPIRED`); across the 100 runs **both** outcomes occur at least once (otherwise the test did not race) | Both writes apply, or the race was never exercised | `ParallelHoldExpiryTest::test_AC_10_3_job_and_confirm_never_both_win` |
 | TC-10-04 | AC-10.4 | Integration | Customer A holds 10:00 (An only) | Customer B `GET availability` | 10:00 `available: false`; B's `POST` 10:00 → 409 | Holds ignored by availability | `HoldTest::test_AC_10_4_held_slot_is_not_free_for_others` |
 | TC-10-05 | AC-10.5 | Integration | A holds 10:00 | A holds 11:00 | 10:00 hold `EXPIRED` with inactive allocations; 11:00 `HELD`; exactly one `HELD` for A | Two holds | `…::test_AC_10_5_new_hold_ends_the_old_one` |
 | TC-10-06 | AC-10.6 | Integration | A holds 10:00; 11:00 full | A holds 11:00 | 409 `NO_AVAILABILITY`; the 10:00 hold still `HELD`, version unchanged | Old hold expired outside the transaction | `…::test_AC_10_6_failed_new_hold_keeps_the_old_one` |
-| TC-10-07 | INV-10.2 | Concurrency | A has no hold | 2 processes hold 10:00 and 11:00 for A at once | Exactly one `HELD` remains; responses are 201 + (201 or 409 `REQUEST_IN_PROGRESS`) | Index missing | `ParallelHoldTest::test_INV_10_2_one_hold_per_customer_in_parallel` |
+| TC-10-07 | INV-10.2, D-10.4 | Concurrency | A has no hold | 2 processes hold 10:00 and 11:00 for A at once | Exactly one `HELD` remains; both responses 201 | Customer row not locked (23505 or 500) | `ParallelHoldTest::test_INV_10_2_one_hold_per_customer_in_parallel` |
 | TC-10-08 | AC-10.7 | Integration | A's hold, vehicle V of A | Confirm `{vehicleId: V}` with `If-Match "1"` | 200 `CONFIRMED`, `expiresAt null`, `ETag "2"`; 3 active allocations; 1 `AppointmentConfirmed` event; history `CONFIRMED` | Vehicle allocation missing | `ConfirmHoldTest::test_AC_10_7_confirm_adds_the_vehicle` |
 | TC-10-09 | AC-10.8 | Integration | V has another booking at the held time | Confirm with V | 409 `VEHICLE_ALREADY_BOOKED`; hold still `HELD`, version 1 | Status changed before the vehicle insert failed | `…::test_AC_10_8_vehicle_clash_keeps_the_hold` |
 | TC-10-10 | INV-10.7 | Integration | A's hold | B confirms it; advisor confirms it; A confirms with B's vehicle | 404 `APPOINTMENT_NOT_FOUND`; 403; 404 `VEHICLE_NOT_FOUND` | Permission leak | `…::test_INV_10_7_only_the_owner_confirms` |
@@ -94,6 +94,7 @@ Backend in `api/tests/Feature/Booking/Hold/`.
 | TC-10-18 | D-10.11 | Web unit | Response `Date` 10:00:00, browser 09:58:00 | `useServerClock().now()` | 10:00:00 (± test tolerance) | Offset ignored | `web/src/shared/time/useServerClock.test.ts` |
 | TC-10-19 | API §B4 | Integration | — | Each row of the adversarial input table | As the table | A rule missing | `HoldAdversarialInputTest` |
 | TC-10-20 | All | Manual | Stack running | M1–M6 | As A2 | — | Record in A2 |
+| TC-10-21 | INV-10.2, D-10.4 | Concurrency | A holds 09:00 (v1) | 2 processes hold 10:00 and 11:00 for A at once | Both 201 (never 412); exactly one `HELD`; the 09:00 hold and the earlier new hold are `EXPIRED` with inactive allocations | Both transactions expire the same old hold → the loser gets 412 | `ParallelHoldTest::test_D_10_4_parallel_holds_with_an_existing_hold` |
 
 ## B3. Fixtures
 

@@ -44,7 +44,7 @@ No soft deletes, so no index needs a `deleted_at` condition.
 
 | Query | Index |
 | --- | --- |
-| Customer search: `lower(c.full_name) LIKE '%' || :q || '%' OR c.phone LIKE :digits || '%' OR u.email LIKE :q || '%'`, `LIMIT 20`, ordered by `full_name` | The 3 indexes above |
+| Customer search: `lower(c.full_name) LIKE '%' || :q || '%' OR c.phone LIKE :digits || '%' OR u.email LIKE :q || '%'`, `LIMIT 20`, ordered by `full_name`; plus `count(*)` with the same `WHERE` for `meta.total` | The 3 indexes above (the email branch also needs `u.role = 'CUSTOMER'` so the partial index applies) |
 | A customer's vehicles | `vehicles (customer_id)` (F01) |
 | Count a customer's vehicles before adding (D-02.9) | `vehicles (customer_id)` |
 | Service by dealership + id | `service_types` PK |

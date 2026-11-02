@@ -52,7 +52,7 @@ The `bookings` figures are counted from `api_events` within the range (not from 
   "details": "No Standard service bay free 10:00–12:00" }
 ```
 
-`details` is built from the redacted `detail`: 409 `NO_AVAILABILITY` → a sentence from `reason` and the time range; 5xx → exception class + redacted message, ≤ 200 characters; `DELIVERY_FAILED` (F11) → "{event} for {reference}, all 5 attempts used".
+`detail` for 409 `NO_AVAILABILITY` stores `reason`, `requestedStart`, `requestedEnd` and `alternativesCount` (F06 M-06.3). `details` is built from the redacted `detail`: 409 `NO_AVAILABILITY` → a sentence from `reason` and the time range; 5xx → exception class + redacted message, ≤ 200 characters; `DELIVERY_FAILED` (F11) → "{event} for {reference}, all 5 attempts used".
 
 ### API-08.3 (illustrative)
 

@@ -24,7 +24,7 @@ namespace App\Domain\Allocation;
 final readonly class AllocationRequest {
     public function __construct(
         public string $dealershipId,
-        public Skill $requiredSkill,
+        public Level $requiredLevel,             // 1–7; a technician qualifies when level >= requiredLevel
         public BayType $requiredBayType,
         public TimeRange $range,                 // UTC, [start, end)
         public ?string $preferTechnicianId = null,
@@ -53,7 +53,7 @@ final readonly class AllocationResult {
 }
 ```
 
-`ResourceSnapshot` holds `dealershipId`, `timezone`, `localDate`, `technicians` (id, name, active, skills, UTC shifts, busy), `bays` (id, code, bayType, active, busy). One day's snapshot serves every `find()` for that day.
+`ResourceSnapshot` holds `dealershipId`, `timezone`, `localDate`, `technicians` (id, name, active, level, busy), `bays` (id, code, bayType, active, busy). One day's snapshot serves every `find()` for that day.
 
 ## B2. Mapping to HTTP (done by F04)
 

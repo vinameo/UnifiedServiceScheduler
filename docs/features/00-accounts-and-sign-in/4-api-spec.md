@@ -39,8 +39,8 @@ Every SPA request carries the `XSRF-TOKEN` cookie → `X-XSRF-TOKEN` header (axi
 
 | Field | Rule | Error |
 | --- | --- | --- |
-| `email` | required, string, trim + lower before validation, `email:rfc`, ≤ 254 | 400 |
-| `password` | required, string, 1–72 characters | 400 |
+| `email` | required, string, trim + lower before validation, `email:rfc`, ASCII only (D-00.13), ≤ 254 | 400 |
+| `password` | required, string, at least 1 character, ≤ 72 **bytes** (`strlen`, D-00.4) | 400 |
 | `password` strength | ≥ 8 characters, has `[A-Za-z]`, has `[0-9]` | 422 `WEAK_PASSWORD` |
 | `passwordConfirmation` | required, equals `password` | 400 (field `passwordConfirmation`) |
 | `fullName` | required, trim, 2–100 characters | 400 |
@@ -108,6 +108,8 @@ Copy: README §5.
 | sign-up | body is not JSON | 400 |
 | sign-in | `email` = `null` | 400 |
 | sign-in | `password` 10 000 characters | 400 (bcrypt never runs) |
+| sign-up | `email` = `ánh@mail.com` (non-ASCII) | 400 (never 500 from the lower-case CHECK) |
+| sign-up | `password` = 30 Vietnamese characters with letters and a digit (> 72 bytes) | 400 |
 | sign-in | email with surrounding spaces and upper case | Normalised, signs in normally |
 | sign-in | no XSRF header | 419 |
 
@@ -117,7 +119,7 @@ Copy: README §5.
 | --- | --- |
 | Failures per email | 5 / 15 minutes, locked 15 minutes |
 | Requests per IP on the 3 auth routes | 30 / minute |
-| Length of email / password / name / phone | 254 / 72 / 100 / 15 digits |
+| Length of email / password / name / phone | 254 characters / 72 bytes / 100 characters / 15 digits |
 | Idle session | 120 minutes (`SESSION_LIFETIME`) |
 
 Logs: one line per failed sign-in (`outcome=INVALID_CREDENTIALS` or `TOO_MANY_ATTEMPTS`), without the email; F08 adds a counter.

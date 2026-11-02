@@ -88,7 +88,7 @@ Assumes F00–F06 are merged: `TransitionAppointment`, `AppointmentStatus::canMo
 | ID | In scope |
 | --- | --- |
 | S-07.1 | `POST /api/v1/appointments/{appointment}/cancel`. |
-| S-07.2 | Action `CancelAppointment`; enum `CancelReason`. |
+| S-07.2 | `BookingServiceInterface::cancel()` — the operation the specs call `CancelAppointment` (README §6.3); enum `CancelReason`. |
 | S-07.3 | Web: cancel dialog (staff), cancel sheet (customer), banners after cancelling. |
 
 ## B3. Invariants
@@ -116,11 +116,11 @@ Edge cases:
 | File | Change |
 | --- | --- |
 | `api/app/Domain/Booking/CancelReason.php` | Enum + `forStaff()`, `forCustomer()`. |
-| `api/app/Domain/Booking/Actions/CancelAppointment.php` | B7. |
+| `api/app/Domain/Booking/Services/BookingService.php`, `BookingServiceInterface.php` | Add `cancel()` = B7 (`CancelAppointment`). |
 | `api/app/Domain/Booking/Exceptions/TooLateToCancel.php` | 422 `TOO_LATE_TO_CANCEL`, member `dealershipPhone`. |
 | `api/app/Http/Requests/CancelAppointmentRequest.php` | API §B2. |
 | `api/app/Http/Controllers/Api/V1/AppointmentController.php` | Add `cancel`. |
-| `api/app/Providers/AuthServiceProvider.php` | Ability `cancel-appointment` (advisor, customer). |
+| `api/app/Providers/AppServiceProvider.php` (`boot()`) | Ability `cancel-appointment` (advisor, customer). |
 | `api/routes/api.php` | Route with `auth:sanctum`, `can:cancel-appointment`, `idempotent`, `if-match`. |
 | `api/app/Http/Resources/AppointmentResource.php` | `cancellation` (F04 API §B2); customers get `byRole` but not the staff `reason`/`note` (Q-07.b). |
 | `web/src/staff/appointments/CancelAppointmentModal.tsx`, `web/src/customer/bookings/CancelBookingSheet.tsx`, `web/src/shared/api/appointments.ts` (`useCancelAppointment`) | WEB. |
@@ -131,15 +131,16 @@ Edge cases:
 
 ```php
 // illustrative
-final class CancelAppointment {
-    public function __invoke(User $actor, string $appointmentId, int $expectedVersion, ?CancelReason $reason, ?string $note, CarbonImmutable $now): Appointment;
+interface BookingServiceInterface {
+    /** `CancelAppointment`. */
+    public function cancel(User $actor, string $appointmentId, int $expectedVersion, ?CancelReason $reason, ?string $note, CarbonImmutable $now): Appointment;
 }
 ```
 
 ## B6. Seams
 
 Uses: `findVisibleTo`, `TransitionAppointment`, `ExpectedVersion`, web `appointmentQuery`, `AppointmentDetailsLayout`, `AppointmentModifiedAlert`.
-New: `isWithinCustomerChangeWindow(appointment, now)` (2 hours) in `api/app/Domain/Booking/CustomerChangePolicy.php` and `web/src/shared/appointments/changeWindow.ts` — reused by F09 for reschedule.
+New: `isWithinCustomerChangeWindow(appointment, now)` (2 hours) in `api/app/Domain/Booking/CustomerChangePolicy.php` (a pure rule class, README D-G.13) and `web/src/shared/appointments/changeWindow.ts` — reused by F09 for reschedule.
 
 ## B7. Algorithm (`CancelAppointment`)
 

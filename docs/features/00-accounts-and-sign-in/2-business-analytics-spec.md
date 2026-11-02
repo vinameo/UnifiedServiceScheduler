@@ -30,7 +30,8 @@ Every permission rule in the requirements ("customers see only their own", "staf
 
 | ID | Risk | Handling |
 | --- | --- | --- |
-| RB-00.1 | Someone fails 5 times on purpose to lock a customer out | Accepted: the lock lasts 15 minutes; the 429 message gives the wait time. Watch `sign_in_failures_total` (F08). |
+| RB-00.1 | Someone fails 5 times on purpose to lock a customer out | Accepted: the lock lasts 15 minutes; the 429 message gives the wait time. Owner: product owner. Revisit when M-00.3 > 30% for 1 hour, or support gets > 3 lock-out complaints a week. |
+| RB-00.4 | Sign-up reveals which emails have an account (D-00.14) | Accepted (ADR-00.5). Owner: product owner. Revisit when M-00.5 alerts (> 50 in an hour). |
 | RB-00.2 | A customer types a wrong phone number → no SMS | Phone verification is out of scope; the number is shown on the confirmation screen so the customer can check it. |
 | RB-00.3 | One person is both staff and customer | BR-00.1: two emails. |
 
@@ -65,6 +66,12 @@ Every permission rule in the requirements ("customers see only their own", "staf
 - **Chosen: (b).** Appointments and vehicles reference `customers.id` (UUID), not `users.id`; later, walk-in customers without an account need no foreign-key change.
 - **Constraint:** in this version every customer has an account (`user_id NOT NULL UNIQUE`).
 
+### ADR-00.5 · Sign-up says "email already used"
+
+- **Options:** (a) 409 `EMAIL_ALREADY_USED` with a "Sign in instead" link; (b) always answer "check your email" and send a mail (needs email verification, out of scope); (c) a generic error for every sign-up failure.
+- **Chosen: (a).** Without email sending, (b) is impossible and (c) leaves real users stuck.
+- **Cost accepted:** anyone can check whether an email has an account, at 30 requests/minute per IP. Sign-in still hides it (INV-00.4). Revisit with email verification (RB-00.4).
+
 ### ADR-00.4 · `dealerships` created in F00
 
 - Staff need a dealership as soon as they are seeded, and F00 is built before F01. Create the minimal table in F00; F01 adds opening hours and the rest.
@@ -77,6 +84,7 @@ Every permission rule in the requirements ("customers see only their own", "staf
 | M-00.2 | Log lines containing an email or password | `grep -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}' storage/logs/*` on the logs after a full test run | **0** |
 | M-00.3 | Failed sign-in rate | `sign_in_failures_total` (F08) / all sign-ins | Alert if > 30% in 1 hour |
 | M-00.4 | Sign-in p95 | `durationMs` of the sign-in route in logs (F08) | < 500 ms (bcrypt dominates) |
+| M-00.5 | `EMAIL_ALREADY_USED` per hour (email probing) | `SELECT date_trunc('hour', occurred_at), count(*) FROM api_events WHERE code = 'EMAIL_ALREADY_USED' AND occurred_at > now() - interval '1 day' GROUP BY 1;` (F08 stores every response ≥ 400) | Alert when > 50 in an hour |
 
 ## B3. Future constraints
 

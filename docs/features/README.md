@@ -48,7 +48,7 @@ The user approved every open point with its default (2026-11-02). Any row can ch
 
 | ID | Decision | Reason |
 | --- | --- | --- |
-| D-G.1 | Code lives in `api/` (Laravel 13, PHP 8.4) and `web/` (React 19, Mantine 9, TanStack Query 5, React Router 8). `CLAUDE.md` says `backend/` and `frontend/`; specs use the real paths. Fixing `CLAUDE.md` is part of F00 ticket 01. | Real repo |
+| D-G.1 | Code lives in `api/` (Laravel 13, PHP 8.4) and `web/` (React 19, Mantine 9, TanStack Query 5, React Router 8). `CLAUDE.md` uses the same paths. | Real repo |
 | D-G.2 | Plural table names per `CLAUDE.md`: `appointments`, `resource_allocations`, `idempotency_keys`, `outbox_messages`, `service_types`, `bays`, `technicians`… (the SDD and requirements use singular names). | `CLAUDE.md` wins on code conventions |
 | D-G.3 | `users.id` stays `bigint` (existing migration). Every business table uses UUIDs (`HasUuids`, time-ordered UUID v7). | Ids in URLs are not guessable; users table already exists |
 | D-G.4 | All docs and UI copy are in **English** (`CLAUDE.md`: "Copy is English"). Each web area keeps its copy in one `copy.ts` file so another language can be added later. | `CLAUDE.md` + user preference |
@@ -59,7 +59,11 @@ The user approved every open point with its default (2026-11-02). Any row can ch
 | D-G.9 | Customers and vehicles do not belong to a dealership (a customer can book at several). Appointments and every operational table have `dealership_id`. | NFR-03 applies to operational tables |
 | D-G.10 | Backend tests run on real PostgreSQL, database `scheduler_testing` (`docker/postgres/init`). Concurrency tests run N separate PHP processes with `Process::pool()` through the `testing:request` command (README §7) and use `DatabaseTruncation`. | `CLAUDE.md` §Testing rules |
 | D-G.11 | No new Composer or npm package unless a spec names it in a `D` row. Today only F08 adds packages (OpenTelemetry). | `CLAUDE.md`: ask before adding a package |
-| D-G.12 | Lists page with a cursor: `limit` default 50, max 200; `nextCursor` is opaque (base64 of the sort key). | FR-05.4 |
+| D-G.12 | Lists page with a cursor: `limit` default 50, max 200; `nextCursor` is opaque (base64 of the sort key). A list whose screen shows a count also returns `meta.total` (the real count, not the page length). | FR-05.4 |
+| D-G.13 | Business operations live in **services** per `CLAUDE.md`: an interface + a class in `app/Domain/<Module>/Services/`, bound in `DomainServiceProvider::$bindings`; controllers call only a module service interface. Operation names used in the specs (`CreateBooking`, `CancelAppointment`…) are methods of those services (map in §6.3). Pure rule classes without I/O (`BookingTimeRules`, `CustomerChangePolicy`, everything in `App\Domain\Allocation`) stay plain classes. | `CLAUDE.md` "Backend conventions" wins |
+| D-G.14 | Gates and Policies are registered in `AppServiceProvider::boot()` (already in `bootstrap/providers.php`); there is no `AuthServiceProvider` in Laravel 13. | Real repo |
+| D-G.16 | **Technician model** (user decision, 2026-11-03): each technician has one **level** 1–7 (trade grade); each service type requires one level; a technician qualifies when active and `level ≥ required level`. Skills, shifts, attendance and leave (absences) are out of scope: an active technician works whenever the dealership is open. Admins disable/enable technicians in Master data; disabling is refused while the technician has upcoming appointments. Bay outages are out of scope too. This replaces the skill and shift rules of FR-01, FR-03.1–03.4 and the absence/outage part of FR-12.3–12.4. | User decision |
+| D-G.15 | An `Idempotency-Key` belongs to one **attempt** of an action: the web reuses it only to resend after no response, a 5xx, or 409 `REQUEST_IN_PROGRESS`. Any other answer (2xx, 4xx) is final for that key; trying again after it needs a new key. | The server saves every answer < 500 (F04 D-04.12), so reusing a key after a 412/409/422 replays the old answer |
 
 ## 4. Permission matrix
 
@@ -70,6 +74,7 @@ The user approved every open point with its default (2026-11-02). Any row can ch
 | Read dealerships, service types, free times | ✓ (any dealership) | ✓ (own dealership) | ✓ | ✓ | F01, F06 |
 | Read bays, technicians | — | ✓ | ✓ | ✓ | F01 |
 | Master data screen | — | — | — | ✓ | F01 |
+| Disable / enable a technician | — | — | — | ✓ | F01 |
 | Search customers, read a customer's vehicles | — | ✓ | — | — | F02 |
 | Add a vehicle | own | — | — | — | F02 |
 | Create a booking (`CONFIRM`) | own | ✓ | — | — | F02 |
@@ -81,7 +86,6 @@ The user approved every open point with its default (2026-11-02). Any row can ch
 | Reschedule | own (≥ 2 h before) | ✓ | — | — | F09 |
 | Check in, no-show | — | ✓ | ✓ | — | F12 |
 | Start, complete, extend | — | — | ✓ | — | F12 |
-| Report absence, bay out of service, reassign | — | — | ✓ | — | F12 |
 | Workshop board | — | ✓ | ✓ | ✓ | F12 |
 | Outbox (read, retry) | — | — | — | ✓ | F11 |
 | System monitoring | — | — | — | ✓ | F08 |
@@ -105,13 +109,13 @@ Every error is `application/problem+json` (`type`, `title`, `status`, `code`, `d
 | 404 | `CUSTOMER_NOT_FOUND` | F02 | Customer not found. | — |
 | 404 | `VEHICLE_NOT_FOUND` | F02 | Vehicle not found. | — |
 | 404 | `APPOINTMENT_NOT_FOUND` | F05 | We couldn't find this appointment. | — |
-| 404 | `TECHNICIAN_NOT_FOUND` | F12 | Technician not found. | — |
-| 404 | `BAY_NOT_FOUND` | F12 | Bay not found. | — |
+| 404 | `TECHNICIAN_NOT_FOUND` | F01 | Technician not found. | — |
 | 404 | `OUTBOX_MESSAGE_NOT_FOUND` | F11 | Message not found. | — |
 | 409 | `EMAIL_ALREADY_USED` | F00 | An account with this email already exists. Sign in instead. | — |
+| 409 | `TECHNICIAN_HAS_BOOKINGS` | F01 | {name} still has {count} upcoming appointments. Move or cancel them before disabling. | `count`, `appointments[]` (≤ 20) |
 | 409 | `PLATE_ALREADY_REGISTERED` | F02 | This licence plate is already registered. Call the dealership if it is your car. | — |
 | 409 | `VIN_ALREADY_REGISTERED` | F02 | This VIN is already registered. | — |
-| 409 | `NO_AVAILABILITY` | F04 (+F06 alternatives) | The {time} slot was just taken. | `reason`, `alternatives[]` |
+| 409 | `NO_AVAILABILITY` | F04 (+F06 alternatives) | Heading per `reason` (F03 WEB §B2), for example "The {time} slot was just taken." | `reason`, `alternatives[]` |
 | 409 | `VEHICLE_ALREADY_BOOKED` | F04 | Vehicle {plate} already has a booking at {range} that day. | `existingAppointment?` |
 | 409 | `REQUEST_IN_PROGRESS` | F04 | Your request is still being processed. Wait a moment, then check again. | — |
 | 410 | `HOLD_EXPIRED` | F10 | Your hold has expired. | — |
@@ -121,7 +125,7 @@ Every error is `application/problem+json` (`type`, `title`, `status`, `code`, `d
 | 422 | `START_TOO_FAR_AHEAD` | F02 | You can book up to 90 days ahead. | `maxDate` |
 | 422 | `OUTSIDE_OPENING_HOURS` | F02 | The service would end after closing time. | `opensAt`, `closesAt`, `latestStart` |
 | 422 | `VEHICLE_NOT_OWNED_BY_CUSTOMER` | F02 | This vehicle does not belong to {customer}. Choose another vehicle or change the customer. | — |
-| 422 | `VEHICLE_LIMIT_REACHED` | F02 | You can save up to 10 vehicles. Call the dealership to remove one. | — |
+| 422 | `VEHICLE_LIMIT_REACHED` | F02 | You can save up to 10 vehicles. | — |
 | 422 | `INVALID_STATUS_TRANSITION` | F04 | This appointment is {status} and can no longer be changed this way. | `currentStatus` |
 | 422 | `IDEMPOTENCY_KEY_MISMATCH` | F04 | Something went wrong with this request. Please try again. | — |
 | 422 | `TOO_LATE_TO_CANCEL` | F07 | It's less than 2 hours before your appointment. Please call {phone} to cancel. | `dealershipPhone` |
@@ -130,13 +134,14 @@ Every error is `application/problem+json` (`type`, `title`, `status`, `code`, `d
 | 422 | `HOLD_NOT_ALLOWED` | F10 | Only customers can hold a time. | — |
 | 422 | `NO_SHOW_BEFORE_START` | F12 | You can mark a no-show only after the start time. | — |
 | 422 | `NOT_SERVICE_DAY` | F12 | You can check in only on the day of the appointment. | — |
+| 422 | `NEEDS_RESCHEDULE` | F12 | This booking no longer has a bay or technician. Reschedule it before checking in. | — |
 | 422 | `OUTBOX_NOT_RETRYABLE` | F11 | Only failed messages can be sent again. | — |
 | 428 | `PRECONDITION_REQUIRED` | F04 | Something went wrong with this request. Please reload the page. | — |
 | 429 | `TOO_MANY_ATTEMPTS` | F00 | Too many attempts. Try again in {minutes} minutes. | `Retry-After` header |
 | 419 | `CSRF_TOKEN_MISMATCH` | existing | Your session has expired. Reload the page. | — |
 | 500 | `INTERNAL_ERROR` | existing | Something went wrong on our side. Try again in a moment. | — |
 
-Codes the spec adds beyond the requirements: `PLATE_ALREADY_REGISTERED`, `VIN_ALREADY_REGISTERED`, `VEHICLE_LIMIT_REACHED`, `CUSTOMER_NOT_FOUND`, `START_TOO_FAR_AHEAD`, `TOO_LATE_TO_RESCHEDULE`, `RESCHEDULE_SAME_TIME`, `HOLD_NOT_ALLOWED`, `NO_SHOW_BEFORE_START`, `NOT_SERVICE_DAY`, `TECHNICIAN_NOT_FOUND`, `BAY_NOT_FOUND`, `OUTBOX_MESSAGE_NOT_FOUND`, `OUTBOX_NOT_RETRYABLE`. Each has a `D` row in its owning feature.
+Codes the spec adds beyond the requirements: `PLATE_ALREADY_REGISTERED`, `VIN_ALREADY_REGISTERED`, `VEHICLE_LIMIT_REACHED`, `CUSTOMER_NOT_FOUND`, `START_TOO_FAR_AHEAD`, `TOO_LATE_TO_RESCHEDULE`, `RESCHEDULE_SAME_TIME`, `HOLD_NOT_ALLOWED`, `NO_SHOW_BEFORE_START`, `NOT_SERVICE_DAY`, `NEEDS_RESCHEDULE`, `TECHNICIAN_NOT_FOUND`, `TECHNICIAN_HAS_BOOKINGS`, `OUTBOX_MESSAGE_NOT_FOUND`, `OUTBOX_NOT_RETRYABLE`. Each has a `D` row in its owning feature.
 
 Web seam: `web/src/shared/api/errorCopy.ts` (F00) maps `code` → copy; an unknown code falls back to the `INTERNAL_ERROR` copy.
 
@@ -147,17 +152,18 @@ Web seam: `web/src/shared/api/errorCopy.ts` (F00) maps `code` → copy; an unkno
 | Table | Created in | Note |
 | --- | --- | --- |
 | `users` (adds `role`, `dealership_id`), `customers`, `dealerships` | F00 | `dealerships` is created in F00 because staff accounts need one |
-| `dealership_opening_hours`, `service_types`, `bays`, `technicians`, `technician_skills`, `technician_shifts`, `vehicles` | F01 | |
+| `dealership_opening_hours`, `service_types`, `bays`, `technicians`, `vehicles` | F01 | No skill or shift tables (D-G.16) |
 | `appointments`, `resource_allocations`, `idempotency_keys`, `appointment_events`, `outbox_messages` | F04 | Schema has every column F07–F12 need ("schema ready") |
 | `api_events`, `metric_counters` | F08 | |
-| `technician_absences`, `bay_outages` | F12 | |
 
 ### 6.2 Which feature builds each seam, and who reuses it
 
 | Seam | Built in | Used in |
 | --- | --- | --- |
-| `App\Domain\Auth\Role` (enum) + Gates in `AuthServiceProvider` | F00 | all |
+| `App\Domain\Auth\Role` (enum) + Gates in `AppServiceProvider::boot()` (D-G.14) | F00 | all |
 | Route binding `{dealership}` that only returns the staff member's dealership (404 `DEALERSHIP_NOT_FOUND`) | F01 | F05, F06, F12 |
+| `UpcomingAssignmentsReader` (a technician's upcoming appointments, used to refuse disabling): F01 binds `NoUpcomingAssignments`, F04 binds the real reader over `resource_allocations` | F01 | F04 |
+| Technician row lock: disabling takes `FOR UPDATE`; every allocation write takes `FOR SHARE` and treats an inactive technician like a taken one | F01 (disable), F04 (writers) | F02, F09, F10, F12 |
 | `App\Domain\Allocation\CandidateFinder`, `AllocationStrategy`, `ResourceSnapshot`, `OpeningHours` | F03 | F02, F06, F09, F10, F12 |
 | `App\Domain\Booking\Repositories\AllocationSnapshotRepository` (one day's snapshot) | F03 | F02, F06, F09, F12 |
 | `Idempotency` middleware (alias `idempotent`) | F04 | every writing POST |
@@ -172,21 +178,44 @@ Web seam: `web/src/shared/api/errorCopy.ts` (F00) maps `code` → copy; an unkno
 | `OutboxWriter` (outbox row in the same transaction) | F04 | F02, F07, F09, F10, F12; relay in F11 |
 | `AppointmentResource` + `AppointmentResponder` (body + `ETag` + `Location`) | F04 | F02, F05, F07, F09, F10, F12 |
 | `BookingTimeRules` (past, opening hours, 15-minute step, 90 days) | F02 | F06, F09 |
-| `AppointmentRepository::findVisibleTo(User, id)` (404 when not visible) | F05 | F07, F09, F10, F12 |
+| `AppointmentRepository::findVisibleTo(User, id)` + explicit route binding `{appointment}` that calls it (404 when not visible); the only way a route loads an appointment | F05 | F05, F07, F09, F10, F12 |
 | `AlternativeTimesFinder` | F06 | F02, F09 (409) |
-| Web: `useIdempotencyKey(actionInputs)`, `SubmitButton`, `IdempotentRetryPanel`, `AppointmentModifiedAlert` | F04 | every writing mutation |
+| Web: `useIdempotencyKey(actionInputs)` (D-G.15), `SubmitButton`, `IdempotentRetryPanel`, `AppointmentModifiedAlert` | F04 | every writing mutation |
 | Web: `appointmentQuery` keeps the `ETag` + `withIfMatch()` | F05 | F07, F09, F10, F12 |
 | Web: `formatInZone(iso, timeZone)` | F02 | all |
 | Web: `RequireRole` route guard, `useMe()` | F00 | all |
 | Web: `SlotGrid` (free times, struck-through when taken) | F06 | F09, F10 |
 | Web: `AppointmentStatusBadge` | F02 | F05, F12 |
 
+### 6.3 Service map (D-G.13)
+
+Each row is an interface + class pair in the folder shown, bound in `DomainServiceProvider`. "Called by controllers" services are the only ones a controller may type-hint.
+
+| Interface (folder) | Methods (operation name used in the specs) | Built in | Called by controllers |
+| --- | --- | --- | --- |
+| `Auth/Services/SignUpServiceInterface`, `Auth/Services/SignInServiceInterface` | `signUp`; `signIn` (sign-out is a thin session call) | F00 | yes |
+| `Customers/Services/CustomerServiceInterface` | `search` (`CustomerSearch`), `vehiclesOf`, `addVehicle` (`AddVehicle`) | F02 | yes |
+| `Booking/Services/BookingServiceInterface` | `create` (`CreateBooking`), `cancel` (`CancelAppointment`, F07), `reschedule` (`RescheduleAppointment`, F09), `confirmHold` (`ConfirmHold`, F10) | F02 | yes |
+| `Booking/Services/AppointmentQueryServiceInterface` | `show`, `history`, `listForDealershipDay`, `listForCustomer` | F05 | yes |
+| `Booking/Services/AvailabilityServiceInterface` | `forDay` (`AvailabilityCalculator`), `near`/`next` (`AlternativeTimesFinder`) | F06 | yes |
+| `Workshop/Services/WorkshopServiceInterface` | `checkIn`, `start`, `complete`, `markNoShow`, `extend` (`ExtendAppointment`), `board` | F12 | yes |
+| `MasterData/Services/TechnicianServiceInterface` | `setActive` (disable / enable, D-G.16) | F01 | yes |
+| `Notifications/Services/OutboxServiceInterface` | `list`, `summary`, `retry` (`RetryOutboxMessage`) | F11 | yes |
+| `Booking/Services/AppointmentWriterInterface` | `create`, `moveTo`, `displace` (F12) | F04 | no |
+| `Booking/Services/AppointmentTransitionInterface` | `transition` (`TransitionAppointment`) | F04 | no |
+| `Booking/Services/AppointmentEventRecorderInterface`, `Notifications/Services/OutboxWriterInterface` | `record`, `append` | F04 | no |
+| `Booking/Services/ExpiredHoldReleaserInterface` | `releaseBlocking` | F10 | no |
+| `Workshop/Services/ReassignerInterface` | `reassign` | F12 | no |
+| `Notifications/Services/OutboxRelayInterface`, `Notifications/Services/ReminderQueueInterface` | `runOnce` (`OutboxRelay`), `queue` (`QueueReminders`) | F11 | no (console commands) |
+
+Code sketches in the feature specs show the operation as one method of these interfaces.
+
 ## 7. Shared fixtures and test infrastructure
 
 | Fixture | Built in | Content |
 | --- | --- | --- |
 | `Database\Factories\*` for users, customers, dealerships | F00 | `User::factory()->advisor($dealership)`, `->customer()` |
-| `Tests\Support\World` | F01 | Builds one standard dealership like the seed (opening hours, 3 service types, 4 bays, 5 technicians, shifts) and returns the ids; tests adjust from there |
+| `Tests\Support\World` | F01 | Builds one standard dealership like the seed (opening hours, 3 service types, 4 bays, 5 technicians with levels) and returns the ids; tests adjust from there |
 | `Tests\Support\Allocation\SnapshotBuilder` | F03 | Builds a `ResourceSnapshot` in memory for unit tests, no DB |
 | `Tests\Support\AssertsNoOverlap` | F04 | Trait: one query that returns 0 rows when no two active allocations overlap; called in `tearDown` of every booking test |
 | Command `testing:request` + `Tests\Support\Concurrency\Parallel` | F04 | Runs N PHP processes; each waits for the same start time, then sends one in-process HTTP request (through the real middleware and controller) as a given user; prints JSON `{status, body, headers}` |

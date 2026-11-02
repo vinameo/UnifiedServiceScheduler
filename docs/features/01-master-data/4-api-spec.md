@@ -4,7 +4,7 @@
 
 # PART A · For readers
 
-Five read-only APIs. Customers can read the dealership list and the services on offer. Staff can also read their own dealership's bays and technicians. Asking for another dealership returns "Dealership not found" (without revealing whether it exists).
+Five read APIs and one write. Customers can read the dealership list and the services on offer. Staff can also read their own dealership's bays and technicians. Admins can disable or enable a technician; disabling is refused while the technician has upcoming appointments. Asking for another dealership returns "Dealership not found" (without revealing whether it exists).
 
 ---
 
@@ -18,7 +18,7 @@ Five read-only APIs. Customers can read the dealership list and the services on 
 
 ## B1. Endpoints
 
-All under `auth:sanctum`, method `GET`, no special headers.
+All under `auth:sanctum`. API-01.1–01.5 are `GET` with no special headers; API-01.6 is a `PUT` (no `Idempotency-Key`, no `If-Match`, RQ D-01.12).
 
 | ID | Path | Who | Note |
 | --- | --- | --- | --- |
@@ -27,6 +27,7 @@ All under `auth:sanctum`, method `GET`, no special headers.
 | API-01.3 | `/api/v1/dealerships/{dealership}/service-types` | every role | Customers: `active` only |
 | API-01.4 | `/api/v1/dealerships/{dealership}/bays` | `can:staff` | |
 | API-01.5 | `/api/v1/dealerships/{dealership}/technicians` | `can:staff` | |
+| API-01.6 | `PUT /api/v1/dealerships/{dealership}/technicians/{technician}/status` | `can:admin` | Body `{ "active": false }`; 200 `Technician`; 409 `TECHNICIAN_HAS_BOOKINGS` (RQ D-01.11) |
 
 No paging: each dealership has few rows (hard cap 200 rows per response; beyond that, cut and add `"truncated": true` — not expected to happen).
 
@@ -44,11 +45,21 @@ Responses are wrapped in `{ "data": … }` (Laravel API Resource default). JSON 
 
 `openingHours` lists open days only. `weekday` is ISO 1–7.
 
-**ServiceType**: `{ "id", "code", "name", "description", "durationMinutes": 60, "requiredSkill": "BASIC", "requiredBayType": "QUICK", "active": true }`
+**ServiceType**: `{ "id", "code", "name", "description", "durationMinutes": 60, "requiredLevel": 1, "requiredBayType": "QUICK", "active": true }`
 
 **Bay**: `{ "id", "code": "K2", "name": "Bay 2", "bayType": "QUICK", "active": true, "supportedServiceTypeIds": ["…"] }`
 
-**Technician**: `{ "id", "name": "Ngô Bảo Em", "active": true, "skills": ["BASIC","GENERAL_MAINTENANCE","EV_HIGH_VOLTAGE"], "shifts": [ { "weekday": 1, "startsAt": "08:00", "endsAt": "17:00" } ] }` — `skills` in enum order; `shifts` by `weekday`, `startsAt`.
+**Technician**: `{ "id", "name": "Ngô Bảo Em", "level": 6, "active": true }` — `level` 1–7.
+
+**API-01.6 409** (`TECHNICIAN_HAS_BOOKINGS`):
+
+```json
+{ "code": "TECHNICIAN_HAS_BOOKINGS", "status": 409, "count": 3,
+  "appointments": [ { "id": "…", "reference": "APT-20261103-0012", "start": "2026-11-03T09:00:00+07:00",
+                     "end": "2026-11-03T10:00:00+07:00", "customerName": "Nguyễn Văn Hùng" } ] }
+```
+
+`count` is the real number; `appointments` holds the first 20 by start time.
 
 ## B3. Error table
 
@@ -57,6 +68,10 @@ Responses are wrapped in `{ "data": … }` (Laravel API Resource default). JSON 
 | 401 | `UNAUTHENTICATED` | No session |
 | 403 | `FORBIDDEN` | Customer calls API-01.4, API-01.5 |
 | 404 | `DEALERSHIP_NOT_FOUND` | INV-01.3 |
+| 400 | `VALIDATION_ERROR` | API-01.6 body |
+| 403 | `FORBIDDEN` | API-01.6 by a non-admin |
+| 404 | `TECHNICIAN_NOT_FOUND` | API-01.6, INV-01.8 |
+| 409 | `TECHNICIAN_HAS_BOOKINGS` | API-01.6, D-01.11 |
 
 ## B4. Adversarial input table
 
@@ -67,6 +82,11 @@ Responses are wrapped in `{ "data": … }` (Laravel API Resource default). JSON 
 | API-01.2–01.5 | Another dealership's UUID, called by staff | 404 `DEALERSHIP_NOT_FOUND`, body identical to the row above except `correlationId` |
 | API-01.3 | `?includeInactive=true` sent by a customer | Ignored; still `active` only |
 | API-01.1 | `?dealershipId=<other>` | Unknown parameter ignored |
+| API-01.6 | `active` missing, `"false"`, `0`, `null` | 400 `VALIDATION_ERROR` |
+| API-01.6 | `{technician}` = `abc`, a missing UUID, another dealership's technician | 404 `TECHNICIAN_NOT_FOUND` (identical bodies) |
+| API-01.6 | Advisor, foreman, customer | 403 `FORBIDDEN` |
+| API-01.6 | Disable an already disabled technician; enable an active one | 200, nothing changes |
+| API-01.6 | Body also has `level: 7` or `name` | Ignored; only `active` changes |
 
 ## B5. Bounds
 
