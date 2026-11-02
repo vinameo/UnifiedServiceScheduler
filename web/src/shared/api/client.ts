@@ -10,5 +10,5 @@ export const api = axios.create({
 
 // Call before sign-in and sign-up so Laravel sets the XSRF-TOKEN cookie.
 export function ensureCsrfCookie() {
-  return axios.get('/sanctum/csrf-cookie', { withCredentials: true })
+  return api.get('/sanctum/csrf-cookie', { baseURL: '' })
 }

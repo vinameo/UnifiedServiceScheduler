@@ -2,9 +2,11 @@ import { createBrowserRouter } from 'react-router'
 import { CustomerHomePage } from './customer/CustomerHomePage'
 import { StaffHomePage } from './staff/StaffHomePage'
 import { StaffLayout } from './staff/StaffLayout'
+import { StaffSignInPage } from './staff/auth/StaffSignInPage'
 
 export const routes = [
   { path: '/', element: <CustomerHomePage /> },
+  { path: '/staff/sign-in', element: <StaffSignInPage /> },
   {
     path: '/staff',
     element: <StaffLayout />,

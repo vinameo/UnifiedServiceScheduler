@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Domain\Auth\Repositories\UserRepository;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
+use App\Domain\Auth\Services\SignInService;
+use App\Domain\Auth\Services\SignInServiceInterface;
 use App\Domain\Auth\Services\UserService;
 use App\Domain\Auth\Services\UserServiceInterface;
 use Illuminate\Support\ServiceProvider;
@@ -21,5 +23,6 @@ class DomainServiceProvider extends ServiceProvider
         // Auth (F00)
         UserRepositoryInterface::class => UserRepository::class,
         UserServiceInterface::class => UserService::class,
+        SignInServiceInterface::class => SignInService::class,
     ];
 }

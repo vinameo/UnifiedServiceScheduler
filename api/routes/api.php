@@ -1,4 +1,19 @@
 <?php
 
-// Every route here is under /api/v1 (see bootstrap/app.php).
-// Feature routes (F00 to F12) are added here: FormRequest in, Service, API Resource out.
+use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\MeController;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
+
+RateLimiter::for('auth-ip', function (Request $request) {
+    return Limit::perMinute(30)->by($request->ip());
+});
+
+Route::post('/auth/staff/sign-in', [AuthController::class, 'staffSignIn'])
+    ->middleware('throttle:auth-ip');
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/me', [MeController::class, 'me']);
+});
