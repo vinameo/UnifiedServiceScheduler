@@ -45,16 +45,16 @@ Implementing agents treat every sketch as a _hypothesis_ and build to the invari
 - **Decisions as invariants.** For every decision a write depends on (who may act, which role, which rows, what count), state:
   - what is decided, from which data;
   - where and when that data is read: a row locked in the same transaction, or a value the guard read earlier;
-  - the edge cases: soft-deleted rows, deactivated accounts, ended memberships, the same write twice, a change committed between the read and the write, who is in or out of a count;
+  - the edge cases: inactive technicians, bays or service types, an expired hold, a cancelled or completed appointment, the same write twice, a change committed between the read and the write, a time across midnight or a DST change, who is in or out of a count;
   - one `TC-` row per edge case.
 
   Each rule lives in one section; other sections and files point to it.
 
-- **Sketches as shapes.** Code shows signatures, types and call shapes (`create({ …, creatorRoleFor })`), labelled _illustrative_ and tied to the `INV-` it serves. Lock modes, `where` clauses, queries, counts and the order of checks are written as invariants and steps in words.
-- **Seams.** For every rule more than one endpoint or page will need, name the reusable seam (guard and decorator, path helper, shared hook or component, context API). Map every `FC-` constraint to a seam in this feature or defer it with a reason.
+- **Sketches as shapes.** Code shows signatures, types and call shapes (`book(BookingData $data, User $customer): Appointment`), labelled _illustrative_ and tied to the `INV-` it serves. Lock modes, `where` clauses, queries, counts and the order of checks are written as invariants and steps in words.
+- **Seams.** For every rule more than one endpoint or page will need, name the reusable seam (route binding, Gate or Policy, middleware, shared hook or component; the registry is `docs/features/README.md` §6). Map every `FC-` constraint to a seam in this feature or defer it with a reason.
 - **Adversarial input table** per endpoint, with the expected 4xx for each row.
-- **Bounds**: list maximums, real counts beside previews, rate limits on lookups whose 403/404 reveal existence, one log line per person and window for warnings any member can trigger.
-- **Migrations**: the pre-check of existing rows, the exact `down()`, and the soft-delete scope of every index.
+- **Bounds**: list maximums, real counts beside previews, rate limits on lookups whose 403/404 reveal existence, one log line per person and window for warnings anyone can trigger.
+- **Migrations**: the pre-check of existing rows, the exact `down()`, and the `WHERE` scope of every partial index (`active`, status).
 - **Copy and codes** for every user-facing message, including errors, in English, following the glossary in `CONTEXT.md`. Add another language column only when the project ships that language. Each sentence the web must tell apart has its own `code` in the API error table.
 
 ## Test case file must carry
@@ -87,7 +87,7 @@ Implementing agents treat every sketch as a _hypothesis_ and build to the invari
   | Where    | test file and test name, named after the requirement it proves (`CLAUDE.md` naming rule)                      |
 
 - **Level choice.** Use the lowest level that fails for the right reason. Pure logic is a unit test. Anything that relies on database constraints, locks or transactions runs on the real database, never an in-memory substitute. A race is a concurrency test: real parallel processes released together, followed by the data-integrity check `CLAUDE.md` requires. Screen behaviour is a component test; a full user flow is e2e or manual.
-- **Edge cases and adversarial input.** Every edge case listed under a decision in part B (soft-deleted rows, deactivated accounts, the same write twice, a change committed between the read and the write) gets its own row. Every row of an API adversarial input table gets a row, or one parametrised case that names each input and its expected 4xx.
+- **Edge cases and adversarial input.** Every edge case listed under a decision in part B (inactive rows, an expired hold, the same write twice, a change committed between the read and the write) gets its own row. Every row of an API adversarial input table gets a row, or one parametrised case that names each input and its expected 4xx.
 - **Copy.** Each user-facing message and error `code` the web must tell apart has a case that checks it.
 - **Fixtures.** The data builders and seeders the cases share, named as seams, so tickets reuse them instead of rebuilding data.
 - **Regression.** The existing tests and suites this feature touches, which must stay green unchanged.
@@ -95,7 +95,9 @@ Implementing agents treat every sketch as a _hypothesis_ and build to the invari
 ## Ticket rules
 
 - Checkboxes name the outcome and the `INV-`/`AC-` that proves it. A function name or step order copied from part B is a hypothesis, like the sketch it comes from.
+- Tickets form one linear chain: each ticket is blocked by the one before it, never run in parallel, so no two tickets edit the same file at once. Ticket 01 is blocked by the previous feature's acceptance ticket in the build order (`docs/features/README.md` §1).
+- Split as fine as a slice still verifies on its own; never merge tickets just to have fewer.
 - Each ticket lists the `TC-` rows it must make pass. A `TC-` belongs to the ticket that delivers its behaviour, and every `TC-` belongs to exactly one ticket.
 - Ticket 01 is the prefactor: extract the shared seams the feature needs, with no change users can see; done when existing tests stay green unchanged.
 - The tracer bullet comes early, and its acceptance list ends with "run `/code-review` on the branch and fix findings before later tickets build on it".
-- The last ticket is acceptance: every `TC-` row automated and green, or run by hand with the result recorded in `6-test-case.md`; BA metrics measured; and the whole-branch self-review written to `.claude/reviews/<branch>.md` (the merge hook requires it).
+- The last ticket is acceptance: every `TC-` row automated and green, or run by hand with the result recorded in `6-test-case.md`; BA metrics measured; and the whole-branch self-review written to `.claude/reviews/feature__<docs-dir>.md` (the merge hook requires it).
