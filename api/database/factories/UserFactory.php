@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Domain\Auth\Role;
+use App\Models\Dealership;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -40,6 +42,37 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    public function customer(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => Role::CUSTOMER,
+        ]);
+    }
+
+    public function advisor(Dealership|string|null $dealership = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => Role::SERVICE_ADVISOR,
+            'dealership_id' => $dealership instanceof Dealership ? $dealership->id : ($dealership ?? (string) Str::uuid()),
+        ]);
+    }
+
+    public function foreman(Dealership|string|null $dealership = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => Role::WORKSHOP_FOREMAN,
+            'dealership_id' => $dealership instanceof Dealership ? $dealership->id : ($dealership ?? (string) Str::uuid()),
+        ]);
+    }
+
+    public function admin(Dealership|string|null $dealership = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => Role::ADMIN,
+            'dealership_id' => $dealership instanceof Dealership ? $dealership->id : ($dealership ?? (string) Str::uuid()),
         ]);
     }
 }

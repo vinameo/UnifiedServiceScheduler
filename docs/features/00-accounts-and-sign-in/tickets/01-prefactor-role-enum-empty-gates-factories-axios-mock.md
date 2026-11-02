@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/00-accounts-and-sign-in`
 
@@ -12,7 +12,7 @@
 
 **Test cases:** TC-00-27
 
-- [ ] TC-00-27 (INV-00.10; Unit): when Scan `app/Http/Controllers/**/*.php`; then No `->role ===` and no `Role::` comparison. Test: `Unit/Architecture/NoRoleChecksInControllersTest`.
-- [ ] `User::factory()->advisor($dealership)` and `->customer()` are available to later tests (README §7)
-- [ ] No change users can see; existing tests stay green unchanged
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-00-27 (INV-00.10; Unit): when Scan `app/Http/Controllers/**/*.php`; then No `->role ===` and no `Role::` comparison. Test: `Unit/Architecture/NoRoleChecksInControllersTest`.
+- [x] `User::factory()->advisor($dealership)` and `->customer()` are available to later tests (README §7)
+- [x] No change users can see; existing tests stay green unchanged
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
