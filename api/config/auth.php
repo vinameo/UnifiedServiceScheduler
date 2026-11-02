@@ -103,6 +103,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Seed Passwords
+    |--------------------------------------------------------------------------
+    */
+
+    'seed' => [
+        'admin_password' => env('SEED_ADMIN_PASSWORD'),
+        'advisor_password' => env('SEED_ADVISOR_PASSWORD'),
+        'foreman_password' => env('SEED_FOREMAN_PASSWORD'),
+        'customer_password' => env('SEED_CUSTOMER_PASSWORD'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Password Confirmation Timeout
     |--------------------------------------------------------------------------
     |
