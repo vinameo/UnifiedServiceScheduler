@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Customer reschedule</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1971c2}a:hover{color:#1864ab}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:48px;padding:0 18px;border-radius:8px;border:1px solid #1971c2;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;background:#1971c2;color:#fff;box-sizing:border-box}
+.btn:hover{background:#1864ab;color:#fff}
+.dim{color:#495057}
+.sm{font-size:13px}
+.days{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.day{flex:0 0 56px;min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:1px solid #dee2e6;border-radius:8px;background:#fff;font:inherit;color:#212529;cursor:pointer}
+.day:hover{background:#f8f9fa}
+.day.on{background:#1971c2;border-color:#1971c2;color:#fff}
+.day .d{font-size:18px;font-weight:700;line-height:1.1}
+.day .w{font-size:12px;font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.slot{min-height:44px;border:1px solid #ced4da;border-radius:8px;background:#fff;font:inherit;font-weight:600;color:#212529;cursor:pointer;font-variant-numeric:tabular-nums}
+.slot:hover{border-color:#1971c2;color:#1864ab}
+.slot.on{background:#1971c2;border-color:#1971c2;color:#fff}
+.slot.cur{border:2px dashed #5f3dc4;color:#5f3dc4;background:#f3f0ff;cursor:default}
+.slot:disabled{background:#f1f3f5;border-color:#f1f3f5;color:#868e96;text-decoration:line-through;cursor:not-allowed;font-weight:500}
+.slot.cur:disabled{background:#f3f0ff;border:2px dashed #5f3dc4;color:#5f3dc4;text-decoration:none;font-weight:600}
+.gh{font-weight:600;margin:4px 0 8px;display:flex;justify-content:space-between}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f8f9fa; color: #212529; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.55; display: flex; flex-direction: column">
+<header style="display: flex; align-items: center; gap: 8px; padding: 12px; background: #fff; border-bottom: 1px solid #dee2e6">
+<a href="CustomerBooking.dc.html" aria-label="Back" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #212529; border-radius: 4px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg></a>
+<div style="line-height: 1.3"><div style="font-weight: 700; font-size: 16px">Change appointment time</div><div class="dim sm">Oil change · 60 min</div></div>
+</header>
+<div style="flex: 1 1 auto; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px">
+<div style="flex: 1 1 0; min-width: 0"><div class="dim sm">Current time</div><div style="font-weight: 600; color: #5f3dc4">Mon 2 Nov · 10:00</div></div>
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#495057" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6l-6 6"></path></svg>
+<div style="flex: 1 1 0; min-width: 0; text-align: right"><div class="dim sm">New time</div><div style="font-weight: 600">{{newText}}</div></div>
+</div>
+
+<div>
+<div class="gh"><span>Choose a day</span></div>
+<div class="days" role="radiogroup" aria-label="Date">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="6">
+<button class="{{d.cls}}" type="button" role="radio" onClick="{{d.pick}}"><span class="w">{{d.w}}</span><span class="d">{{d.n}}</span></button>
+</sc-for>
+</div>
+</div>
+
+<div>
+<div class="gh"><span>Choose a time</span><span class="dim sm" style="font-weight: 400">{{freeCount}} free slots</span></div>
+<div class="grid" role="radiogroup" aria-label="Time">
+<sc-for list="{{slots}}" as="s" hint-placeholder-count="16">
+<button class="{{s.cls}}" type="button" role="radio" disabled="{{s.disabled}}" onClick="{{s.pick}}">{{s.t}}</button>
+</sc-for>
+</div>
+<div class="dim sm" style="display: flex; align-items: center; gap: 8px; margin-top: 10px"><span style="width: 14px; height: 14px; border-radius: 4px; border: 2px dashed #5f3dc4; background: #f3f0ff; box-sizing: border-box"></span>Your current appointment</div>
+</div>
+
+<div style="display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 8px; background: #e7f5ff; color: #1864ab">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 18px; margin-top: 2px"><path d="M12 3l8 4v5c0 5-3.5 8-8 9c-4.5-1-8-4-8-9V7z"></path><path d="M9 12l2 2l4-4"></path></svg>
+<div class="sm">Your current booking is kept until the new time is secured. If someone takes the new time first, nothing changes.</div>
+</div>
+</div>
+<footer style="padding: 12px 16px 20px; background: #fff; border-top: 1px solid #dee2e6">
+<a class="btn" href="CustomerBooking.dc.html">Confirm new time</a>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { day: 3, slot: 840 };
+  }
+  renderVals() {
+    const fmt = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    const BAYS = ['K1', 'K2'];
+    const TECHS = ['An', 'Dung', 'Chi', 'Em'];
+    const DAYS = [
+      { n: 2, w: 'Mon', close: 1020, busy: [[480, 540, 'An', 'K1'], [540, 600, 'An', 'K2'], [600, 660, 'Dung', 'K1'], [900, 960, 'Dung', 'K2'], [510, 630, 'Chi', ''], [630, 720, 'Em', '']] },
+      { n: 3, w: 'Tue', close: 1020, busy: [[480, 570, 'Em', ''], [600, 720, 'Dung', 'K1'], [780, 900, 'An', 'K2']] },
+      { n: 4, w: 'Wed', close: 1020, busy: [[480, 600, 'An', 'K1'], [480, 600, 'Dung', 'K2']] },
+      { n: 5, w: 'Thu', close: 1020, busy: [[480, 1020, 'An', 'K1'], [480, 1020, 'Dung', 'K2']] },
+      { n: 6, w: 'Fri', close: 1020, busy: [] },
+      { n: 7, w: 'Sat', close: 720, busy: [[480, 540, 'An', 'K1']] }
+    ];
+    const cur = DAYS.find((d) => d.n === this.state.day) || DAYS[1];
+    const free = (id, s, e) => !cur.busy.some((b) => (b[2] === id || b[3] === id) && s < b[1] && b[0] < e);
+    const ok = (s) => BAYS.some((b) => free(b, s, s + 60)) && TECHS.some((t) => free(t, s, s + 60));
+    const isCur = (s) => cur.n === 2 && s === 600;
+    const all = [];
+    for (let s = 480; s + 60 <= cur.close; s += 15) all.push(s);
+    const avail = (s) => ok(s) && !isCur(s);
+    const sel = all.includes(this.state.slot) && avail(this.state.slot) ? this.state.slot : all.find(avail);
+    const slots = all.map((s) => ({
+      t: fmt(s),
+      disabled: !avail(s),
+      cls: isCur(s) ? 'slot cur' : avail(s) && s === sel ? 'slot on' : 'slot',
+      pick: () => this.setState({ slot: s })
+    }));
+    return {
+      days: DAYS.map((d) => ({ n: String(d.n).padStart(2, '0'), w: d.w, cls: d.n === cur.n ? 'day on' : 'day', pick: () => this.setState({ day: d.n }) })),
+      slots,
+      freeCount: slots.filter((s) => !s.disabled).length,
+      newText: sel === undefined ? 'Not selected' : cur.w + ' ' + cur.n + ' Nov · ' + fmt(sel)
+    };
+  }
+}
+</script>
+</body>
+</html>

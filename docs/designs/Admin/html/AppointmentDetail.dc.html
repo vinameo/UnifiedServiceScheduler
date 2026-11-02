@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Appointment details</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f8f9fa}
+a{color:#1971c2}a:hover{color:#1864ab}
+.app{position:relative;min-height:100vh;background:#f8f9fa;color:#212529;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.55}
+.hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:8px 24px;min-height:60px;box-sizing:border-box;background:#fff;border-bottom:1px solid #dee2e6}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.logo{width:32px;height:32px;border-radius:8px;background:#1971c2;color:#fff;display:flex;align-items:center;justify-content:center}
+.row{display:flex;flex-wrap:wrap;align-items:stretch}
+.nav{flex:1 1 240px;box-sizing:border-box;background:#fff;border-right:1px solid #dee2e6;padding:16px 12px;display:flex;flex-direction:column;gap:4px}
+.nl{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:4px;color:#212529;text-decoration:none;font-weight:500}
+.nl:hover{background:#f1f3f5;color:#212529}
+.nl.on{background:#e7f5ff;color:#1864ab}
+.navsec{font-size:12px;font-weight:600;color:#495057;padding:12px 12px 4px;text-transform:uppercase;letter-spacing:.4px}
+.main{flex:999 1 560px;min-width:0;box-sizing:border-box;padding:24px 32px 48px;display:flex;flex-direction:column;gap:20px}
+.card{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.08);box-sizing:border-box;min-width:0}
+.title{font-size:26px;font-weight:700;margin:0;line-height:1.3}
+.h3{font-size:18px;font-weight:600;margin:0 0 12px;line-height:1.4}
+.dim{color:#495057}
+.sm{font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:4px;border:1px solid #1971c2;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;background:#1971c2;color:#fff;box-sizing:border-box;white-space:nowrap}
+.btn:hover{background:#1864ab;border-color:#1864ab;color:#fff}
+.btn.def{background:#fff;color:#212529;border-color:#ced4da}
+.btn.def:hover{background:#f8f9fa;color:#212529}
+.btn.red{background:#c92a2a;border-color:#c92a2a;color:#fff}
+.btn.redo{background:#fff;border-color:#ffa8a8;color:#c92a2a}
+.btn.redo:hover{background:#fff5f5;color:#c92a2a}
+.btn.sub{background:transparent;border-color:transparent;color:#1971c2}
+.btn.sub:hover{background:#e7f5ff;color:#1864ab}
+.badge{display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
+.b-blue{background:#e7f5ff;color:#1864ab}.b-cyan{background:#e3fafc;color:#0b7285}.b-indigo{background:#edf2ff;color:#364fc7}.b-green{background:#ebfbee;color:#1e6b2f}.b-orange{background:#fff4e6;color:#b4410a}.b-gray{background:#f1f3f5;color:#495057}
+.kv{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px 16px}
+.k{color:#495057}
+.lbl{display:block;font-size:14px;font-weight:500;margin-bottom:4px}
+.inp{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;box-sizing:border-box;min-height:44px;border:1px solid #ced4da;border-radius:4px;padding:0 12px;font:inherit;background:#fff;color:#212529;text-align:left}
+.tl{display:flex;gap:12px}
+.dot{flex:0 0 12px;height:12px;border-radius:50%;margin-top:5px;background:#1971c2;box-shadow:0 0 0 4px #e7f5ff}
+</style>
+</helmet>
+<div class="app">
+<header class="hdr">
+<div class="brand"><span class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M4 11h16"></path></svg></span>Service Scheduler</div>
+<div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+<button class="btn def" type="button">Saigon Auto · District 7<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button>
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 36px; height: 36px; border-radius: 50%; background: #e7f5ff; color: #1864ab; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px">MA</span><div style="line-height: 1.3"><div style="font-weight: 600">Minh Anh</div><div class="dim sm">Service advisor</div></div></div>
+</div>
+</header>
+<div class="row">
+<nav class="nav" aria-label="Main navigation">
+<div class="navsec">Operations</div>
+<a class="nl" href="Main.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M4 11h16"></path></svg>New booking</a>
+<a class="nl on" href="Appointments.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01"></path></svg>Appointments</a>
+<a class="nl" href="Workshop.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 4v16"></path></svg>Workshop board</a>
+<div class="navsec">Administration</div>
+<a class="nl" href="MasterData.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>Master data</a>
+<a class="nl" href="Notifications.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3H4a4 4 0 0 0 2-3v-3a7 7 0 0 1 4-6M9 17v1a3 3 0 0 0 6 0v-1"></path></svg>Notifications</a>
+<a class="nl" href="Monitoring.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3 8l4-16l3 8h4"></path></svg>Monitoring</a>
+</nav>
+<main class="main">
+<div class="sm"><a href="Appointments.dc.html">Appointments</a> <span class="dim">/ APT-20261102-0042</span></div>
+<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap">
+<div>
+<div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap"><h1 class="title">Nguyễn Văn Hùng · Toyota Vios</h1><span class="{{badgeCls}}">{{statusText}}</span></div>
+<p class="dim" style="margin: 4px 0 0">Monday, 2 Nov 2026, 09:00–10:00 · Oil change</p>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<sc-if value="{{isConfirmed}}" hint-placeholder-val="{{true}}">
+<button class="btn" type="button">Check in</button>
+<a class="btn def" href="Reschedule.dc.html">Reschedule</a>
+<button class="btn redo" type="button" onClick="{{openCancel}}">Cancel appointment</button>
+<button class="btn sub" type="button">Mark no-show</button>
+</sc-if>
+<sc-if value="{{isCheckedIn}}" hint-placeholder-val="{{false}}">
+<button class="btn" type="button">Start work</button>
+</sc-if>
+<sc-if value="{{isInProgress}}" hint-placeholder-val="{{false}}">
+<button class="btn" type="button">Mark completed</button>
+<button class="btn def" type="button">Extend time</button>
+</sc-if>
+</div>
+</div>
+<sc-if value="{{isClosed}}" hint-placeholder-val="{{false}}">
+<div style="padding: 12px 16px; border-radius: 8px; background: #f1f3f5" class="dim">This appointment is closed and can no longer be changed. Its bay and technician have been released for this time slot.</div>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<div style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section class="card">
+<h2 class="h3">Appointment info</h2>
+<div class="kv">
+<div class="k">Time</div><div style="font-weight: 600">09:00–10:00, Monday 2 Nov 2026</div>
+<div class="k">Service</div><div>Oil change · 60 min</div>
+<div class="k">Technician</div><div>Trần Minh An <span class="dim sm">· Basic skill</span></div>
+<div class="k">Khoang</div><div>Bay 2 <span class="dim sm">· Quick service</span></div>
+<div class="k">Dealership</div><div>Saigon Auto · District 7</div>
+<div class="k">Created by</div><div>Minh Anh, 28/10/2026 16:40</div>
+</div>
+</section>
+<section class="card">
+<h2 class="h3">Customer and vehicle</h2>
+<div class="kv">
+<div class="k">Customer</div><div>Nguyễn Văn Hùng</div>
+<div class="k">Phone</div><div>0903 *** 218 <button class="btn sub" type="button" style="min-height: 32px; padding: 0 8px; font-size: 13px">Show number</button></div>
+<div class="k">Vehicle</div><div>Toyota Vios 2021 · 51H-123.45</div>
+<div class="k">VIN</div><div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace">RL4BT3F3X0M001234</div>
+</div>
+</section>
+</div>
+<section class="card" style="flex: 1 1 340px; min-width: 0">
+<h2 class="h3">History</h2>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<sc-for list="{{history}}" as="h" hint-placeholder-count="4">
+<div class="tl"><span class="dot" aria-hidden="true"></span><div><div style="font-weight: 500">{{h.text}}</div><div class="dim sm">{{h.when}}</div></div></div>
+</sc-for>
+</div>
+<a href="Notifications.dc.html" class="sm" style="display: inline-block; margin-top: 16px; font-weight: 600">View notification log</a>
+</section>
+</div>
+</main>
+</div>
+<sc-if value="{{cancelOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: rgba(0, 0, 0, .45); display: flex; align-items: flex-start; justify-content: center; padding: 120px 16px 16px; box-sizing: border-box">
+<div role="dialog" aria-modal="true" aria-labelledby="cancel-title" style="width: 100%; max-width: 480px; background: #fff; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.2); padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px"><h2 id="cancel-title" style="margin: 0; font-size: 18px; font-weight: 600">Cancel this appointment?</h2><button class="btn sub" type="button" aria-label="Close" onClick="{{closeCancel}}" style="padding: 0 12px; color: #495057"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg></button></div>
+<p class="dim" style="margin: 0">Bay 2 and technician Trần Minh An will be released for 09:00–10:00 so other customers can book it. This cannot be undone.</p>
+<div><label class="lbl" for="c-reason">Reason</label><button id="c-reason" class="inp" type="button"><span>Customer is busy</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button></div>
+<div><label class="lbl" for="c-note">Note (optional)</label><textarea id="c-note" rows="3" style="width: 100%; box-sizing: border-box; border: 1px solid #ced4da; border-radius: 4px; padding: 10px 12px; font: inherit; resize: vertical">Customer will call back to book next week.</textarea></div>
+<div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap"><button class="btn def" type="button" onClick="{{closeCancel}}">Keep appointment</button><button class="btn red" type="button" onClick="{{closeCancel}}">Cancel appointment</button></div>
+</div>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"status":{"editor":"enum","options":["CONFIRMED","CHECKED_IN","IN_PROGRESS","COMPLETED","CANCELLED","NO_SHOW"],"default":"CONFIRMED"},"cancelOpen":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.props.status ?? 'CONFIRMED';
+    const M = {
+      CONFIRMED: ['Confirmed', 'b-blue', null],
+      CHECKED_IN: ['Checked in', 'b-cyan', 'Checked in at 08:52 by Minh Anh'],
+      IN_PROGRESS: ['In progress', 'b-indigo', 'Work started at 09:01 by Trần Minh An'],
+      COMPLETED: ['Completed', 'b-green', 'Completed at 09:56, bay and technician released'],
+      CANCELLED: ['Cancelled', 'b-gray', 'Cancelled by Minh Anh, reason: Customer is busy'],
+      NO_SHOW: ['No-show', 'b-orange', 'Marked as no-show at 09:20']
+    };
+    const m = M[st] || M.CONFIRMED;
+    const history = [
+      { text: 'Appointment created, assigned to Trần Minh An and Bay 2', when: '28/10/2026 16:40 · Minh Anh' },
+      { text: 'Confirmation SMS sent', when: '28/10/2026 16:40' },
+      { text: 'Reminder SMS sent', when: '01/11/2026 09:00' }
+    ];
+    if (m[2]) history.push({ text: m[2], when: '02/11/2026' });
+    const open = this.state && this.state.open !== undefined ? this.state.open : (this.props.cancelOpen ?? false);
+    return {
+      statusText: m[0],
+      badgeCls: 'badge ' + m[1],
+      isConfirmed: st === 'CONFIRMED',
+      isCheckedIn: st === 'CHECKED_IN',
+      isInProgress: st === 'IN_PROGRESS',
+      isClosed: st === 'COMPLETED' || st === 'CANCELLED' || st === 'NO_SHOW',
+      history: history.slice().reverse(),
+      cancelOpen: open,
+      openCancel: () => this.setState({ open: true }),
+      closeCancel: () => this.setState({ open: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

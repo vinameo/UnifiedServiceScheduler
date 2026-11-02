@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Customer slot hold</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1971c2}a:hover{color:#1864ab}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:48px;padding:0 18px;border-radius:8px;border:1px solid #1971c2;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;background:#1971c2;color:#fff;box-sizing:border-box}
+.btn:hover{background:#1864ab;color:#fff}
+.btn.def{background:#fff;color:#212529;border-color:#ced4da}
+.lbl{display:block;font-size:14px;font-weight:500;margin-bottom:4px}
+.inp{display:block;width:100%;box-sizing:border-box;min-height:44px;border:1px solid #ced4da;border-radius:4px;padding:0 12px;font:inherit;background:#fff;color:#212529}
+.dim{color:#495057}
+.sm{font-size:13px}
+.sumrow{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #e9ecef}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f8f9fa; color: #212529; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.55; display: flex; flex-direction: column">
+<header style="display: flex; align-items: center; gap: 8px; padding: 12px 12px; background: #fff; border-bottom: 1px solid #dee2e6">
+<a href="CustomerSlots.dc.html" aria-label="Back" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #212529; border-radius: 4px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg></a>
+<div style="line-height: 1.3"><div style="font-weight: 700; font-size: 16px">Book a service</div><div class="dim sm">Step 3 of 3 · Contact details</div></div>
+</header>
+<div style="flex: 1 1 auto; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px">
+<sc-if value="{{held}}" hint-placeholder-val="{{true}}">
+<div role="status" style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; border-radius: 8px; background: #f3f0ff; border: 1px solid #d0bfff">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5f3dc4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 22px"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2M9 2h6"></path></svg>
+<div style="flex: 1 1 auto"><div style="font-weight: 600; color: #5f3dc4">Slot held for you</div><div class="dim sm">Finish within this time to keep the slot.</div></div>
+<div style="font-size: 22px; font-weight: 700; color: #5f3dc4; font-variant-numeric: tabular-nums">04:32</div>
+</div>
+</sc-if>
+<sc-if value="{{expired}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 8px; background: #fff5f5; border: 1px solid #ffc9c9">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c92a2a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 22px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v4M12 16v.01"></path></svg>
+<div><div style="font-weight: 600">Your hold has expired</div><div class="dim sm">Someone may have booked the 10:00 slot. Pick a time again to continue; the details you entered are kept.</div></div>
+</div>
+</sc-if>
+<section style="background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px">
+<div style="font-weight: 600; margin-bottom: 4px">Your selection</div>
+<div class="sumrow"><span class="dim">Service</span><span>Oil change · 60 min</span></div>
+<div class="sumrow"><span class="dim">Time</span><span style="font-weight: 600">Mon 2 Nov, 10:00–11:00</span></div>
+<div class="sumrow" style="border-bottom: none"><span class="dim">Dealership</span><span>Saigon Auto · District 7</span></div>
+</section>
+<section style="display: flex; flex-direction: column; gap: 12px">
+<div><label class="lbl" for="h-name">Full name</label><input id="h-name" class="inp" type="text" value="Nguyễn Văn Hùng"></div>
+<div><label class="lbl" for="h-phone">Phone number</label><input id="h-phone" class="inp" type="tel" value="0903 456 218"></div>
+<div><label class="lbl" for="h-plate">Licence plate</label><input id="h-plate" class="inp" type="text" value="51H-123.45"></div>
+<label style="display: flex; gap: 10px; align-items: center; min-height: 44px"><input type="checkbox" checked style="width: 20px; height: 20px; accent-color: #1971c2">Text me a reminder 1 day before</label>
+</section>
+</div>
+<footer style="padding: 12px 16px 20px; background: #fff; border-top: 1px solid #dee2e6">
+<sc-if value="{{held}}" hint-placeholder-val="{{true}}">
+<a class="btn" href="CustomerConfirmed.dc.html">Confirm appointment</a>
+</sc-if>
+<sc-if value="{{expired}}" hint-placeholder-val="{{false}}">
+<a class="btn" href="CustomerSlots.dc.html">Pick a time again</a>
+</sc-if>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"expired":{"editor":"boolean","default":false},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const expired = this.props.expired ?? false;
+    return { expired: expired, held: !expired };
+  }
+}
+</script>
+</body>
+</html>

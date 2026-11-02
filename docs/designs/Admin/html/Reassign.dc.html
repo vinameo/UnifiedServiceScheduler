@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Report absence and reassign</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f8f9fa}
+a{color:#1971c2}a:hover{color:#1864ab}
+.app{min-height:100vh;background:#f8f9fa;color:#212529;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.55}
+.hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:8px 24px;min-height:60px;box-sizing:border-box;background:#fff;border-bottom:1px solid #dee2e6}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.logo{width:32px;height:32px;border-radius:8px;background:#1971c2;color:#fff;display:flex;align-items:center;justify-content:center}
+.row{display:flex;flex-wrap:wrap;align-items:stretch}
+.nav{flex:1 1 240px;box-sizing:border-box;background:#fff;border-right:1px solid #dee2e6;padding:16px 12px;display:flex;flex-direction:column;gap:4px}
+.nl{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:4px;color:#212529;text-decoration:none;font-weight:500}
+.nl:hover{background:#f1f3f5;color:#212529}
+.nl.on{background:#e7f5ff;color:#1864ab}
+.navsec{font-size:12px;font-weight:600;color:#495057;padding:12px 12px 4px;text-transform:uppercase;letter-spacing:.4px}
+.main{flex:999 1 560px;min-width:0;box-sizing:border-box;padding:24px 32px 48px;display:flex;flex-direction:column;gap:20px}
+.card{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.08);box-sizing:border-box;min-width:0}
+.title{font-size:26px;font-weight:700;margin:0;line-height:1.3}
+.h3{font-size:18px;font-weight:600;margin:0;line-height:1.4}
+.dim{color:#495057}
+.sm{font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:4px;border:1px solid #1971c2;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;background:#1971c2;color:#fff;box-sizing:border-box;white-space:nowrap}
+.btn:hover{background:#1864ab;border-color:#1864ab;color:#fff}
+.btn.def{background:#fff;color:#212529;border-color:#ced4da}
+.btn.def:hover{background:#f8f9fa;color:#212529}
+.lbl{display:block;font-size:14px;font-weight:500;margin-bottom:4px}
+.inp{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;box-sizing:border-box;min-height:44px;border:1px solid #ced4da;border-radius:4px;padding:0 12px;font:inherit;background:#fff;color:#212529;text-align:left}
+.badge{display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
+.b-green{background:#ebfbee;color:#1e6b2f}.b-orange{background:#fff4e6;color:#b4410a}
+.item{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;padding:16px 0;border-bottom:1px solid #e9ecef}
+.arrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+</style>
+</helmet>
+<div class="app">
+<header class="hdr">
+<div class="brand"><span class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M4 11h16"></path></svg></span>Service Scheduler</div>
+<div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+<button class="btn def" type="button">Saigon Auto · District 7<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button>
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 36px; height: 36px; border-radius: 50%; background: #fff4e6; color: #b4410a; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px">QT</span><div style="line-height: 1.3"><div style="font-weight: 600">Quang Tín</div><div class="dim sm">Workshop foreman</div></div></div>
+</div>
+</header>
+<div class="row">
+<nav class="nav" aria-label="Main navigation">
+<div class="navsec">Operations</div>
+<a class="nl" href="Main.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M4 11h16"></path></svg>New booking</a>
+<a class="nl" href="Appointments.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01"></path></svg>Appointments</a>
+<a class="nl on" href="Workshop.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 4v16"></path></svg>Workshop board</a>
+<div class="navsec">Administration</div>
+<a class="nl" href="MasterData.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>Master data</a>
+<a class="nl" href="Notifications.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3H4a4 4 0 0 0 2-3v-3a7 7 0 0 1 4-6M9 17v1a3 3 0 0 0 6 0v-1"></path></svg>Notifications</a>
+<a class="nl" href="Monitoring.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3 8l4-16l3 8h4"></path></svg>Monitoring</a>
+</nav>
+<main class="main">
+<div class="sm"><a href="Workshop.dc.html">Workshop board</a> <span class="dim">/ Report absence</span></div>
+<div>
+<h1 class="title">Report technician absence and reassign</h1>
+<p class="dim" style="margin: 4px 0 0">The system reruns allocation for each affected appointment. Any it cannot reassign waits for you to contact the customer; nothing is cancelled automatically.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<section class="card" style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<h2 class="h3">Absence period</h2>
+<div><label class="lbl" for="a-tech">Technician</label><button id="a-tech" class="inp" type="button"><span>Ngô Bảo Em</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px">
+<div><label class="lbl" for="a-from">From</label><button id="a-from" class="inp" type="button"><span>03/11 08:00</span></button></div>
+<div><label class="lbl" for="a-to">To</label><button id="a-to" class="inp" type="button"><span>03/11 17:00</span></button></div>
+</div>
+<div><label class="lbl" for="a-reason">Reason</label><button id="a-reason" class="inp" type="button"><span>Sick leave</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button></div>
+<button class="btn def" type="button">Find affected appointments</button>
+</section>
+<section class="card" style="flex: 999 1 560px; min-width: 0">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
+<h2 class="h3">3 affected appointments</h2>
+<div style="display: flex; gap: 8px; flex-wrap: wrap"><span class="badge b-green">2 can be reassigned</span><span class="badge b-orange">1 needs customer contact</span></div>
+</div>
+
+<div class="item">
+<div style="flex: 0 0 120px"><div style="font-weight: 600">08:00–09:30</div><div class="dim sm">Tue 3 Nov</div></div>
+<div style="flex: 1 1 260px; min-width: 0">
+<div style="font-weight: 500">Lâm Khánh · VinFast VF e34</div>
+<div class="dim">EV battery check · needs High voltage skill</div>
+<div style="display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; color: #b4410a"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 18px; margin-top: 2px"><path d="M12 9v4M12 17v.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg><span>No other technician with High voltage skill is available that day.</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end"><span class="badge b-orange">Contact customer</span><div style="display: flex; gap: 8px; flex-wrap: wrap"><button class="btn def" type="button">Call customer</button><a class="btn def" href="Reschedule.dc.html">Offer another time</a></div></div>
+</div>
+
+<div class="item">
+<div style="flex: 0 0 120px"><div style="font-weight: 600">10:00–12:00</div><div class="dim sm">Tue 3 Nov</div></div>
+<div style="flex: 1 1 260px; min-width: 0">
+<div style="font-weight: 500">Đặng Hữu Phúc · Toyota Corolla Cross</div>
+<div class="dim">20,000 km service</div>
+<div class="arrow" style="margin-top: 8px"><span class="dim" style="text-decoration: line-through">Ngô Bảo Em</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#495057" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6l-6 6"></path></svg><strong>Lý Hoàng Dũng</strong><span class="dim">· keeps Bay 3</span></div>
+</div>
+<div><span class="badge b-green">Reassignable</span></div>
+</div>
+
+<div class="item" style="border-bottom: none">
+<div style="flex: 0 0 120px"><div style="font-weight: 600">14:00–15:00</div><div class="dim sm">Tue 3 Nov</div></div>
+<div style="flex: 1 1 260px; min-width: 0">
+<div style="font-weight: 500">Mai Anh Thư · Honda CR-V</div>
+<div class="dim">Oil change</div>
+<div class="arrow" style="margin-top: 8px"><span class="dim" style="text-decoration: line-through">Ngô Bảo Em</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#495057" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6l-6 6"></path></svg><strong>Trần Minh An</strong><span class="dim">· keeps Bay 1</span></div>
+</div>
+<div><span class="badge b-green">Reassignable</span></div>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 16px; border-top: 1px solid #e9ecef">
+<span class="dim sm">Customers of reassigned appointments get an SMS about the technician change.</span>
+<div style="display: flex; gap: 8px; flex-wrap: wrap"><a class="btn def" href="Workshop.dc.html">Discard</a><a class="btn" href="Workshop.dc.html">Apply reassignment</a></div>
+</div>
+</section>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":950}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

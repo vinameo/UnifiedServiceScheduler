@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Customer chooses time</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1971c2}a:hover{color:#1864ab}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:48px;padding:0 18px;border-radius:8px;border:1px solid #1971c2;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;background:#1971c2;color:#fff;box-sizing:border-box}
+.btn:hover{background:#1864ab;color:#fff}
+.btn.def{background:#fff;color:#1864ab;border-color:#ced4da}
+.dim{color:#495057}
+.sm{font-size:13px}
+.steps{display:flex;gap:6px}
+.steps span{flex:1;height:4px;border-radius:2px;background:#dee2e6}
+.steps span.on{background:#1971c2}
+.days{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.day{flex:0 0 56px;min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:1px solid #dee2e6;border-radius:8px;background:#fff;font:inherit;color:#212529;cursor:pointer}
+.day:hover{background:#f8f9fa}
+.day.on{background:#1971c2;border-color:#1971c2;color:#fff}
+.day.off{background:#f1f3f5;color:#495057;cursor:not-allowed}
+.day .d{font-size:18px;font-weight:700;line-height:1.1}
+.day .w{font-size:12px;font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.slot{min-height:44px;border:1px solid #ced4da;border-radius:8px;background:#fff;font:inherit;font-weight:600;color:#212529;cursor:pointer;font-variant-numeric:tabular-nums}
+.slot:hover{border-color:#1971c2;color:#1864ab}
+.slot.on{background:#1971c2;border-color:#1971c2;color:#fff}
+.slot:disabled{background:#f1f3f5;border-color:#f1f3f5;color:#868e96;text-decoration:line-through;cursor:not-allowed;font-weight:500}
+.gh{font-weight:600;margin:4px 0 8px;display:flex;justify-content:space-between}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f8f9fa; color: #212529; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.55; display: flex; flex-direction: column">
+<header style="padding: 12px 12px 12px; background: #fff; border-bottom: 1px solid #dee2e6; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 8px">
+<a href="CustomerService.dc.html" aria-label="Back" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #212529; border-radius: 4px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg></a>
+<div style="line-height: 1.3"><div style="font-weight: 700; font-size: 16px">Book a service</div><div class="dim sm">Step 2 of 3 · Choose date and time</div></div>
+</div>
+<div class="steps" aria-hidden="true" style="padding: 0 4px"><span class="on"></span><span class="on"></span><span></span></div>
+</header>
+<div style="flex: 1 1 auto; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px"><div><div class="dim sm">Service</div><div style="font-weight: 600">Oil change · 60 min</div></div><a href="CustomerService.dc.html" style="font-weight: 600; min-height: 44px; display: flex; align-items: center">Change</a></div>
+
+<div>
+<div class="gh"><span>November 2026</span></div>
+<div class="days" role="radiogroup" aria-label="Date">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+<button class="{{d.cls}}" type="button" role="radio" onClick="{{d.pick}}" disabled="{{d.closed}}"><span class="w">{{d.w}}</span><span class="d">{{d.n}}</span></button>
+</sc-for>
+</div>
+</div>
+
+<sc-if value="{{hasSlots}}" hint-placeholder-val="{{true}}">
+<div>
+<div class="gh"><span>Morning</span><span class="dim sm" style="font-weight: 400">{{amCount}} free slots</span></div>
+<div class="grid" role="radiogroup" aria-label="Morning times">
+<sc-for list="{{am}}" as="s" hint-placeholder-count="16">
+<button class="{{s.cls}}" type="button" role="radio" disabled="{{s.disabled}}" onClick="{{s.pick}}">{{s.t}}</button>
+</sc-for>
+</div>
+</div>
+<sc-if value="{{hasPm}}" hint-placeholder-val="{{true}}">
+<div>
+<div class="gh"><span>Afternoon</span><span class="dim sm" style="font-weight: 400">{{pmCount}} free slots</span></div>
+<div class="grid" role="radiogroup" aria-label="Afternoon times">
+<sc-for list="{{pm}}" as="s" hint-placeholder-count="17">
+<button class="{{s.cls}}" type="button" role="radio" disabled="{{s.disabled}}" onClick="{{s.pick}}">{{s.t}}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{noSlots}}" hint-placeholder-val="{{false}}">
+<div style="background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px 16px; display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center">
+<span style="width: 48px; height: 48px; border-radius: 50%; background: #fff4e6; color: #b4410a; display: flex; align-items: center; justify-content: center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M4 11h16M10 15l4 4M14 15l-4 4"></path></svg></span>
+<div><div style="font-weight: 600">This day is fully booked</div><div class="dim sm">Next available slot for Oil change:</div></div>
+<button class="btn def" type="button" onClick="{{jumpNext}}">Fri 6 Nov · 08:00</button>
+</div>
+</sc-if>
+</div>
+<footer style="padding: 12px 16px 20px; background: #fff; border-top: 1px solid #dee2e6; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between" class="sm"><span class="dim">Your choice</span><span style="font-weight: 600">{{summary}}</span></div>
+<a class="btn" href="Hold.dc.html">Hold and continue</a>
+<div class="dim sm" style="text-align: center">We hold this slot for you for 5 minutes.</div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { day: 2, slot: 600 };
+  }
+  renderVals() {
+    const fmt = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    const BAYS = ['K1', 'K2'];
+    const TECHS = ['An', 'Dung', 'Chi', 'Em'];
+    const FULL = [[480, 1020, 'An', 'K1'], [480, 1020, 'Dung', 'K2']];
+    const DAYS = [
+      { n: 2, w: 'Mon', close: 1020, busy: [[480, 540, 'An', 'K1'], [540, 600, 'An', 'K2'], [600, 660, 'Dung', 'K1'], [900, 960, 'Dung', 'K2'], [510, 630, 'Chi', ''], [630, 720, 'Em', '']] },
+      { n: 3, w: 'Tue', close: 1020, busy: [[480, 570, 'Em', ''], [600, 720, 'Dung', 'K1']] },
+      { n: 4, w: 'Wed', close: 1020, busy: [[480, 600, 'An', 'K1'], [480, 600, 'Dung', 'K2']] },
+      { n: 5, w: 'Thu', close: 1020, busy: FULL },
+      { n: 6, w: 'Fri', close: 1020, busy: [] },
+      { n: 7, w: 'Sat', close: 720, busy: [[480, 540, 'An', 'K1']] },
+      { n: 8, w: 'Sun', close: 0, busy: [] }
+    ];
+    const cur = DAYS.find((d) => d.n === this.state.day) || DAYS[0];
+    const free = (id, s, e) => !cur.busy.some((b) => (b[2] === id || b[3] === id) && s < b[1] && b[0] < e);
+    const ok = (s) => BAYS.some((b) => free(b, s, s + 60)) && TECHS.some((t) => free(t, s, s + 60));
+    const all = [];
+    for (let s = 480; s + 60 <= cur.close; s += 15) all.push(s);
+    const firstFree = all.find(ok);
+    const sel = all.includes(this.state.slot) && ok(this.state.slot) ? this.state.slot : firstFree;
+    const toSlot = (s) => {
+      const avail = ok(s);
+      return { t: fmt(s), disabled: !avail, cls: avail && s === sel ? 'slot on' : 'slot', pick: () => this.setState({ slot: s }) };
+    };
+    const am = all.filter((s) => s < 720).map(toSlot);
+    const pm = all.filter((s) => s >= 720).map(toSlot);
+    const has = firstFree !== undefined;
+    const days = DAYS.map((d) => ({
+      n: String(d.n).padStart(2, '0'), w: d.w, closed: d.close === 0,
+      cls: d.close === 0 ? 'day off' : d.n === cur.n ? 'day on' : 'day',
+      pick: () => this.setState({ day: d.n })
+    }));
+    return {
+      days,
+      am, pm,
+      hasPm: pm.length > 0,
+      amCount: am.filter((s) => !s.disabled).length,
+      pmCount: pm.filter((s) => !s.disabled).length,
+      hasSlots: has,
+      noSlots: !has,
+      summary: has ? cur.w + ' ' + cur.n + ' Nov · ' + fmt(sel) + '–' + fmt(sel + 60) : 'No time selected',
+      jumpNext: () => this.setState({ day: 6, slot: 480 })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>System monitoring</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f8f9fa}
+a{color:#1971c2}a:hover{color:#1864ab}
+.app{min-height:100vh;background:#f8f9fa;color:#212529;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.55}
+.hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:8px 24px;min-height:60px;box-sizing:border-box;background:#fff;border-bottom:1px solid #dee2e6}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.logo{width:32px;height:32px;border-radius:8px;background:#1971c2;color:#fff;display:flex;align-items:center;justify-content:center}
+.row{display:flex;flex-wrap:wrap;align-items:stretch}
+.nav{flex:1 1 240px;box-sizing:border-box;background:#fff;border-right:1px solid #dee2e6;padding:16px 12px;display:flex;flex-direction:column;gap:4px}
+.nl{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:4px;color:#212529;text-decoration:none;font-weight:500}
+.nl:hover{background:#f1f3f5;color:#212529}
+.nl.on{background:#e7f5ff;color:#1864ab}
+.navsec{font-size:12px;font-weight:600;color:#495057;padding:12px 12px 4px;text-transform:uppercase;letter-spacing:.4px}
+.main{flex:999 1 560px;min-width:0;box-sizing:border-box;padding:24px 32px 48px;display:flex;flex-direction:column;gap:20px}
+.card{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.08);box-sizing:border-box;min-width:0}
+.title{font-size:26px;font-weight:700;margin:0;line-height:1.3}
+.h3{font-size:18px;font-weight:600;margin:0;line-height:1.4}
+.dim{color:#495057}
+.sm{font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:4px;border:1px solid #1971c2;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;background:#1971c2;color:#fff;box-sizing:border-box;white-space:nowrap}
+.btn:hover{background:#1864ab;border-color:#1864ab;color:#fff}
+.btn.def{background:#fff;color:#212529;border-color:#ced4da}
+.btn.def:hover{background:#f8f9fa;color:#212529}
+.lbl{display:block;font-size:14px;font-weight:500;margin-bottom:4px}
+.inp{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;min-height:44px;border:1px solid #ced4da;border-radius:4px;padding:0 12px;font:inherit;background:#fff;color:#212529}
+.badge{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
+.b-green{background:#ebfbee;color:#1e6b2f}.b-orange{background:#fff4e6;color:#b4410a}.b-gray{background:#f1f3f5;color:#495057}.b-red{background:#fff5f5;color:#c92a2a}
+.seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:4px;background:#f1f3f5;border-radius:8px}
+.sg{min-height:40px;padding:0 14px;border:none;border-radius:4px;background:transparent;font:inherit;font-weight:500;color:#495057;cursor:pointer;white-space:nowrap}
+.sg:hover{color:#212529}
+.sg.on{background:#fff;color:#212529;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.health{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.hc{display:flex;gap:12px;align-items:center}
+.dot{width:10px;height:10px;border-radius:50%;flex:0 0 10px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.stat .v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:4px}
+.stat .s{font-size:13px;color:#495057;margin-top:2px}
+.scroll{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;min-width:900px}
+.tbl th{text-align:left;font-weight:600;padding:10px 12px;border-bottom:1px solid #dee2e6;white-space:nowrap}
+.tbl td{padding:12px;border-bottom:1px solid #e9ecef;vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;background:#f1f3f5;color:#212529;padding:1px 6px;border-radius:4px}
+</style>
+</helmet>
+<div class="app">
+<header class="hdr">
+<div class="brand"><span class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M4 11h16"></path></svg></span>Service Scheduler</div>
+<div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+<button class="btn def" type="button">Saigon Auto · District 7<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button>
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 36px; height: 36px; border-radius: 50%; background: #e7f5ff; color: #1864ab; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px">MA</span><div style="line-height: 1.3"><div style="font-weight: 600">Minh Anh</div><div class="dim sm">Service advisor</div></div></div>
+</div>
+</header>
+<div class="row">
+<nav class="nav" aria-label="Main navigation">
+<div class="navsec">Operations</div>
+<a class="nl" href="Main.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M4 11h16"></path></svg>New booking</a>
+<a class="nl" href="Appointments.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01"></path></svg>Appointments</a>
+<a class="nl" href="Workshop.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 4v16"></path></svg>Workshop board</a>
+<div class="navsec">Administration</div>
+<a class="nl" href="MasterData.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>Master data</a>
+<a class="nl" href="Notifications.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3H4a4 4 0 0 0 2-3v-3a7 7 0 0 1 4-6M9 17v1a3 3 0 0 0 6 0v-1"></path></svg>Notifications</a>
+<a class="nl on" href="Monitoring.dc.html" aria-current="page"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3 8l4-16l3 8h4"></path></svg>Monitoring</a>
+</nav>
+<main class="main">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+<div>
+<h1 class="title">System monitoring</h1>
+<p class="dim" style="margin: 4px 0 0">Service health, booking metrics and recent errors. Figures on this screen are sample data.</p>
+</div>
+<div class="seg" role="group" aria-label="Time range">
+<button class="{{r1}}" type="button" onClick="{{set1}}">1 hour</button>
+<button class="{{r24}}" type="button" onClick="{{set24}}">24 hours</button>
+<button class="{{r7}}" type="button" onClick="{{set7}}">7 days</button>
+</div>
+</div>
+
+<div class="health">
+<div class="card hc"><span class="dot" style="background: #2f9e44"></span><div><div style="font-weight: 600">Application</div><div class="dim sm">Running · 12 ms response</div></div><span class="badge b-green" style="margin-left: auto">UP</span></div>
+<div class="card hc"><span class="dot" style="background: #2f9e44"></span><div><div style="font-weight: 600">Database</div><div class="dim sm">PostgreSQL · 8/20 connections</div></div><span class="badge b-green" style="margin-left: auto">UP</span></div>
+<div class="card hc"><span class="dot" style="background: #e8590c"></span><div><div style="font-weight: 600">Outbox pending</div><div class="dim sm">2 events · oldest 7 min</div></div><a class="badge b-orange" href="Notifications.dc.html" style="margin-left: auto; text-decoration: none">View</a></div>
+</div>
+
+<div>
+<h2 class="h3" style="margin-bottom: 12px">Bookings in the {{rangeText}}</h2>
+<div class="stats">
+<div class="card stat"><div class="dim sm">Booking requests</div><div class="v">1,248</div><div class="s">Total POST /appointments</div></div>
+<div class="card stat"><div class="dim sm">Confirmed</div><div class="v">1,102</div><div class="s">88.3% of requests</div></div>
+<div class="card stat"><div class="dim sm">No availability (409)</div><div class="v">131</div><div class="s">10.5% · business outcome, not an outage</div></div>
+<div class="card stat"><div class="dim sm">System errors (5xx)</div><div class="v" style="color: #c92a2a">15</div><div class="s">1.2% of requests</div></div>
+<div class="card stat"><div class="dim sm">p95 response time</div><div class="v">184 ms</div><div class="s">Target under 300 ms</div></div>
+<div class="card stat"><div class="dim sm">Allocation retries</div><div class="v">23</div><div class="s">Constraint conflicts, retried automatically</div></div>
+<div class="card stat"><div class="dim sm">Idempotent replays</div><div class="v">41</div><div class="s">Returned the original result, no duplicate</div></div>
+</div>
+</div>
+
+<section class="card" style="padding: 0">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; padding: 20px 20px 12px">
+<h2 class="h3">Recent errors</h2>
+<div style="flex: 0 1 360px; min-width: 0"><label class="lbl" for="m-cid">Search by correlationId</label><div class="inp"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#495057" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"></circle><path d="M21 21l-6-6"></path></svg><input id="m-cid" type="text" placeholder="e.g. 7f3c9a1e" style="border: none; outline: none; font: inherit; flex: 1; min-width: 0; min-height: 40px; background: transparent"></div></div>
+</div>
+<div class="scroll">
+<table class="tbl">
+<thead><tr><th scope="col">Time</th><th scope="col">Endpoint</th><th scope="col">Error code</th><th scope="col">HTTP</th><th scope="col">correlationId</th><th scope="col">Details</th></tr></thead>
+<tbody>
+<tr><td class="num">16:44:03</td><td><code>POST /appointments</code></td><td><code>NO_AVAILABILITY</code></td><td><span class="badge b-gray">409</span></td><td><code>7f3c9a1e</code></td><td class="dim">No Standard service bay free 10:00–12:00</td></tr>
+<tr><td class="num">16:39:51</td><td><code>POST /appointments</code></td><td><code>VEHICLE_ALREADY_BOOKED</code></td><td><span class="badge b-gray">409</span></td><td><code>b21e04d7</code></td><td class="dim">Vehicle 51H-123.45 has an overlapping booking</td></tr>
+<tr><td class="num">16:21:17</td><td><code>POST /appointments</code></td><td><code>INTERNAL_ERROR</code></td><td><span class="badge b-red">500</span></td><td><code>e90a55c2</code></td><td class="dim">Database connection timed out after 5 seconds</td></tr>
+<tr><td class="num">16:20:41</td><td><code>outbox-relay</code></td><td><code>DELIVERY_FAILED</code></td><td><span class="badge b-gray">—</span></td><td><code>4c7d1b90</code></td><td class="dim">Cancellation email for APT-20261102-0031, all 5 attempts used</td></tr>
+<tr><td class="num">16:02:08</td><td><code>POST /appointments</code></td><td><code>OUTSIDE_OPENING_HOURS</code></td><td><span class="badge b-gray">422</span></td><td><code>a03f6e21</code></td><td class="dim">End time 17:30 is after closing time</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { r: '24' };
+  }
+  renderVals() {
+    const r = this.state.r;
+    const cls = (k) => (r === k ? 'sg on' : 'sg');
+    const T = { '1': 'last hour', '24': 'last 24 hours', '7': 'last 7 days' };
+    return {
+      r1: cls('1'), r24: cls('24'), r7: cls('7'),
+      rangeText: T[r],
+      set1: () => this.setState({ r: '1' }),
+      set24: () => this.setState({ r: '24' }),
+      set7: () => this.setState({ r: '7' })
+    };
+  }
+}
+</script>
+</body>
+</html>

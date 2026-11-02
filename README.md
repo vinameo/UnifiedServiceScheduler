@@ -1,2 +1,2 @@
-# unified-service-scheduler-lighweight
-Unified Service Scheduler Lighweight
+# Unified Service Scheduler
+Unified Service Scheduler

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New booking</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f8f9fa}
+a{color:#1971c2}a:hover{color:#1864ab}
+.app{min-height:100vh;background:#f8f9fa;color:#212529;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.55}
+.hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:8px 24px;min-height:60px;box-sizing:border-box;background:#fff;border-bottom:1px solid #dee2e6}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.logo{width:32px;height:32px;border-radius:8px;background:#1971c2;color:#fff;display:flex;align-items:center;justify-content:center}
+.row{display:flex;flex-wrap:wrap;align-items:stretch}
+.nav{flex:1 1 240px;box-sizing:border-box;background:#fff;border-right:1px solid #dee2e6;padding:16px 12px;display:flex;flex-direction:column;gap:4px}
+.nl{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:4px;color:#212529;text-decoration:none;font-weight:500}
+.nl:hover{background:#f1f3f5;color:#212529}
+.nl.on{background:#e7f5ff;color:#1864ab}
+.navsec{font-size:12px;font-weight:600;color:#495057;padding:12px 12px 4px;text-transform:uppercase;letter-spacing:.4px}
+.main{flex:999 1 560px;min-width:0;box-sizing:border-box;padding:24px 32px 48px;display:flex;flex-direction:column;gap:20px}
+.card{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.08);box-sizing:border-box;min-width:0}
+.title{font-size:26px;font-weight:700;margin:0;line-height:1.3}
+.h3{font-size:18px;font-weight:600;margin:0;line-height:1.4}
+.dim{color:#495057}
+.sm{font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:4px;border:1px solid #1971c2;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;background:#1971c2;color:#fff;box-sizing:border-box;white-space:nowrap}
+.btn:hover{background:#1864ab;border-color:#1864ab;color:#fff}
+.btn.def{background:#fff;color:#212529;border-color:#ced4da}
+.btn.def:hover{background:#f8f9fa;color:#212529}
+.btn[disabled]{background:#e9ecef;border-color:#e9ecef;color:#868e96;cursor:not-allowed}
+.lbl{display:block;font-size:14px;font-weight:500;margin-bottom:4px}
+.inp{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;box-sizing:border-box;min-height:44px;border:1px solid #ced4da;border-radius:4px;padding:0 12px;font:inherit;background:#fff;color:#212529;text-align:left}
+.badge{display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap}
+.b-blue{background:#e7f5ff;color:#1864ab}
+.svc{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:12px 14px;border:1px solid #ced4da;border-radius:8px;background:#fff;font:inherit;color:#212529;cursor:pointer;min-height:44px}
+.svc:hover{border-color:#1971c2}
+.svc.on{border-color:#1971c2;background:#e7f5ff;box-shadow:0 0 0 1px #1971c2}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+.slot{min-height:44px;border:1px solid #ced4da;border-radius:4px;background:#fff;font:inherit;font-weight:500;color:#212529;cursor:pointer}
+.slot:hover{border-color:#1971c2}
+.slot.on{background:#1971c2;border-color:#1971c2;color:#fff}
+.slot.off{background:#f1f3f5;border-color:#f1f3f5;color:#868e96;text-decoration:line-through;cursor:not-allowed}
+.sumrow{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #e9ecef}
+</style>
+</helmet>
+<div class="app">
+<header class="hdr">
+<div class="brand"><span class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M4 11h16"></path></svg></span>Service Scheduler</div>
+<div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+<button class="btn def" type="button">Saigon Auto · District 7<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button>
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 36px; height: 36px; border-radius: 50%; background: #e7f5ff; color: #1864ab; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px">MA</span><div style="line-height: 1.3"><div style="font-weight: 600">Minh Anh</div><div class="dim sm">Service advisor</div></div></div>
+</div>
+</header>
+<div class="row">
+<nav class="nav" aria-label="Main navigation">
+<div class="navsec">Operations</div>
+<a class="nl on" href="Main.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M4 11h16"></path></svg>New booking</a>
+<a class="nl" href="Appointments.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01"></path></svg>Appointments</a>
+<a class="nl" href="Workshop.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 4v16"></path></svg>Workshop board</a>
+<div class="navsec">Administration</div>
+<a class="nl" href="MasterData.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>Master data</a>
+<a class="nl" href="Notifications.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3H4a4 4 0 0 0 2-3v-3a7 7 0 0 1 4-6M9 17v1a3 3 0 0 0 6 0v-1"></path></svg>Notifications</a>
+<a class="nl" href="Monitoring.dc.html"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3 8l4-16l3 8h4"></path></svg>Monitoring</a>
+</nav>
+<main class="main">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+<div>
+<h1 class="title">Book a service appointment</h1>
+<p class="dim" style="margin: 4px 0 0">The system checks a service bay and a qualified technician together for the full service duration.</p>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section class="card" style="display: flex; flex-direction: column; gap: 16px">
+<h2 class="h3">1. Customer and vehicle</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px">
+<div><label class="lbl" for="cust">Customer</label><button id="cust" class="inp" type="button"><span>Nguyễn Văn Hùng · 0903 *** 218</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button></div>
+<div><label class="lbl" for="veh">Vehicle</label><button id="veh" class="inp" type="button"><span>Toyota Vios · 51H-123.45</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button><div class="dim sm" style="margin-top: 4px">Only vehicles owned by the selected customer are shown.</div></div>
+</div>
+</section>
+<section class="card" style="display: flex; flex-direction: column; gap: 16px">
+<h2 class="h3">2. Service</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px">
+<sc-for list="{{services}}" as="s" hint-placeholder-count="3">
+<button class="{{s.cls}}" type="button" onClick="{{s.pick}}"><span style="font-weight: 600">{{s.name}}</span><span class="dim sm">{{s.meta}}</span></button>
+</sc-for>
+</div>
+</section>
+<section class="card" style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
+<h2 class="h3">3. Date and time</h2>
+<div style="display: flex; align-items: center; gap: 8px">
+<button class="btn def" type="button" aria-label="Previous day" style="padding: 0 12px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg></button>
+<button class="inp" type="button" style="width: auto; gap: 10px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M4 11h16"></path></svg>Monday, 2 Nov 2026</button>
+<button class="btn def" type="button" aria-label="Next day" style="padding: 0 12px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6l-6 6"></path></svg></button>
+</div>
+</div>
+<p class="dim sm" style="margin: 0">{{availText}} Times in dealership time zone (GMT+7). Struck-through slots have no free bay or technician.</p>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="font-weight: 600">Morning</div>
+<div class="slots">
+<sc-for list="{{morning}}" as="t" hint-placeholder-count="16">
+<button class="{{t.cls}}" type="button" disabled="{{t.disabled}}" onClick="{{t.pick}}">{{t.label}}</button>
+</sc-for>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="font-weight: 600">Afternoon</div>
+<div class="slots">
+<sc-for list="{{afternoon}}" as="t" hint-placeholder-count="12">
+<button class="{{t.cls}}" type="button" disabled="{{t.disabled}}" onClick="{{t.pick}}">{{t.label}}</button>
+</sc-for>
+</div>
+</div>
+</section>
+</div>
+<aside class="card" style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<h2 class="h3" style="margin-bottom: 8px">Summary</h2>
+<div class="sumrow"><span class="dim">Customer</span><span style="text-align: right">Nguyễn Văn Hùng</span></div>
+<div class="sumrow"><span class="dim">Vehicle</span><span style="text-align: right">Toyota Vios · 51H-123.45</span></div>
+<div class="sumrow"><span class="dim">Service</span><span style="text-align: right">{{svcName}}</span></div>
+<div class="sumrow"><span class="dim">Duration</span><span style="text-align: right">{{svcDuration}}</span></div>
+<div class="sumrow"><span class="dim">Time</span><span style="text-align: right; font-weight: 600">{{timeText}}</span></div>
+<div class="sumrow" style="border-bottom: none"><span class="dim">Technician, bay</span><span style="text-align: right">Assigned automatically on confirm</span></div>
+<sc-if value="{{hasSel}}" hint-placeholder-val="{{true}}">
+<a class="btn" href="BookingResult.dc.html" style="margin-top: 12px">Confirm booking</a>
+</sc-if>
+<sc-if value="{{noSel}}" hint-placeholder-val="{{false}}">
+<button class="btn" type="button" disabled="{{true}}" style="margin-top: 12px">Choose a time to continue</button>
+</sc-if>
+<p class="dim sm" style="margin: 12px 0 0">Each booking carries its own request key (7f3c…e21a). On a flaky network, pressing again is safe and never creates a duplicate.</p>
+</aside>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { svc: 'oil', slot: 600 };
+  }
+  renderVals() {
+    const fmt = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    const SV = [
+      { id: 'oil', name: 'Oil change', d: 60, skill: 'BASIC', bay: 'QUICK', meta: '60 min · Basic skill' },
+      { id: 'maint', name: '20,000 km service', d: 120, skill: 'GENERAL', bay: 'STANDARD', meta: '120 min · General maintenance' },
+      { id: 'ev', name: 'EV battery check', d: 90, skill: 'EV', bay: 'EV', meta: '90 min · high-voltage certification required' }
+    ];
+    const BAYS = [{ id: 'K1', t: 'QUICK' }, { id: 'K2', t: 'QUICK' }, { id: 'K3', t: 'STANDARD' }, { id: 'KEV', t: 'EV' }];
+    const TECHS = [{ id: 'An', s: ['BASIC'] }, { id: 'Dung', s: ['BASIC', 'GENERAL'] }, { id: 'Chi', s: ['BASIC', 'GENERAL'] }, { id: 'Em', s: ['BASIC', 'GENERAL', 'EV'] }];
+    const BUSY = [[480, 540, 'An', 'K1'], [510, 630, 'Chi', 'K3'], [540, 600, 'An', 'K2'], [600, 660, 'Dung', 'K1'], [630, 720, 'Em', 'KEV'], [900, 960, 'Dung', 'K2']];
+    const free = (id, s, e) => !BUSY.some((b) => (b[2] === id || b[3] === id) && s < b[1] && b[0] < e);
+    const sv = SV.find((x) => x.id === this.state.svc);
+    const slots = [];
+    for (let s = 480; s + sv.d <= 1020; s += 15) {
+      const ok = BAYS.some((b) => b.t === sv.bay && free(b.id, s, s + sv.d)) && TECHS.some((t) => t.s.includes(sv.skill) && free(t.id, s, s + sv.d));
+      const on = ok && this.state.slot === s;
+      slots.push({ start: s, label: fmt(s), disabled: !ok, on: on, cls: on ? 'slot on' : (ok ? 'slot' : 'slot off'), pick: () => this.setState({ slot: s }) });
+    }
+    const sel = slots.find((x) => x.on);
+    const count = slots.filter((x) => !x.disabled).length;
+    return {
+      services: SV.map((x) => ({ ...x, cls: x.id === sv.id ? 'svc on' : 'svc', pick: () => this.setState({ svc: x.id, slot: null }) })),
+      morning: slots.filter((x) => x.start < 720),
+      afternoon: slots.filter((x) => x.start >= 720),
+      availText: count + ' slots available.',
+      svcName: sv.name,
+      svcDuration: sv.d + ' min',
+      timeText: sel ? 'Mon 2 Nov, ' + sel.label + '–' + fmt(sel.start + sv.d) : 'Not selected',
+      hasSel: !!sel,
+      noSel: !sel
+    };
+  }
+}
+</script>
+</body>
+</html>
