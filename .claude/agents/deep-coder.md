@@ -6,7 +6,7 @@ skills:
   - implement-ticket
   - postgres-skills:postgresql-best-practices
   - backend-tools:backend-development
-  - web-dev-tools:frontend-development
+  - web-frontend
   - mattpocock-skills:codebase-design
 ---
 

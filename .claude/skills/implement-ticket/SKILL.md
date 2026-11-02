@@ -15,9 +15,9 @@ description: Implement one ticket of a Unified Service Scheduler feature (docs/f
    | ------------------------------------------------------------- | ------------------------------------------- |
    | Database: migration, index, constraint, raw SQL in a repository | `postgres-skills:postgresql-best-practices` |
    | API: route, FormRequest, controller, service, repository, policy | `backend-tools:backend-development`         |
-   | Web: page, component, hook, query                             | `web-dev-tools:frontend-development`        |
+   | Web: page, component, hook, query                             | `web-frontend` (project skill)              |
 
-   `CLAUDE.md` overrides these skills where they disagree: Laravel 13 with Repository → Service → Controller layers, Mantine 9, React Router and TanStack Query (not MUI or TanStack Router). Before you write a migration or a query, inspect the real schema, indexes and row counts read-only, with `docker compose exec postgres psql -U scheduler -d scheduler -c '<query>'` or the `postgres-mcp` query tool (`postgres_mcp_query`). Never write to the database that way; change the schema only through migrations.
+   `CLAUDE.md` overrides these skills where they disagree: Laravel 13 with Repository → Service → Controller layers. Before you write a migration or a query, inspect the real schema, indexes and row counts read-only, with `docker compose exec postgres psql -U scheduler -d scheduler -c '<query>'` or the `postgres-mcp` query tool (`postgres_mcp_query`). Never write to the database that way; change the schema only through migrations.
 
 4. **Design pass: every sketch is a hypothesis.** The spec's code, queries, locks and algorithm steps, and the function names and step orders in the ticket, were written without running code. The requirement is the INVs, ACs, permissions and copy they serve. Test each hypothesis against the code at HEAD, the real schema and rows, and `CLAUDE.md` (core rules, layer conventions, and the seven rules of "Design pass and self-review"). Then write `docs/features/<n>-<feature>/tickets/NN-<slug>.design.md` with this table, one row per sketch or rule the ticket builds on:
 

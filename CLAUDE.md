@@ -352,6 +352,7 @@ The `spec-review` skill (user-level) reads this section. Specs live in `docs/fea
 - `write-feature-spec`: grill, write the six spec files, gate them with the `spec-reviewer` subagent (which runs `spec-review` with the checks above), then split into tickets.
 - `implement-ticket`: one ticket, plus the final feature review and merge.
 - `implement-feature` (`/implement-feature <docs path>`): every ticket in order through the `deep-coder` subagent, then the branch review and merge.
+- `web-frontend`: how the frontend conventions above land in `web/src` (Mantine 9, React Router, TanStack Query, tests); preloaded in `deep-coder`.
 
 **Other coding agents (Codex, Antigravity).** `AGENTS.md` is a symlink to this file, and `.agents/skills` and `.agents/agents` are symlinks to `.claude/skills` and `.claude/agents`, so every agent reads the same rules, skills and subagents. In an agent's frontmatter, restrict tools with `disallowedTools`, never `tools:`: Antigravity drops an agent whose `tools:` names Claude Code tools. Antigravity gets the hooks from `.agents/hooks.json`, which runs the same `.claude/hooks/requireBranchReview.mjs` (merge gate) and `requireTicketDesignNotes.mjs` (ticket commit gate). When a skill names a Claude Code feature your agent lacks:
 
