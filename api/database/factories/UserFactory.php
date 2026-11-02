@@ -32,6 +32,8 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            'role' => Role::CUSTOMER,
+            'dealership_id' => null,
         ];
     }
 
@@ -49,6 +51,7 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'role' => Role::CUSTOMER,
+            'dealership_id' => null,
         ]);
     }
 
@@ -56,7 +59,7 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'role' => Role::SERVICE_ADVISOR,
-            'dealership_id' => $dealership instanceof Dealership ? $dealership->id : ($dealership ?? (string) Str::uuid()),
+            'dealership_id' => $dealership instanceof Dealership ? $dealership->id : ($dealership ?? Dealership::factory()),
         ]);
     }
 
@@ -64,7 +67,7 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'role' => Role::WORKSHOP_FOREMAN,
-            'dealership_id' => $dealership instanceof Dealership ? $dealership->id : ($dealership ?? (string) Str::uuid()),
+            'dealership_id' => $dealership instanceof Dealership ? $dealership->id : ($dealership ?? Dealership::factory()),
         ]);
     }
 
@@ -72,7 +75,7 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'role' => Role::ADMIN,
-            'dealership_id' => $dealership instanceof Dealership ? $dealership->id : ($dealership ?? (string) Str::uuid()),
+            'dealership_id' => $dealership instanceof Dealership ? $dealership->id : ($dealership ?? Dealership::factory()),
         ]);
     }
 }
