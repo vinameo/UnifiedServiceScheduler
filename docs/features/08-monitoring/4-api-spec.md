@@ -1,31 +1,31 @@
-# F08 · Giám sát · API spec (API)
+# F08 · Monitoring · API spec (API)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-Hai API cho màn hình admin (tóm tắt theo khoảng thời gian; tìm lỗi), cộng `/metrics` cho hệ thống giám sát trong mạng nội bộ, và hai endpoint health có sẵn.
+Two APIs for the admin screen (a summary per time range; error search), plus `/metrics` for monitoring systems on the internal network, and the two existing health endpoints.
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
-## B1. Endpoint
+## B1. Endpoints
 
-| ID | Method + path | Ai | Ghi chú |
+| ID | Method + path | Who | Note |
 | --- | --- | --- | --- |
 | API-08.1 | `GET /api/v1/monitoring/summary?range=1h|24h|7d` | `can:admin` | |
-| API-08.2 | `GET /api/v1/monitoring/errors?correlationId=&cursor=&limit=` | `can:admin` | Phân trang cursor (F05), mặc định 20 |
-| API-08.3 | `GET /metrics` | Nội bộ (D-08.7) | `text/plain; version=0.0.4` |
-| API-08.4 | `GET /health/live`, `GET /health/ready` | Không auth | Có sẵn |
+| API-08.2 | `GET /api/v1/monitoring/errors?correlationId=&cursor=&limit=` | `can:admin` | Cursor paging (F05), default 20 |
+| API-08.3 | `GET /metrics` | Internal (D-08.7) | `text/plain; version=0.0.4` |
+| API-08.4 | `GET /health/live`, `GET /health/ready` | No auth | Existing |
 
-## B2. Hợp đồng
+## B2. Contracts
 
 ### API-08.1
 
@@ -39,10 +39,10 @@ Hai API cho màn hình admin (tóm tắt theo khoảng thời gian; tìm lỗi),
   "bookings": { "total": 1248, "confirmed": 1102, "noAvailability": 131, "validationError": 0,
                 "error": 15, "p95Ms": 184, "allocationRetries": 23, "idempotentReplays": 41,
                 "appointmentModified": 7 },
-  "recentErrors": [ ApiEvent… (≤ 20, mới nhất trước) ] } }
+  "recentErrors": [ ApiEvent… (≤ 20, newest first) ] } }
 ```
 
-Số trong `bookings` đếm từ `api_events` trong khoảng (không từ `metric_counters`, vì bộ đếm là tổng từ đầu). `database.status = DOWN` nếu `select 1` lỗi (API vẫn 200 nếu đọc được phần khác; nếu DB chết thì endpoint 500 — màn hình hiện lỗi).
+The `bookings` figures are counted from `api_events` within the range (not from `metric_counters`, which hold totals since the start). `database.status = DOWN` when `select 1` fails (the API still returns 200 if it can read the rest; if the DB is fully down the endpoint returns 500 and the screen shows the error).
 
 ### `ApiEvent`
 
@@ -52,9 +52,9 @@ Số trong `bookings` đếm từ `api_events` trong khoảng (không từ `metr
   "details": "No Standard service bay free 10:00–12:00" }
 ```
 
-`details` dựng từ `detail` đã che: 409 `NO_AVAILABILITY` → câu theo `reason` và khoảng giờ; 5xx → tên lớp exception + thông điệp đã che, ≤ 200 ký tự; `DELIVERY_FAILED` (F11) → "{event} for {reference}, all 5 attempts used".
+`details` is built from the redacted `detail`: 409 `NO_AVAILABILITY` → a sentence from `reason` and the time range; 5xx → exception class + redacted message, ≤ 200 characters; `DELIVERY_FAILED` (F11) → "{event} for {reference}, all 5 attempts used".
 
-### API-08.3 (minh hoạ)
+### API-08.3 (illustrative)
 
 ```
 # TYPE booking_requests_total counter
@@ -67,21 +67,21 @@ booking_duration_seconds_bucket{le="0.3"} 1180
 outbox_pending_messages 2
 ```
 
-## B3. Bảng lỗi
+## B3. Error table
 
 RQ §B8.
 
-## B4. Bảng đầu vào bất thường
+## B4. Adversarial input table
 
-| Endpoint | Đầu vào | Kỳ vọng |
+| Endpoint | Input | Expected |
 | --- | --- | --- |
-| 08.1 | `range=30d`, thiếu `range` | 400 |
-| 08.2 | `correlationId` > 128 ký tự hoặc có ký tự ngoài `[A-Za-z0-9._-]` | 400 |
-| 08.2 | `correlationId` của lỗi ở đại lý khác | 200, `data: []` |
-| 08.1, 08.2 | Advisor, foreman, khách | 403 |
-| 08.3 | Header `X-Forwarded-For: 10.0.0.1` từ ngoài | 404 (không tin header) |
-| 08.3 | Qua Nginx công khai | 404 |
+| 08.1 | `range=30d`, missing `range` | 400 |
+| 08.2 | `correlationId` > 128 characters or with characters outside `[A-Za-z0-9._-]` | 400 |
+| 08.2 | `correlationId` of an error at another dealership | 200, `data: []` |
+| 08.1, 08.2 | Advisor, foreman, customer | 403 |
+| 08.3 | Header `X-Forwarded-For: 10.0.0.1` from outside | 404 (header not trusted) |
+| 08.3 | Through the public Nginx | 404 |
 
-## B5. Giới hạn
+## B5. Bounds
 
-`recentErrors` ≤ 20; `errors` `limit` ≤ 100; dữ liệu 7 ngày.
+`recentErrors` ≤ 20; `errors` `limit` ≤ 100; 7 days of data.

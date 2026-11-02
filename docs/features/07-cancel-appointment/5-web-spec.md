@@ -1,10 +1,10 @@
-# F07 · Huỷ lịch hẹn · Web spec (WEB)
+# F07 · Cancel an appointment · Web spec (WEB)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-**Nhân viên** (bản vẽ `Admin/05-appointment-details.png`): nút "Cancel appointment" (đỏ, viền) trên trang chi tiết → hộp thoại:
+**Staff** (draft `Admin/05-appointment-details.png`): a "Cancel appointment" button (red outline) on the details page → dialog:
 
 ```
 Cancel this appointment?
@@ -15,7 +15,7 @@ Note (optional) [Customer will call back to book next week.]
                          [Keep appointment] [Cancel appointment]
 ```
 
-**Khách** (bản vẽ `Customer/06-details-and-cancel.png`): nút "Cancel appointment" → bảng trượt từ dưới:
+**Customer** (draft `Customer/06-details-and-cancel.png`): a "Cancel appointment" button → bottom sheet:
 
 ```
 Cancel your 10:00 appointment on Mon 2 Nov?
@@ -25,66 +25,66 @@ Reason (optional)
 [Keep appointment]  [Cancel appointment]
 ```
 
-Sau khi huỷ: banner "You cancelled this appointment · The time slot has been released. We'll send you a cancellation SMS."
+After cancelling: banner "You cancelled this appointment · The time slot has been released. We'll send you a cancellation SMS."
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
-## B1. Seam
+## B1. Seams
 
-| ID | Seam | File | Hành vi |
+| ID | Seam | File | Behaviour |
 | --- | --- | --- | --- |
-| WEB-07.1 | `useCancelAppointment(id)` | `web/src/shared/api/appointments.ts` | Mutation: đọc `etag` từ `appointmentQuery`, gửi `If-Match` + khoá (`useIdempotencyKey({id, reason, note})`). 200 → `setAppointment(…)` + invalidate danh sách, availability. 412 → trả `latest` cho `AppointmentModifiedAlert`. |
-| WEB-07.2 | `CancelAppointmentModal` | `web/src/staff/appointments/CancelAppointmentModal.tsx` | Mantine `Modal`. Câu thân dùng `bay.name`, `technician.name`, `range` của lịch đang hiện. Nút xác nhận `SubmitButton` màu đỏ ("Cancelling…"). |
-| WEB-07.3 | `CancelBookingSheet` | `web/src/customer/bookings/CancelBookingSheet.tsx` | Mantine `Drawer position="bottom"`; `Radio.Group` lý do (không chọn = null). "Other reason" mở `Textarea` → `note`. |
-| WEB-07.4 | `canCustomerChange(appointment, now)` | `web/src/shared/appointments/changeWindow.ts` | Gương của `CustomerChangePolicy`; F09 dùng lại. `now` từ đồng hồ đã hiệu chỉnh theo header `Date` của server (F10 xây đầy đủ; F07 dùng `Date.now()`). |
+| WEB-07.1 | `useCancelAppointment(id)` | `web/src/shared/api/appointments.ts` | Mutation: reads the `etag` from `appointmentQuery`, sends `If-Match` + key (`useIdempotencyKey({id, reason, note})`). 200 → `setAppointment(…)` + invalidate the lists and availability. 412 → hands `latest` to `AppointmentModifiedAlert`. |
+| WEB-07.2 | `CancelAppointmentModal` | `web/src/staff/appointments/CancelAppointmentModal.tsx` | Mantine `Modal`. The body uses `bay.name`, `technician.name`, `range` of the booking on screen. Confirm is a red `SubmitButton` ("Cancelling…"). |
+| WEB-07.3 | `CancelBookingSheet` | `web/src/customer/bookings/CancelBookingSheet.tsx` | Mantine `Drawer position="bottom"`; a `Radio.Group` of reasons (none = null). "Other reason" opens a `Textarea` → `note`. |
+| WEB-07.4 | `canCustomerChange(appointment, now)` | `web/src/shared/appointments/changeWindow.ts` | Mirrors `CustomerChangePolicy`; F09 reuses it. `now` comes from a clock corrected by the server `Date` header (F10 builds it fully; F07 uses `Date.now()`). |
 
-## B2. Hành vi
+## B2. Behaviour
 
-**Nhân viên**
-- Nút "Cancel appointment" chỉ hiện cho advisor, khi `status ∈ {CONFIRMED, HELD}`.
-- Lý do mặc định không chọn; nút xác nhận `disabled` tới khi chọn.
-- 200 → đóng hộp thoại, thông báo "Appointment cancelled", trang hiện badge Cancelled + banner closed (F05), nút hành động ẩn.
-- 412 → trong hộp thoại hiện `AppointmentModifiedAlert`; "Review and retry" cập nhật trang với bản mới; nếu trạng thái mới không huỷ được thì đóng hộp thoại.
-- 422 `INVALID_STATUS_TRANSITION` → `Alert` câu README §5 với `{status}`, cập nhật trang.
+**Staff**
+- The "Cancel appointment" button shows only for advisors, when `status ∈ {CONFIRMED, HELD}`.
+- No reason selected by default; the confirm button stays `disabled` until one is picked.
+- 200 → close the dialog, notification "Appointment cancelled", the page shows the Cancelled badge + closed banner (F05), action buttons hidden.
+- 412 → `AppointmentModifiedAlert` inside the dialog; "Review and retry" updates the page with the new version; if the new status cannot be cancelled, close the dialog.
+- 422 `INVALID_STATUS_TRANSITION` → `Alert` with the README §5 copy and `{status}`, page updated.
 
-**Khách**
-- Nút "Cancel appointment" hiện khi `canCustomerChange` đúng và `status = CONFIRMED`. Sát giờ (< 2 giờ) → thay nút bằng câu "It's less than 2 hours before your appointment. Please call {phone} to cancel." (`tel:` link).
-- 422 `TOO_LATE_TO_CANCEL` (đồng hồ lệch) → cùng câu trên trong `Alert`.
-- 200 → đóng bảng; banner trên thẻ: tiêu đề "You cancelled this appointment", thân "The time slot has been released. We'll send you a cancellation SMS."; ẩn nút Cancel/Change time.
-- Lịch bị cố vấn huỷ: banner "This appointment was cancelled by the dealership. Call {phone} if you have questions."
+**Customer**
+- The "Cancel appointment" button shows when `canCustomerChange` is true and `status = CONFIRMED`. Less than 2 hours → instead of the button, "It's less than 2 hours before your appointment. Please call {phone} to cancel." (`tel:` link).
+- 422 `TOO_LATE_TO_CANCEL` (clock skew) → the same sentence in an `Alert`.
+- 200 → close the sheet; banner on the card: title "You cancelled this appointment", body "The time slot has been released. We'll send you a cancellation SMS."; hide Cancel/Change time.
+- Cancelled by an advisor: banner "This appointment was cancelled by the dealership. Call {phone} if you have questions."
 
-## B3. Câu chữ
+## B3. Copy
 
-| Key | en | vi |
-| --- | --- | --- |
-| `cancel.button` | Cancel appointment | Huỷ lịch hẹn |
-| `cancel.staff.title` | Cancel this appointment? | Huỷ lịch hẹn này? |
-| `cancel.staff.body` | {bay} and technician {technician} will be released for {range} so other customers can book it. This cannot be undone. | {bay} và kỹ thuật viên {technician} sẽ được giải phóng cho khung {range} để khách khác đặt. Không thể hoàn tác. |
-| `cancel.reason` | Reason | Lý do |
-| `cancel.note` | Note (optional) | Ghi chú (không bắt buộc) |
-| `cancel.keep` | Keep appointment | Giữ lịch hẹn |
-| `cancel.submitting` | Cancelling… | Đang huỷ… |
-| `cancel.done` | Appointment cancelled | Đã huỷ lịch hẹn |
-| `reason.CUSTOMER_REQUEST` | Customer asked to cancel | Khách yêu cầu huỷ |
-| `reason.CUSTOMER_BUSY` | Customer is busy | Khách bận |
-| `reason.DONE_ELSEWHERE` (staff) | Service done elsewhere | Đã làm ở nơi khác |
-| `reason.DEALERSHIP_ISSUE` | Dealership issue | Vấn đề từ đại lý |
-| `reason.OTHER` (staff) | Other | Khác |
-| `cancel.cust.title` | Cancel your {time} appointment on {day}? | Huỷ lịch hẹn {time} ngày {day}? |
-| `cancel.cust.body` | The slot will be released for others to book. You cannot restore it after cancelling. | Khung giờ sẽ được trả lại cho người khác đặt. Bạn không thể khôi phục sau khi huỷ. |
-| `cancel.cust.reason` | Reason (optional) | Lý do (không bắt buộc) |
-| `reason.SOMETHING_CAME_UP` | Something came up | Có việc đột xuất |
-| `reason.DONE_ELSEWHERE` (customer) | I had it done elsewhere | Tôi đã làm ở nơi khác |
-| `reason.OTHER` (customer) | Other reason | Lý do khác |
-| `cancel.cust.doneTitle` | You cancelled this appointment | Bạn đã huỷ lịch hẹn này |
-| `cancel.cust.doneBody` | The time slot has been released. We'll send you a cancellation SMS. | Khung giờ đã được trả lại. Chúng tôi sẽ nhắn tin xác nhận huỷ cho bạn. |
-| `cancel.cust.byDealership` | This appointment was cancelled by the dealership. Call {phone} if you have questions. | Lịch hẹn này đã được đại lý huỷ. Gọi {phone} nếu bạn có thắc mắc. |
-| `cancel.cust.tooLate` | It's less than 2 hours before your appointment. Please call {phone} to cancel. | Chỉ còn dưới 2 giờ trước giờ hẹn. Vui lòng gọi {phone} để huỷ. |
+| Key | Copy |
+| --- | --- |
+| `cancel.button` | Cancel appointment |
+| `cancel.staff.title` | Cancel this appointment? |
+| `cancel.staff.body` | {bay} and technician {technician} will be released for {range} so other customers can book it. This cannot be undone. |
+| `cancel.reason` | Reason |
+| `cancel.note` | Note (optional) |
+| `cancel.keep` | Keep appointment |
+| `cancel.submitting` | Cancelling… |
+| `cancel.done` | Appointment cancelled |
+| `reason.CUSTOMER_REQUEST` | Customer asked to cancel |
+| `reason.CUSTOMER_BUSY` | Customer is busy |
+| `reason.DONE_ELSEWHERE` (staff) | Service done elsewhere |
+| `reason.DEALERSHIP_ISSUE` | Dealership issue |
+| `reason.OTHER` (staff) | Other |
+| `cancel.cust.title` | Cancel your {time} appointment on {day}? |
+| `cancel.cust.body` | The slot will be released for others to book. You cannot restore it after cancelling. |
+| `cancel.cust.reason` | Reason (optional) |
+| `reason.SOMETHING_CAME_UP` | Something came up |
+| `reason.DONE_ELSEWHERE` (customer) | I had it done elsewhere |
+| `reason.OTHER` (customer) | Other reason |
+| `cancel.cust.doneTitle` | You cancelled this appointment |
+| `cancel.cust.doneBody` | The time slot has been released. We'll send you a cancellation SMS. |
+| `cancel.cust.byDealership` | This appointment was cancelled by the dealership. Call {phone} if you have questions. |
+| `cancel.cust.tooLate` | It's less than 2 hours before your appointment. Please call {phone} to cancel. |

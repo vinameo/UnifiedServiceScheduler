@@ -1,34 +1,34 @@
-# F06 · Gợi ý giờ trống khác · API spec (API)
+# F06 · Suggest other free times · API spec (API)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-Hai API đọc: lưới giờ của một ngày (mọi khung, mỗi khung trống hay không), và "giờ trống kế tiếp". Thêm field `alternatives` vào lỗi `409 NO_AVAILABILITY` của mọi endpoint đặt/đổi giờ.
+Two read APIs: one day's time grid (every slot, free or not), and "the next free time". Plus an `alternatives` member on the `409 NO_AVAILABILITY` error of every book/reschedule endpoint.
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
-## B1. Endpoint
+## B1. Endpoints
 
-| ID | Method + path | Ai | Middleware |
+| ID | Method + path | Who | Middleware |
 | --- | --- | --- | --- |
-| API-06.1 | `GET /api/v1/dealerships/{dealership}/availability` | khách (mọi đại lý), nhân viên (đại lý mình) | `auth:sanctum`, `throttle:120,1` |
-| API-06.2 | `GET /api/v1/dealerships/{dealership}/availability/next` | như trên | như trên |
-| API-06.3 | Field `alternatives` trong `409 NO_AVAILABILITY` | — | — |
+| API-06.1 | `GET /api/v1/dealerships/{dealership}/availability` | customer (any dealership), staff (own dealership) | `auth:sanctum`, `throttle:120,1` |
+| API-06.2 | `GET /api/v1/dealerships/{dealership}/availability/next` | same | same |
+| API-06.3 | `alternatives` member of `409 NO_AVAILABILITY` | — | — |
 
-## B2. Hợp đồng
+## B2. Contracts
 
 ### API-06.1
 
-Query: `serviceTypeId` (UUID, bắt buộc), `date` (`YYYY-MM-DD`, bắt buộc), `excludeAppointmentId` (UUID, tuỳ chọn).
+Query: `serviceTypeId` (UUID, required), `date` (`YYYY-MM-DD`, required), `excludeAppointmentId` (UUID, optional).
 
 ```json
 { "data": {
@@ -41,11 +41,11 @@ Query: `serviceTypeId` (UUID, bắt buộc), `date` (`YYYY-MM-DD`, bắt buộc)
     ] } }
 ```
 
-Ngày đóng cửa: `closed: true`, `opensAt`/`closesAt` `null`, `slots: []`, `freeCount: 0`.
+A closed day: `closed: true`, `opensAt`/`closesAt` `null`, `slots: []`, `freeCount: 0`.
 
 ### API-06.2
 
-Query: `serviceTypeId`, `after` (ISO 8601 có offset). Trả `{ "data": { "nextAvailable": { "start": "…", "end": "…" } | null } }`. Tìm trong `after` … `after + 7 ngày`.
+Query: `serviceTypeId`, `after` (ISO 8601 with offset). Returns `{ "data": { "nextAvailable": { "start": "…", "end": "…" } | null } }`. Searches `after` … `after + 7 days`.
 
 ### API-06.3
 
@@ -58,31 +58,31 @@ Query: `serviceTypeId`, `after` (ISO 8601 có offset). Trả `{ "data": { "nextA
     { "start": "2026-11-03T08:00:00+07:00", "end": "2026-11-03T09:00:00+07:00" } ] }
 ```
 
-Câu trả lời 409 có `alternatives` được lưu cùng khoá chống lặp (F04): gửi lại cùng khoá nhận lại đúng gợi ý cũ.
+A 409 with `alternatives` is saved with its idempotency key (F04): resending the same key returns the same old suggestions.
 
-## B3. Bảng lỗi
+## B3. Error table
 
 RQ §B8.
 
-## B4. Bảng đầu vào bất thường
+## B4. Adversarial input table
 
-| Endpoint | Đầu vào | Kỳ vọng |
+| Endpoint | Input | Expected |
 | --- | --- | --- |
-| 06.1 | Thiếu `date` / `date=2026-11-31` / `date=today` | 400 |
+| 06.1 | Missing `date` / `date=2026-11-31` / `date=today` | 400 |
 | 06.1 | `serviceTypeId=abc` | 400 |
-| 06.1 | `serviceTypeId` của đại lý khác | 404 `SERVICE_TYPE_NOT_FOUND` |
-| 06.1 | `date` hôm qua | 422 `START_IN_PAST` |
-| 06.1 | `date` = hôm nay + 91 | 422 `START_TOO_FAR_AHEAD` |
-| 06.1 | `excludeAppointmentId` của khách khác (khách gọi) | 404 `APPOINTMENT_NOT_FOUND` |
+| 06.1 | `serviceTypeId` of another dealership | 404 `SERVICE_TYPE_NOT_FOUND` |
+| 06.1 | `date` yesterday | 422 `START_IN_PAST` |
+| 06.1 | `date` = today + 91 | 422 `START_TOO_FAR_AHEAD` |
+| 06.1 | `excludeAppointmentId` of another customer (called by a customer) | 404 `APPOINTMENT_NOT_FOUND` |
 | 06.1 | `excludeAppointmentId=abc` | 400 |
-| 06.2 | `after` không có offset | 400 |
-| 06.1, 06.2 | 121 request trong một phút | 429 |
+| 06.2 | `after` without an offset | 400 |
+| 06.1, 06.2 | 121 requests in a minute | 429 |
 
-## B5. Giới hạn
+## B5. Bounds
 
-| Giới hạn | Giá trị |
+| Bound | Value |
 | --- | --- |
-| Ngày hỏi | hôm nay … hôm nay + 90 |
-| Gợi ý | ≤ 3, trong 8 ngày (ngày muốn + 7) |
-| `next` | trong 7 ngày sau `after` |
-| Rate limit | 120/phút mỗi người dùng |
+| Date asked | today … today + 90 |
+| Suggestions | ≤ 3, within 8 days (the wanted day + 7) |
+| `next` | within 7 days after `after` |
+| Rate limit | 120/minute per user |

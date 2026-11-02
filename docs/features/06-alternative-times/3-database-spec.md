@@ -1,38 +1,38 @@
-# F06 · Gợi ý giờ trống khác · Database spec (DB)
+# F06 · Suggest other free times · Database spec (DB)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-F06 chỉ đọc, không có bảng hay migration mới. Mỗi ngày cần tính chỉ đọc một bộ truy vấn cố định (của F03), dù ngày đó có bao nhiêu khung giờ.
+F06 only reads; no new tables or migrations. Each day computed reads one fixed set of queries (F03's), however many slots that day has.
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
-## B1. Bảng
+## B1. Tables
 
-Không có bảng mới, không có migration.
+No new tables, no migrations.
 
-## B2. Truy vấn
+## B2. Queries
 
-| Thao tác | Truy vấn | Số lần |
+| Operation | Query | Count |
 | --- | --- | --- |
-| Lưới một ngày | `AllocationSnapshotRepository::forDay` (F03 DB §B2) | 1 snapshot |
-| Gợi ý khi 409 | `forDay` cho ngày muốn, rồi tối đa 7 ngày sau | ≤ 8 snapshot, dừng sớm |
-| `next` | Như trên từ `after` | ≤ 8 snapshot |
+| One day's grid | `AllocationSnapshotRepository::forDay` (F03 DB §B2) | 1 snapshot |
+| Suggestions on 409 | `forDay` for the wanted day, then up to 7 later days | ≤ 8 snapshots, stopping early |
+| `next` | Same, from `after` | ≤ 8 snapshots |
 | `excludeAppointmentId` | `findVisibleTo` (F05) | 1 |
 
-Index dùng: `resource_allocations_dealership_period_idx` (F04) cho khoảng bận trong ngày.
+Index used: `resource_allocations_dealership_period_idx` (F04) for the day's busy intervals.
 
-Truy vấn bận nên có thể gộp nhiều ngày thành một (cửa sổ 8 ngày) cho gợi ý; giả thuyết, agent đo trước khi làm (TC-06-13).
+The busy-interval query could merge several days into one (an 8-day window) for suggestions; a hypothesis the agent measures before doing (TC-06-13).
 
-## B3. Test DB
+## B3. DB tests
 
-TC-06-10 (số truy vấn cố định), TC-06-13 (hiệu năng).
+TC-06-10 (fixed query count), TC-06-13 (performance).

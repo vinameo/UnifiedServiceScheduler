@@ -1,21 +1,21 @@
-# F05 · Xem lịch hẹn · Web spec (WEB)
+# F05 · View appointments · Web spec (WEB)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-| Màn hình | Đường dẫn | Bản vẽ |
+| Screen | Path | Draft |
 | --- | --- | --- |
-| Appointments (nhân viên) | `/staff/appointments` | `Admin/04-appointment-list.png` |
-| Appointment details (nhân viên) | `/staff/appointments/:id` | `Admin/05-appointment-details.png` |
-| My bookings (khách) | `/my-bookings` | `Customer/05-my-bookings.png` |
-| Details (khách) | `/my-bookings/:id` | `Customer/06-details-and-cancel.png` |
+| Appointments (staff) | `/staff/appointments` | `Admin/04-appointment-list.png` |
+| Appointment details (staff) | `/staff/appointments/:id` | `Admin/05-appointment-details.png` |
+| My bookings (customer) | `/my-bookings` | `Customer/05-my-bookings.png` |
+| Details (customer) | `/my-bookings/:id` | `Customer/06-details-and-cancel.png` |
 
 ```
 Appointments                                              [New booking]
 Monday, 2 Nov 2026 · times in dealership time zone (GMT+7)
 Date [02/11/2026]  Technician [All ▾]  Bay [All ▾]  Status [All ▾]
-Time         Customer · Vehicle               Service     Technician    Bay    Status     
+Time         Customer · Vehicle               Service     Technician    Bay    Status
 09:00–10:00  Nguyễn Văn Hùng · Toyota Vios   Oil change  Trần Minh An  Bay 2  Confirmed  View
 …
 Showing the first 8 appointments, sorted by start time        [Load more]
@@ -25,7 +25,7 @@ Showing the first 8 appointments, sorted by start time        [Load more]
 Appointments / APT-20261102-0042
 Nguyễn Văn Hùng · Toyota Vios   [Confirmed]
 Monday, 2 Nov 2026, 09:00–10:00 · Oil change
-[ nút hành động: F07, F09, F12 ]
+[ action buttons: F07, F09, F12 ]
 ┌ Appointment info ───────────┐ ┌ Customer and vehicle ──────────────┐
 │ Time  09:00–10:00, Mon 2 Nov│ │ Customer  Nguyễn Văn Hùng           │
 │ Service Oil change · 60 min │ │ Phone  0903 *** 218  Show number    │
@@ -33,118 +33,118 @@ Monday, 2 Nov 2026, 09:00–10:00 · Oil change
 │ Bay  Bay 2 · Quick service  │ │ VIN  RL4BT3F3X0M001234              │
 │ Dealership Saigon Auto · D7 │ └─────────────────────────────────────┘
 │ Created by Minh Anh, 28/10… │ ┌ History ───────────────────────────┐
-└─────────────────────────────┘ │ • Created · Minh Anh · 28/10 16:40  │
+└─────────────────────────────┘ │ • Booked · Minh Anh · 28/10 16:40   │
                                 └─────────────────────────────────────┘
 ```
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
-## B1. Route
+## B1. Routes
 
 | Path | Element | Guard |
 | --- | --- | --- |
-| `/staff/appointments` | `staff/appointments/AppointmentListPage` | mọi vai trò nhân viên |
-| `/staff/appointments/:id` | `staff/appointments/AppointmentDetailsPage` | mọi vai trò nhân viên |
+| `/staff/appointments` | `staff/appointments/AppointmentListPage` | every staff role |
+| `/staff/appointments/:id` | `staff/appointments/AppointmentDetailsPage` | every staff role |
 | `/my-bookings` | `customer/bookings/MyBookingsPage` | `CUSTOMER` |
 | `/my-bookings/:id` | `customer/bookings/BookingDetailsPage` | `CUSTOMER` |
 
-404 từ API → trang "We couldn't find this appointment." với nút về danh sách.
+A 404 from the API → a "We couldn't find this appointment." page with a button back to the list.
 
-## B2. Seam
+## B2. Seams
 
-| ID | Seam | File | Hành vi |
+| ID | Seam | File | Behaviour |
 | --- | --- | --- | --- |
-| WEB-05.1 | `appointmentQuery(id)` | `web/src/shared/api/appointmentQuery.ts` | `queryKey ['appointment', id]`; dữ liệu `{ appointment, etag }` (`etag` đọc từ header `ETag`). `setAppointment(qc, appointment, etag)` dùng bởi mọi mutation và bởi 412 (`AppointmentModifiedAlert.onReview`). `withIfMatch(etag)` → header. |
-| WEB-05.2 | `AppointmentDetailsLayout` | `web/src/staff/appointments/AppointmentDetailsLayout.tsx` | Props: `appointment`, `actions` (ReactNode), `banner`; dùng lại ở F07, F09, F11, F12. |
+| WEB-05.1 | `appointmentQuery(id)` | `web/src/shared/api/appointmentQuery.ts` | `queryKey ['appointment', id]`; data `{ appointment, etag }` (`etag` read from the `ETag` header). `setAppointment(qc, appointment, etag)` is used by every mutation and by 412 (`AppointmentModifiedAlert.onReview`). `withIfMatch(etag)` → header. |
+| WEB-05.2 | `AppointmentDetailsLayout` | `web/src/staff/appointments/AppointmentDetailsLayout.tsx` | Props: `appointment`, `actions` (ReactNode), `banner`; reused by F07, F09, F11, F12. |
 | WEB-05.3 | `useDealershipAppointments(filters)` | `web/src/shared/api/appointments.ts` | `useInfiniteQuery`, `getNextPageParam = meta.nextCursor`; `refetchInterval` 60 s. |
-| WEB-05.4 | `useMyAppointments(scope)` | như trên | `useInfiniteQuery`. |
-| WEB-05.5 | `useAppointmentHistory(id)` | như trên | Chỉ gọi khi là nhân viên. |
+| WEB-05.4 | `useMyAppointments(scope)` | same | `useInfiniteQuery`. |
+| WEB-05.5 | `useAppointmentHistory(id)` | same | Only called for staff. |
 | WEB-05.6 | `isClosed(status)` | `web/src/shared/appointments/status.ts` | `COMPLETED`, `CANCELLED`, `NO_SHOW`, `EXPIRED`. |
 
-## B3. Hành vi
+## B3. Behaviour
 
 **Appointments**
-- Bộ lọc nằm trong URL (`?date=2026-11-02&technicianId=…&status=CONFIRMED`) để chia sẻ link và giữ khi F5. `date` mặc định là hôm nay theo múi giờ đại lý (không theo trình duyệt).
-- Technician/Bay `Select` lấy từ `useTechnicians`, `useBays` (F01); "All" là mặc định. Status `Select` gồm 8 trạng thái + "All".
-- Cột Time "09:00–10:00"; Customer · Vehicle hai dòng (tên đậm; "{make} {model} · {plate}" mờ); Status = `AppointmentStatusBadge`; Actions = link "View".
-- Footer: "Showing the first {n} appointments, sorted by start time" (n = số dòng đang hiện); "Load more" khi còn `nextCursor`.
-- Trống: "No appointments on this day."
-- Nút "New booking" chỉ cho advisor.
+- Filters live in the URL (`?date=2026-11-02&technicianId=…&status=CONFIRMED`) so links can be shared and F5 keeps them. `date` defaults to today in the dealership's time zone (not the browser's).
+- Technician/Bay `Select` from `useTechnicians`, `useBays` (F01); "All" by default. Status `Select` has the 8 statuses + "All".
+- Time column "09:00–10:00"; Customer · Vehicle on two lines (name bold; "{make} {model} · {plate}" dimmed); Status = `AppointmentStatusBadge`; Actions = a "View" link.
+- Footer: "Showing the first {n} appointments, sorted by start time" (n = rows shown); "Load more" while `nextCursor` exists.
+- Empty: "No appointments on this day."
+- "New booking" button for advisors only.
 
-**Appointment details (nhân viên)**
-- Breadcrumb "Appointments / {reference}"; tiêu đề "{fullName} · {make} {model}"; badge; dòng "{dayLong}, {range} · {service}".
-- Banner khi `isClosed`: "This appointment is closed and can no longer be changed. Its bay and technician have been released for this time slot."
-- Appointment info: Time, Service "{name} · {duration} min", Technician, Bay "{name} · {bayTypeLabel}", Dealership, Created by "{name}, {dd/MM/yyyy HH:mm}" (giờ đại lý).
-- Customer and vehicle: Customer, Phone (`maskPhone` + nút "Show number" đổi thành số đầy đủ, link `tel:`), Vehicle "{make} {model} {year} · {plate}", VIN (ẩn dòng nếu không có).
-- History: Timeline, mỗi dòng "{label} · {actor name or 'System'} · {dd/MM HH:mm}"; nhãn theo `type` (B4).
+**Appointment details (staff)**
+- Breadcrumb "Appointments / {reference}"; title "{fullName} · {make} {model}"; badge; line "{dayLong}, {range} · {service}".
+- Banner when `isClosed`: "This appointment is closed and can no longer be changed. Its bay and technician have been released for this time slot."
+- Appointment info: Time, Service "{name} · {duration} min", Technician, Bay "{name} · {bayTypeLabel}", Dealership, Created by "{name}, {dd/MM/yyyy HH:mm}" (dealership time).
+- Customer and vehicle: Customer, Phone (`maskPhone` + "Show number" reveals the full number as a `tel:` link), Vehicle "{make} {model} {year} · {plate}", VIN (row hidden when absent).
+- History: a Timeline, each row "{label} · {actor name or 'System'} · {dd/MM HH:mm}"; label by `type` (B4).
 
-**My bookings (khách)**
-- Tiêu đề "My bookings"; "Signed in as {email}" + nút "Sign out".
-- `SegmentedControl` Upcoming | Past (lưu trong URL `?tab=past`).
-- Thẻ: "{dayShort} · {range}" + badge; tên dịch vụ; "{make} {model} · {dealership name} {branchName}"; dòng cuối "{reference}" + link "View details".
-- Trống: Upcoming "You have no upcoming bookings." + nút "New booking"; Past "No past bookings yet."
-- Thanh dưới (bản vẽ): "New booking" (`/book`), "My bookings".
+**My bookings (customer)**
+- Title "My bookings"; "Signed in as {email}" + "Sign out".
+- `SegmentedControl` Upcoming | Past (kept in the URL as `?tab=past`).
+- Card: "{dayShort} · {range}" + badge; service name; "{make} {model} · {dealership name} {branchName}"; last line "{reference}" + "View details" link.
+- Empty: Upcoming "You have no upcoming bookings." + "New booking" button; Past "No past bookings yet."
+- Bottom bar (draft): "New booking" (`/book`), "My bookings".
 
-**Details (khách)**
-- "Appointment details", reference; "{dayShort} · {range}" + badge; "{service} · about {duration} min"; Vehicle; "Booked by {fullName}"; "Reminder SMS 1 day before" khi `reminderOptIn`; Location "{name} · {branchName}" + số điện thoại (link `tel:`).
-- Vùng nút: F07 (Cancel), F09 (Change time); luôn có "New booking".
+**Details (customer)**
+- "Appointment details", reference; "{dayShort} · {range}" + badge; "{service} · about {duration} min"; Vehicle; "Booked by {fullName}"; "Reminder SMS 1 day before" when `reminderOptIn`; Location "{name} · {branchName}" + phone (`tel:` link).
+- Actions area: F07 (Cancel), F09 (Change time); always "New booking".
 
-**Liên kết thêm vào F02 (D-05.8)**: "View appointment" ở trang confirmed nhân viên; "View existing booking" trong thẻ `VEHICLE_ALREADY_BOOKED` (`/staff/appointments/{existingAppointment.id}`; khách → `/my-bookings/{id}`); "View my bookings" ở trang confirmed khách; "My bookings" ở header khách; "Check appointment list" trong `IdempotentRetryPanel` (nhân viên → `/staff/appointments?date=…`; khách → `/my-bookings`).
+**Links added to F02 (D-05.8)**: "View appointment" on the staff confirmed page; "View existing booking" in the `VEHICLE_ALREADY_BOOKED` card (`/staff/appointments/{existingAppointment.id}`; customers → `/my-bookings/{id}`); "View my bookings" on the customer confirmed page; "My bookings" in the customer header; "Check appointment list" in `IdempotentRetryPanel` (staff → `/staff/appointments?date=…`; customers → `/my-bookings`).
 
-## B4. Câu chữ
+## B4. Copy
 
-| Key | en | vi |
-| --- | --- | --- |
-| `list.title` | Appointments | Lịch hẹn |
-| `list.subtitle` | {dayLong} · times in dealership time zone ({offset}) | {dayLong} · giờ theo múi giờ đại lý ({offset}) |
-| `list.filters.*` | Date · Technician · Bay · Status · All | Ngày · Kỹ thuật viên · Khoang · Trạng thái · Tất cả |
-| `list.columns.*` | Time · Customer · Vehicle · Service · Technician · Bay · Status · Actions | Giờ · Khách · Xe · Dịch vụ · Kỹ thuật viên · Khoang · Trạng thái · Thao tác |
-| `list.view` | View | Xem |
-| `list.footer` | Showing the first {n} appointments, sorted by start time | Đang hiện {n} lịch đầu tiên, sắp theo giờ bắt đầu |
-| `list.loadMore` | Load more | Tải thêm |
-| `list.empty` | No appointments on this day. | Không có lịch hẹn nào trong ngày này. |
-| `details.closed` | This appointment is closed and can no longer be changed. Its bay and technician have been released for this time slot. | Lịch hẹn đã đóng và không thể thay đổi. Khoang và kỹ thuật viên đã được giải phóng cho khung giờ này. |
-| `details.info` | Appointment info | Thông tin lịch hẹn |
-| `details.customerVehicle` | Customer and vehicle | Khách hàng và xe |
-| `details.fields.*` | Time · Service · Technician · Bay · Dealership · Created by · Customer · Phone · Vehicle · VIN | Giờ · Dịch vụ · Kỹ thuật viên · Khoang · Đại lý · Người tạo · Khách hàng · Điện thoại · Xe · VIN |
-| `details.showNumber` | Show number | Hiện số |
-| `details.history` | History | Lịch sử |
-| `details.system` | System | Hệ thống |
-| `history.CREATED` | Booked | Đã đặt |
-| `history.HELD` | Slot held | Đã giữ chỗ |
-| `history.CONFIRMED` | Confirmed | Đã xác nhận |
-| `history.CANCELLED` | Cancelled | Đã huỷ |
-| `history.RESCHEDULED` | Time changed | Đã đổi giờ |
-| `history.EXPIRED` | Hold expired | Hết hạn giữ chỗ |
-| `history.CHECKED_IN` | Checked in | Đã tiếp nhận xe |
-| `history.STARTED` | Work started | Bắt đầu làm |
-| `history.COMPLETED` | Completed | Hoàn thành |
-| `history.NO_SHOW` | Marked no-show | Đánh dấu không đến |
-| `history.EXTENDED` | Time extended | Đã gia hạn |
-| `history.REASSIGNED` | Technician or bay changed | Đổi kỹ thuật viên hoặc khoang |
-| `history.CONTACT_REQUIRED` | Customer contact needed | Cần liên hệ khách |
-| `notFound` | We couldn't find this appointment. | Không tìm thấy lịch hẹn này. |
-| `my.title` | My bookings | Lịch của tôi |
-| `my.signedInAs` | Signed in as {email} | Đăng nhập với {email} |
-| `my.upcoming` / `my.past` | Upcoming / Past | Sắp tới / Đã qua |
-| `my.viewDetails` | View details | Xem chi tiết |
-| `my.emptyUpcoming` | You have no upcoming bookings. | Bạn chưa có lịch hẹn sắp tới. |
-| `my.emptyPast` | No past bookings yet. | Chưa có lịch hẹn đã qua. |
-| `my.newBooking` | New booking | Đặt lịch mới |
-| `cdetails.title` | Appointment details | Chi tiết lịch hẹn |
-| `cdetails.about` | {service} · about {duration} min | {service} · khoảng {duration} phút |
-| `cdetails.bookedBy` | Booked by {name} | Người đặt {name} |
-| `cdetails.reminder` | Reminder SMS 1 day before | SMS nhắc trước 1 ngày |
-| `cdetails.location` | Location | Địa điểm |
-| `viewAppointment` | View appointment | Xem lịch hẹn |
-| `viewExisting` | View existing booking | Xem lịch đang có |
-| `viewMyBookings` | View my bookings | Xem lịch của tôi |
-| `checkList` | Check appointment list | Xem danh sách lịch |
+| Key | Copy |
+| --- | --- |
+| `list.title` | Appointments |
+| `list.subtitle` | {dayLong} · times in dealership time zone ({offset}) |
+| `list.filters.*` | Date · Technician · Bay · Status · All |
+| `list.columns.*` | Time · Customer · Vehicle · Service · Technician · Bay · Status · Actions |
+| `list.view` | View |
+| `list.footer` | Showing the first {n} appointments, sorted by start time |
+| `list.loadMore` | Load more |
+| `list.empty` | No appointments on this day. |
+| `details.closed` | This appointment is closed and can no longer be changed. Its bay and technician have been released for this time slot. |
+| `details.info` | Appointment info |
+| `details.customerVehicle` | Customer and vehicle |
+| `details.fields.*` | Time · Service · Technician · Bay · Dealership · Created by · Customer · Phone · Vehicle · VIN |
+| `details.showNumber` | Show number |
+| `details.history` | History |
+| `details.system` | System |
+| `history.CREATED` | Booked |
+| `history.HELD` | Slot held |
+| `history.CONFIRMED` | Confirmed |
+| `history.CANCELLED` | Cancelled |
+| `history.RESCHEDULED` | Time changed |
+| `history.EXPIRED` | Hold expired |
+| `history.CHECKED_IN` | Checked in |
+| `history.STARTED` | Work started |
+| `history.COMPLETED` | Completed |
+| `history.NO_SHOW` | Marked no-show |
+| `history.EXTENDED` | Time extended |
+| `history.REASSIGNED` | Technician or bay changed |
+| `history.CONTACT_REQUIRED` | Customer contact needed |
+| `notFound` | We couldn't find this appointment. |
+| `my.title` | My bookings |
+| `my.signedInAs` | Signed in as {email} |
+| `my.upcoming` / `my.past` | Upcoming / Past |
+| `my.viewDetails` | View details |
+| `my.emptyUpcoming` | You have no upcoming bookings. |
+| `my.emptyPast` | No past bookings yet. |
+| `my.newBooking` | New booking |
+| `cdetails.title` | Appointment details |
+| `cdetails.about` | {service} · about {duration} min |
+| `cdetails.bookedBy` | Booked by {name} |
+| `cdetails.reminder` | Reminder SMS 1 day before |
+| `cdetails.location` | Location |
+| `viewAppointment` | View appointment |
+| `viewExisting` | View existing booking |
+| `viewMyBookings` | View my bookings |
+| `checkList` | Check appointment list |

@@ -1,216 +1,216 @@
-# F08 · Giám sát · Requirement spec (RQ)
+# F08 · Monitoring · Requirement spec (RQ)
 
-Nhánh: `feature/08-monitoring` · Ưu tiên: Should · Quy ước chung: [README](../README.md)
-
----
-
-# PHẦN A · Cho người đọc
-
-## A1. Câu chuyện
-
-**Vì sao có feature này.** Khi có sự cố, đội vận hành phải trả lời được "request này đã ra sao?" và phân biệt "hệ thống hỏng" với "xưởng hết chỗ". 409 hết chỗ là kết quả nghiệp vụ bình thường; 5xx mới là sự cố.
-
-**Feature làm gì.**
-- Log dạng JSON, mỗi dòng có mã truy vết, đại lý, người dùng, lịch hẹn, kết quả; **không bao giờ** có mật khẩu, token, số điện thoại, email.
-- Mỗi request có `X-Correlation-Id` (đã có), cùng giá trị trong log và trong lỗi.
-- Bộ đếm (metrics) cho đặt lịch theo kết quả, thời gian đặt lịch, số lần thử lại cặp, số lần trả lại câu trả lời cũ, số 412, số đăng nhập lỗi; xuất ở `/metrics` chỉ trong mạng nội bộ.
-- Trace OpenTelemetry cho 4 bước của một lần đặt lịch.
-- Màn hình "System monitoring" cho admin: sức khoẻ app, DB, outbox; số liệu đặt lịch theo khoảng 1 giờ/24 giờ/7 ngày; lỗi gần đây; tìm theo correlation id.
-
-**Ai dùng.** Admin (màn hình); hệ thống giám sát (Prometheus, OTel collector) qua mạng nội bộ.
-
-**Không làm.** Cảnh báo tự động (gửi email/Slack), dashboard Grafana, lưu log dài hạn.
-
-## A2. Các bước sử dụng
-
-1. Admin → Administration → Monitoring → chọn "24 hours".
-2. Thấy "No availability (409) 131 · business outcome, not an outage" khác "System errors (5xx) 15".
-3. Khách báo lỗi kèm mã → dán mã vào "Search by correlationId" → thấy dòng lỗi.
-
-## A3. Màn hình và khác biệt so với bản vẽ
-
-Bản vẽ: `Admin/11-system-monitoring.png`.
-
-| Bản vẽ | Spec | Lý do |
-| --- | --- | --- |
-| "Figures on this screen are sample data." | Bỏ; số liệu thật | — |
-| "Application · Running · 12 ms response" | "Running · p95 {n} ms (bookings)" | Số đo thật có sẵn là thời gian đặt lịch |
-| "Outbox pending … View" | Nút "View" xuất hiện khi F11 có trang | Thứ tự build |
-| Menu Monitoring thấy với advisor | Chỉ admin | AC-08.4 |
-
-## A4. Luật chính bằng lời thường
-
-- Chỉ admin xem màn hình giám sát.
-- Admin thấy số liệu và lỗi của đại lý mình, cộng các lỗi hệ thống không gắn đại lý.
-- `/metrics` không bao giờ mở ra Internet.
-- Log không chứa dữ liệu cá nhân.
-
-## A5. Ngoài phạm vi
-
-Cảnh báo, lưu trữ log tập trung, tracing ngoài luồng đặt lịch.
-
-## A6. Tiêu chí thành công
-
-- Từ một correlation id tìm được dòng log và dòng lỗi trên màn hình trong < 1 phút.
-- Quét log sau toàn bộ test: 0 email, 0 số điện thoại, 0 mật khẩu (M-08.1).
-
-## A7. Quyết định
-
-| ID | Quyết định |
-| --- | --- |
-| D-08.1 | Log: kênh mặc định `stderr`, formatter `Monolog\Formatter\JsonFormatter`; processor thêm `correlationId`, `userId`, `dealershipId`, `appointmentId`, `outcome`; processor che dữ liệu cá nhân (D-08.2). |
-| D-08.2 | Che: bỏ mọi khoá ngữ cảnh khớp `password|token|secret|authorization|cookie|phone|email` (không phân biệt hoa thường, cả lồng nhau); thay chuỗi dạng email bằng `[email]` và dãy ≥ 9 chữ số (có thể có dấu cách/chấm/gạch) bằng `[phone]` trong `message` và giá trị chuỗi. |
-| D-08.3 | Mỗi request ghi đúng một dòng log "request" khi kết thúc (`method`, `route`, `status`, `code`, `outcome`, `durationMs`). |
-| D-08.4 | Bảng `api_events` lưu: mọi `POST /appointments` (để đếm) và mọi response ≥ 400 (để liệt kê lỗi), cộng lỗi gửi outbox `DELIVERY_FAILED` (F11 ghi). Giữ 7 ngày, `monitoring:prune` hằng ngày. |
-| D-08.5 | Bộ đếm Prometheus là bộ đếm tăng dần lưu ở bảng `metric_counters` (không trong bộ nhớ PHP-FPM, `CLAUDE.md`), tăng bằng `INSERT … ON CONFLICT DO UPDATE SET value = value + :n` sau khi đã gửi response (`terminate`). |
-| D-08.6 | `outcome` của đặt lịch: 201 → `confirmed`; 409 `NO_AVAILABILITY` → `no_availability`; 4xx khác → `validation_error`; 5xx → `error`. Câu trả lời lặp lại (replay) không tính vào `booking_requests_total`, chỉ vào `idempotent_replays_total`. |
-| D-08.7 | `/metrics`: route không cần đăng nhập nhưng có middleware chỉ cho qua khi Nginx nội bộ đặt `fastcgi_param METRICS_INTERNAL 1`; còn lại 404. Thêm server Nginx nội bộ cổng 9100, không publish trong compose. Nginx công khai đã trả 404 cho `/metrics`. |
-| D-08.8 | Tracing: thêm package `open-telemetry/sdk` và `open-telemetry/exporter-otlp` (người dùng đã duyệt mặc định; README D-G.11). Mặc định `OTEL_SDK_DISABLED=true` (không gửi đi đâu). Span: `http.request`, `booking.validate`, `allocation.find_candidates`, `booking.write`. Seam `App\Support\Tracing\Tracer` để domain không phụ thuộc SDK. |
-| D-08.9 | Màn hình: chỉ admin; phạm vi dữ liệu = `dealership_id` của admin hoặc `NULL`. Tự làm mới 30 giây. |
-| D-08.10 | Thẻ DB: `UP` khi `select 1` thành công; "{used}/{max} connections" từ `pg_stat_activity` và `max_connections`. |
-| D-08.11 | Thẻ outbox: số `PENDING` và tuổi dòng cũ nhất (đọc `outbox_messages` có từ F04). |
-
-## A8. Câu hỏi mở
-
-| ID | Câu hỏi | Mặc định |
-| --- | --- | --- |
-| Q-08.a | Có gửi trace tới collector nào trong compose? | Không; bật bằng env khi có collector. |
-| Q-08.b | Có lưu mọi request (kể cả 2xx đọc) vào `api_events`? | Không (D-08.4), để bảng nhỏ. |
+Branch: `feature/08-monitoring` · Priority: Should · Shared conventions: [README](../README.md)
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART A · For readers
 
-## B0. Quy tắc đọc
+## A1. Story
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+**Why this feature exists.** When something goes wrong, the team must answer "what happened to this request?" and tell "the system is broken" apart from "the workshop is full". A 409 for no availability is a normal business outcome; a 5xx is an incident.
 
-## B1. Trạng thái code hiện tại
+**What it does.**
+- JSON logs, every line with correlation id, dealership, user, appointment and outcome; **never** passwords, tokens, phone numbers or emails.
+- Every request has `X-Correlation-Id` (already exists), with the same value in the logs and in errors.
+- Metrics for bookings by outcome, booking duration, pair retries, idempotent replays, 412s and failed sign-ins; exposed at `/metrics` on the internal network only.
+- OpenTelemetry traces for the 4 steps of a booking.
+- An admin "System monitoring" screen: app, DB and outbox health; booking figures for 1 hour/24 hours/7 days; recent errors; search by correlation id.
 
-Có sẵn từ đầu: `CorrelationId` middleware (`api/app/Http/Middleware/CorrelationId.php`, `Log::shareContext`), `HealthController` (`/health/live`, `/health/ready` → 503 khi DB lỗi), `ProblemRenderer` (thêm `correlationId` vào body), Nginx chặn `/metrics` công khai (`docker/nginx/snippets/app.conf`), `config/logging.php` mặc định `stack` → `single` (file, không JSON). Từ F04: event `AllocationRetried`, `IdempotentReplayed`, `AppointmentModifiedDetected`; bảng `outbox_messages`.
+**Who uses it.** Admins (screen); monitoring systems (Prometheus, an OTel collector) through the internal network.
 
-## B2. Phạm vi
+**What it does not do.** Automatic alerts (email/Slack), Grafana dashboards, long-term log storage.
 
-| ID | Trong phạm vi |
+## A2. Usage steps
+
+1. Admin → Administration → Monitoring → "24 hours".
+2. Sees "No availability (409) 131 · business outcome, not an outage" next to "System errors (5xx) 15".
+3. A customer reports an error with a code → paste it into "Search by correlationId" → the error row shows.
+
+## A3. Screens and deviations from the drafts
+
+Draft: `Admin/11-system-monitoring.png`.
+
+| Draft | Spec | Reason |
+| --- | --- | --- |
+| "Figures on this screen are sample data." | Removed; real figures | — |
+| "Application · Running · 12 ms response" | "Running · p95 {n} ms (bookings)" | The real measure available is booking duration |
+| "Outbox pending … View" | The "View" button appears once F11 has its page | Build order |
+| Monitoring menu item visible to advisors | Admin only | AC-08.4 |
+
+## A4. Key rules in plain words
+
+- Only admins see the monitoring screen.
+- Admins see their dealership's figures and errors, plus system errors with no dealership.
+- `/metrics` is never open to the Internet.
+- Logs contain no personal data.
+
+## A5. Out of scope
+
+Alerts, central log storage, tracing outside the booking flow.
+
+## A6. Success criteria
+
+- From a correlation id, find the log line and the error row on screen in < 1 minute.
+- Scanning the logs after the full test run: 0 emails, 0 phone numbers, 0 passwords (M-08.1).
+
+## A7. Decisions
+
+| ID | Decision |
 | --- | --- |
-| S-08.1 | Log JSON + processor ngữ cảnh + processor che dữ liệu cá nhân. |
-| S-08.2 | Middleware `RecordRequestOutcome` (terminable): dòng log request, `api_events`, bộ đếm. |
-| S-08.3 | Bảng `api_events`, `metric_counters`; lệnh `monitoring:prune`. |
-| S-08.4 | `/metrics` + guard + server Nginx nội bộ. |
-| S-08.5 | Tracing (package + seam `Tracer` + 4 span). |
+| D-08.1 | Logs: default channel `stderr`, formatter `Monolog\Formatter\JsonFormatter`; a processor adds `correlationId`, `userId`, `dealershipId`, `appointmentId`, `outcome`; a processor removes personal data (D-08.2). |
+| D-08.2 | Redaction: drop every context key matching `password|token|secret|authorization|cookie|phone|email` (case-insensitive, nested too); replace email-like strings with `[email]` and runs of ≥ 9 digits (with optional spaces/dots/dashes) with `[phone]` in `message` and string values. |
+| D-08.3 | Each request writes exactly one "request" log line when it ends (`method`, `route`, `status`, `code`, `outcome`, `durationMs`). |
+| D-08.4 | Table `api_events` stores every `POST /appointments` (for counting) and every response ≥ 400 (for the error list), plus outbox `DELIVERY_FAILED` errors (written by F11). Kept 7 days, `monitoring:prune` daily. |
+| D-08.5 | Prometheus counters are monotonic counters stored in a `metric_counters` table (never PHP-FPM memory, `CLAUDE.md`), incremented with `INSERT … ON CONFLICT DO UPDATE SET value = value + :n` after the response was sent (`terminate`). |
+| D-08.6 | Booking `outcome`: 201 → `confirmed`; 409 `NO_AVAILABILITY` → `no_availability`; other 4xx → `validation_error`; 5xx → `error`. Replays are not counted in `booking_requests_total`, only in `idempotent_replays_total`. |
+| D-08.7 | `/metrics`: a route without sign-in, but with a middleware that lets it through only when the internal Nginx sets `fastcgi_param METRICS_INTERNAL 1`; otherwise 404. Add an internal Nginx server on port 9100, not published in compose. The public Nginx already returns 404 for `/metrics`. |
+| D-08.8 | Tracing: add the packages `open-telemetry/sdk` and `open-telemetry/exporter-otlp` (approved by default; README D-G.11). Default `OTEL_SDK_DISABLED=true` (nothing is sent). Spans: `http.request`, `booking.validate`, `allocation.find_candidates`, `booking.write`. Seam `App\Support\Tracing\Tracer` so the domain does not depend on the SDK. |
+| D-08.9 | Screen: admin only; data scope = the admin's `dealership_id` or `NULL`. Auto refresh every 30 seconds. |
+| D-08.10 | DB card: `UP` when `select 1` succeeds; "{used}/{max} connections" from `pg_stat_activity` and `max_connections`. |
+| D-08.11 | Outbox card: `PENDING` count and the age of the oldest row (reads `outbox_messages`, which exists since F04). |
+
+## A8. Open questions
+
+| ID | Question | Default |
+| --- | --- | --- |
+| Q-08.a | Send traces to a collector in compose? | No; enable through env when a collector exists. |
+| Q-08.b | Store every request (including 2xx reads) in `api_events`? | No (D-08.4), to keep the table small. |
+
+---
+
+# PART B · For implementing agents
+
+## B0. Reading rules
+
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
+
+## B1. Current code state
+
+Exists from the start: `CorrelationId` middleware (`api/app/Http/Middleware/CorrelationId.php`, `Log::shareContext`), `HealthController` (`/health/live`, `/health/ready` → 503 when the DB fails), `ProblemRenderer` (adds `correlationId` to the body), Nginx blocking public `/metrics` (`docker/nginx/snippets/app.conf`), `config/logging.php` defaulting to `stack` → `single` (file, not JSON). From F04: events `AllocationRetried`, `IdempotentReplayed`, `AppointmentModifiedDetected`; table `outbox_messages`.
+
+## B2. Scope
+
+| ID | In scope |
+| --- | --- |
+| S-08.1 | JSON logs + context processor + personal-data redaction processor. |
+| S-08.2 | Middleware `RecordRequestOutcome` (terminable): request log line, `api_events`, counters. |
+| S-08.3 | Tables `api_events`, `metric_counters`; command `monitoring:prune`. |
+| S-08.4 | `/metrics` + guard + internal Nginx server. |
+| S-08.5 | Tracing (packages + `Tracer` seam + 4 spans). |
 | S-08.6 | `GET /monitoring/summary`, `GET /monitoring/errors`. |
-| S-08.7 | Màn hình System monitoring. |
+| S-08.7 | System monitoring screen. |
 
-## B3. Bất biến
+## B3. Invariants
 
-| ID | Bất biến | Kiểm ở đâu |
+| ID | Invariant | Checked where |
 | --- | --- | --- |
-| INV-08.1 | Không dòng log nào chứa mật khẩu, token, email, số điện thoại (FR-08.1, NFR-05). | Processor D-08.2 chạy cho mọi kênh; TC quét log. |
-| INV-08.2 | Mọi response có `X-Correlation-Id`; mọi dòng log của request đó có cùng `correlationId` (FR-08.2). | `CorrelationId` có sẵn (prepend) + `Log::shareContext`. |
-| INV-08.3 | Bộ đếm không giảm (trừ khi xoá DB); không lưu trong bộ nhớ worker. | `metric_counters`, chỉ `UPDATE value = value + n`. |
-| INV-08.4 | Ghi số liệu không làm chậm hay hỏng request: chạy trong `terminate()`, lỗi khi ghi chỉ được log (không ném). | `RecordRequestOutcome::terminate`. |
-| INV-08.5 | `/metrics` trả 404 với mọi request không qua Nginx nội bộ (FR-08.5). | Middleware `EnsureInternalMetrics` + Nginx. |
-| INV-08.6 | Admin chỉ thấy `api_events` có `dealership_id` của mình hoặc `NULL`; vai trò khác 403 (AC-08.4). | Gate `admin`; `WHERE` trong repository. |
-| INV-08.7 | `api_events.detail` không chứa dữ liệu cá nhân (cùng processor che D-08.2 áp cho detail). | Khi ghi. |
-| INV-08.8 | `/health/ready` trả 503 khi DB không trả lời (FR-08.5, AC-08.3). | Có sẵn; F08 thêm test DB-down. |
-| INV-08.9 | `App\Domain\Allocation` không phụ thuộc tracing (INV-03.1); span bọc lời gọi từ `Booking`. | TC-03-22 vẫn xanh. |
+| INV-08.1 | No log line contains a password, token, email or phone number (FR-08.1, NFR-05). | The D-08.2 processor runs for every channel; a TC scans the logs. |
+| INV-08.2 | Every response has `X-Correlation-Id`; every log line of that request has the same `correlationId` (FR-08.2). | Existing `CorrelationId` (prepended) + `Log::shareContext`. |
+| INV-08.3 | Counters never decrease (unless the DB is wiped); never stored in worker memory. | `metric_counters`, only `UPDATE value = value + n`. |
+| INV-08.4 | Recording metrics never slows down or breaks a request: it runs in `terminate()`, and write errors are only logged (never thrown). | `RecordRequestOutcome::terminate`. |
+| INV-08.5 | `/metrics` returns 404 for every request that does not come through the internal Nginx (FR-08.5). | Middleware `EnsureInternalMetrics` + Nginx. |
+| INV-08.6 | Admins see only `api_events` with their `dealership_id` or `NULL`; other roles 403 (AC-08.4). | Gate `admin`; `WHERE` in the repository. |
+| INV-08.7 | `api_events.detail` holds no personal data (the D-08.2 redaction applies to detail). | On write. |
+| INV-08.8 | `/health/ready` returns 503 when the DB does not answer (FR-08.5, AC-08.3). | Existing; F08 adds a DB-down test. |
+| INV-08.9 | `App\Domain\Allocation` does not depend on tracing (INV-03.1); spans wrap calls from `Booking`. | TC-03-22 stays green. |
 
-## B4. Thay đổi theo file
+## B4. File-by-file changes
 
-| File | Thay đổi |
+| File | Change |
 | --- | --- |
-| `api/config/logging.php`, `api/.env.example` | `LOG_CHANNEL=stderr`, `LOG_STDERR_FORMATTER=Monolog\Formatter\JsonFormatter`; tap thêm processor. |
+| `api/config/logging.php`, `api/.env.example` | `LOG_CHANNEL=stderr`, `LOG_STDERR_FORMATTER=Monolog\Formatter\JsonFormatter`; a tap adds the processors. |
 | `api/app/Support/Logging/{ContextProcessor,RedactPersonalData}.php` | D-08.1, D-08.2. |
-| `api/app/Http/Middleware/RecordRequestOutcome.php` | D-08.3–08.6; đăng ký global sau `CorrelationId`. |
-| `api/app/Support/Monitoring/{RequestMetrics,MetricCounterRepository,ApiEventRepository}.php` | Thu sự kiện F04 trong request (binding `scoped`), ghi khi terminate. |
-| `api/app/Listeners/CollectBookingSignals.php` | Lắng nghe event F04. |
+| `api/app/Http/Middleware/RecordRequestOutcome.php` | D-08.3–08.6; registered globally after `CorrelationId`. |
+| `api/app/Support/Monitoring/{RequestMetrics,MetricCounterRepository,ApiEventRepository}.php` | Collect F04 events during the request (`scoped` binding), write on terminate. |
+| `api/app/Listeners/CollectBookingSignals.php` | Listens to the F04 events. |
 | `api/database/migrations/2026_11_08_*` | `api_events`, `metric_counters`. |
 | `api/routes/health.php`, `api/app/Http/Controllers/MetricsController.php`, `api/app/Http/Middleware/EnsureInternalMetrics.php` | D-08.7. |
-| `docker/nginx/default.conf`, `docker/nginx/production.conf` | Server nội bộ `listen 9100;` chỉ `location = /metrics`. |
-| `api/composer.json` | D-08.8 (2 package). |
+| `docker/nginx/default.conf`, `docker/nginx/production.conf` | Internal server `listen 9100;` with only `location = /metrics`. |
+| `api/composer.json` | D-08.8 (2 packages). |
 | `api/app/Support/Tracing/{Tracer,OtelTracer,NullTracer}.php`, `api/app/Providers/TracingServiceProvider.php` | D-08.8. |
-| `api/app/Domain/Booking/Actions/CreateBooking.php` | Bọc 3 bước bằng `Tracer::span`. |
+| `api/app/Domain/Booking/Actions/CreateBooking.php` | Wrap 3 steps with `Tracer::span`. |
 | `api/app/Http/Controllers/Api/V1/MonitoringController.php`, `Resources/{MonitoringSummary,ApiEvent}Resource.php` | API. |
 | `api/routes/console.php` | `monitoring:prune` daily. |
 | `web/src/staff/monitoring/*` | WEB. |
 
-## B5. Hợp đồng
+## B5. Contracts
 
 [4-api-spec.md](4-api-spec.md), [3-database-spec.md](3-database-spec.md), [5-web-spec.md](5-web-spec.md).
 
 ```php
-// minh hoạ — INV-08.9
+// illustrative — INV-08.9
 interface Tracer { public function span(string $name, callable $fn, array $attributes = []): mixed; }
 ```
 
-## B6. Seam
+## B6. Seams
 
-| Seam | Dùng lại ở |
+| Seam | Reused in |
 | --- | --- |
-| `RedactPersonalData` | F11 (`last_error` của outbox) |
-| `ApiEventRepository::record()` | F11 ghi `DELIVERY_FAILED` |
-| `Tracer` | F09, F12 (CÓ THỂ bọc thêm span) |
+| `RedactPersonalData` | F11 (outbox `last_error`) |
+| `ApiEventRepository::record()` | F11 writes `DELIVERY_FAILED` |
+| `Tracer` | F09, F12 (MAY add spans) |
 | `CursorPaginator` (F05) | `GET /monitoring/errors` |
 
-## B7. Thuật toán (`RecordRequestOutcome`)
+## B7. Algorithm (`RecordRequestOutcome`)
 
-1. `handle`: ghi `startedAt` (hrtime); `$next`.
+1. `handle`: record `startedAt` (hrtime); `$next`.
 2. `terminate(request, response)`:
-   1. `durationMs`, `route` (mẫu route, ví dụ `POST api/v1/appointments`), `status`, `code` (đọc từ body problem nếu `Content-Type` là problem+json).
-   2. Ghi một dòng log `request` (D-08.3).
-   3. Nếu là `POST /appointments`: replay → `idempotent_replays_total += 1`; không replay → `booking_requests_total{outcome}` += 1, histogram `booking_duration_seconds`.
-   4. `allocation_retries_total += số AllocationRetried trong request`.
+   1. `durationMs`, `route` (route pattern, for example `POST api/v1/appointments`), `status`, `code` (read from the problem body when `Content-Type` is problem+json).
+   2. Write one `request` log line (D-08.3).
+   3. For `POST /appointments`: replay → `idempotent_replays_total += 1`; not a replay → `booking_requests_total{outcome}` += 1, histogram `booking_duration_seconds`.
+   4. `allocation_retries_total += number of AllocationRetried in this request`.
    5. `code = APPOINTMENT_MODIFIED` → `appointment_modified_total += 1`.
-   6. Route sign-in và `code ∈ {INVALID_CREDENTIALS, TOO_MANY_ATTEMPTS}` → `sign_in_failures_total += 1`.
-   7. Nếu là `POST /appointments` hoặc `status ≥ 400` → chèn `api_events`.
-   8. Mọi lỗi ở bước 2–7 → `Log::warning` (không ném).
+   6. A sign-in route with `code ∈ {INVALID_CREDENTIALS, TOO_MANY_ATTEMPTS}` → `sign_in_failures_total += 1`.
+   7. `POST /appointments` or `status ≥ 400` → insert into `api_events`.
+   8. Any error in steps 2–7 → `Log::warning` (never thrown).
 
-## B8. Bảng lỗi
+## B8. Error table
 
-| Tình huống | HTTP | `code` |
+| Situation | HTTP | `code` |
 | --- | --- | --- |
-| `range` không thuộc `1h|24h|7d`; `correlationId` sai dạng | 400 | `VALIDATION_ERROR` |
-| Không phiên | 401 | `UNAUTHENTICATED` |
-| Không phải admin | 403 | `FORBIDDEN` |
-| `/metrics` từ ngoài | 404 | `NOT_FOUND` |
-| DB lỗi (`/health/ready`) | 503 | (JSON health, không phải problem) |
+| `range` not `1h|24h|7d`; malformed `correlationId` | 400 | `VALIDATION_ERROR` |
+| No session | 401 | `UNAUTHENTICATED` |
+| Not an admin | 403 | `FORBIDDEN` |
+| `/metrics` from outside | 404 | `NOT_FOUND` |
+| DB down (`/health/ready`) | 503 | (health JSON, not a problem) |
 
 ## B9. Acceptance criteria
 
 | AC | Given | When | Then | TC |
 | --- | --- | --- | --- | --- |
-| AC-08.1 | Client không gửi `X-Correlation-Id` | Gọi API bất kỳ | Response có `X-Correlation-Id`; log có cùng giá trị | TC-08-01 |
-| AC-08.2 | Không còn chỗ | Đặt lịch trả 409 | `booking_requests_total{outcome="no_availability"}` tăng 1 | TC-08-02 |
-| AC-08.3 | DB không chạy | `/health/ready` | 503 | TC-08-03 |
-| AC-08.4 | Advisor đăng nhập | Mở System monitoring | 403 `FORBIDDEN` (chỉ admin) | TC-08-04 |
-| AC-08.5 (mới) | — | Chạy luồng đăng ký, đăng nhập sai, đặt lịch, huỷ | Mọi dòng log là JSON hợp lệ, có `correlationId`; không có email, số điện thoại, mật khẩu | TC-08-05 |
-| AC-08.6 (mới) | — | 201, 422, 500, replay, 412, sign-in sai, một lần thử lại cặp | Mỗi bộ đếm tương ứng tăng đúng 1 | TC-08-06 |
-| AC-08.7 (mới) | — | `GET /metrics` qua Nginx công khai; trực tiếp vào app không có cờ nội bộ; qua Nginx nội bộ | 404; 404; 200 định dạng Prometheus | TC-08-07, TC-08-08 |
-| AC-08.8 (mới) | Admin D1; lỗi của D1, D2 và lỗi không đại lý | `GET /monitoring/summary?range=24h` | Đếm và lỗi gần đây chỉ của D1 và không đại lý | TC-08-09 |
-| AC-08.9 (mới) | Một lỗi có correlation id X | `GET /monitoring/errors?correlationId=X` | Đúng dòng đó | TC-08-10 |
-| AC-08.10 (mới) | Exporter trong bộ nhớ | Đặt lịch | Có 4 span đúng tên, cùng trace, span con nằm trong `http.request` | TC-08-11 |
-| AC-08.11 (mới) | Dòng `api_events` 8 ngày tuổi | `monitoring:prune` | Bị xoá; dòng 6 ngày còn | TC-08-12 |
-| AC-08.12 (mới) | Admin mở System monitoring | Màn hình | Thẻ sức khoẻ, thẻ số liệu đặt lịch, bảng lỗi; chọn 1 hour/24 hours/7 days đổi số liệu | TC-08-13 |
+| AC-08.1 | The client sends no `X-Correlation-Id` | Call any API | The response has `X-Correlation-Id`; the log has the same value | TC-08-01 |
+| AC-08.2 | No free slot | A booking returns 409 | `booking_requests_total{outcome="no_availability"}` goes up by 1 | TC-08-02 |
+| AC-08.3 | The DB is down | `/health/ready` | 503 | TC-08-03 |
+| AC-08.4 | An advisor is signed in | Opens System monitoring | 403 `FORBIDDEN` (admin only) | TC-08-04 |
+| AC-08.5 (new) | — | Run sign-up, a failed sign-in, a booking, a cancel | Every log line is valid JSON with `correlationId`; no email, phone number or password | TC-08-05 |
+| AC-08.6 (new) | — | 201, 422, 500, a replay, 412, a failed sign-in, one pair retry | Each matching counter goes up by exactly 1 | TC-08-06 |
+| AC-08.7 (new) | — | `GET /metrics` through the public Nginx; directly to the app without the internal flag; through the internal Nginx | 404; 404; 200 in Prometheus format | TC-08-07, TC-08-08 |
+| AC-08.8 (new) | Admin of D1; errors of D1, D2 and with no dealership | `GET /monitoring/summary?range=24h` | Counts and recent errors only from D1 and no-dealership rows | TC-08-09 |
+| AC-08.9 (new) | An error with correlation id X | `GET /monitoring/errors?correlationId=X` | Exactly that row | TC-08-10 |
+| AC-08.10 (new) | In-memory exporter | Book | 4 spans with the right names, one trace, child spans inside `http.request` | TC-08-11 |
+| AC-08.11 (new) | An `api_events` row 8 days old | `monitoring:prune` | Deleted; a 6-day-old row stays | TC-08-12 |
+| AC-08.12 (new) | Admin opens System monitoring | Screen | Health cards, booking figure cards, error table; 1 hour/24 hours/7 days changes the figures | TC-08-13 |
 
-## B10. Thứ tự triển khai
+## B10. Implementation order
 
-1. Ticket 01 (prefactor): processor che dữ liệu + log JSON; không đổi API.
-2. Tracer bullet: `RecordRequestOutcome` + `metric_counters` + `/metrics` + AC-08.2, rồi `/code-review`.
-3. `api_events` + summary/errors API + màn hình.
+1. Ticket 01 (prefactor): redaction processor + JSON logs; no API change.
+2. Tracer bullet: `RecordRequestOutcome` + `metric_counters` + `/metrics` + AC-08.2, then `/code-review`.
+3. `api_events` + summary/errors API + screen.
 4. Tracing.
-5. Nghiệm thu.
+5. Acceptance.
 
 ## B11. Definition of Done
 
-Mọi TC xanh; README §8 xanh; `docker compose up` không lộ cổng 9100 ra máy host.
+Every TC green; README §8 green; `docker compose up` does not expose port 9100 to the host.
 
-## B12. Rủi ro kỹ thuật
+## B12. Technical risks
 
-| ID | Rủi ro | Giảm thiểu |
+| ID | Risk | Mitigation |
 | --- | --- | --- |
-| R-08.1 | `terminate()` không chạy khi PHP-FPM bị kill | Mất một điểm số liệu; chấp nhận |
-| R-08.2 | Ghi `metric_counters` mỗi request tạo tranh chấp dòng hot | Upsert ngắn, ngoài transaction nghiệp vụ; đo; nếu cần, gộp theo phút |
-| R-08.3 | Package OTel không tương thích PHP 8.4/Laravel 13 | Seam `Tracer` + `NullTracer`; nếu package lỗi, giữ `NullTracer` và ghi lại |
-| R-08.4 | Regex che số điện thoại xoá nhầm id số dài | Chỉ áp cho chuỗi; UUID có chữ nên không khớp; test TC-08-14 |
+| R-08.1 | `terminate()` does not run when PHP-FPM is killed | One data point lost; accepted |
+| R-08.2 | Writing `metric_counters` on every request creates hot-row contention | Short upserts outside business transactions; measure; if needed, aggregate per minute |
+| R-08.3 | OTel packages incompatible with PHP 8.4/Laravel 13 | `Tracer` seam + `NullTracer`; if the package fails, keep `NullTracer` and record it |
+| R-08.4 | The phone regex wipes long numeric ids | Applied to strings only; UUIDs contain letters so they do not match; TC-08-14 |

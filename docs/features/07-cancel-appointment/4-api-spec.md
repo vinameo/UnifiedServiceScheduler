@@ -1,62 +1,62 @@
-# F07 · Huỷ lịch hẹn · API spec (API)
+# F07 · Cancel an appointment · API spec (API)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-Một endpoint: `POST /appointments/{id}/cancel` với lý do. Cần `If-Match` (phiên bản đang thấy) và `Idempotency-Key`. Thành công trả lịch đã huỷ và phiên bản mới.
+One endpoint: `POST /appointments/{id}/cancel` with a reason. It needs `If-Match` (the version on screen) and an `Idempotency-Key`. Success returns the cancelled booking and its new version.
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
 ## B1. Endpoint
 
-| ID | Method + path | Ai | Middleware | Thành công |
+| ID | Method + path | Who | Middleware | Success |
 | --- | --- | --- | --- | --- |
-| API-07.1 | `POST /api/v1/appointments/{appointment}/cancel` | advisor (đại lý mình), customer (của mình) | `auth:sanctum`, `can:cancel-appointment`, `idempotent`, `if-match` | 200 `AppointmentResource` + `ETag` |
+| API-07.1 | `POST /api/v1/appointments/{appointment}/cancel` | advisor (own dealership), customer (own) | `auth:sanctum`, `can:cancel-appointment`, `idempotent`, `if-match` | 200 `AppointmentResource` + `ETag` |
 
-## B2. Hợp đồng
+## B2. Contract
 
 ```json
 { "reason": "CUSTOMER_BUSY", "note": "Customer will call back to book next week." }
 ```
 
-| Field | Luật |
+| Field | Rule |
 | --- | --- |
-| `reason` | Cố vấn: bắt buộc, thuộc `CUSTOMER_REQUEST`, `CUSTOMER_BUSY`, `DONE_ELSEWHERE`, `DEALERSHIP_ISSUE`, `OTHER`. Khách: tuỳ chọn, thuộc `SOMETHING_CAME_UP`, `DONE_ELSEWHERE`, `OTHER`. |
-| `note` | Tuỳ chọn, chuỗi, trim, ≤ 500 |
+| `reason` | Advisor: required, one of `CUSTOMER_REQUEST`, `CUSTOMER_BUSY`, `DONE_ELSEWHERE`, `DEALERSHIP_ISSUE`, `OTHER`. Customer: optional, one of `SOMETHING_CAME_UP`, `DONE_ELSEWHERE`, `OTHER`. |
+| `note` | Optional, string, trimmed, ≤ 500 |
 
-Response: `AppointmentResource` với `status: CANCELLED`, `cancellation: { reason, note, at, byRole }` (khách nhận `reason`/`note` chỉ khi chính khách huỷ; nhân viên huỷ → khách thấy `byRole: SERVICE_ADVISOR`, `reason: null`, `note: null`).
+Response: `AppointmentResource` with `status: CANCELLED`, `cancellation: { reason, note, at, byRole }` (customers get `reason`/`note` only when they cancelled themselves; when staff cancelled, the customer sees `byRole: SERVICE_ADVISOR`, `reason: null`, `note: null`).
 
 `422 TOO_LATE_TO_CANCEL`: `{ "dealershipPhone": "028 3812 3456", "start": "…" }`.
 
-## B3. Bảng lỗi
+## B3. Error table
 
 RQ §B8.
 
-## B4. Bảng đầu vào bất thường
+## B4. Adversarial input table
 
-| Đầu vào | Kỳ vọng |
+| Input | Expected |
 | --- | --- |
-| Cố vấn gửi `reason: "SOMETHING_CAME_UP"` (lý do của khách) | 400 |
-| Khách gửi `reason: "DEALERSHIP_ISSUE"` | 400 |
-| `reason: "customer_busy"` (chữ thường) | 400 |
-| `note` 501 ký tự | 400 |
-| `note` là số | 400 |
+| An advisor sends `reason: "SOMETHING_CAME_UP"` (a customer reason) | 400 |
+| A customer sends `reason: "DEALERSHIP_ISSUE"` | 400 |
+| `reason: "customer_busy"` (lower case) | 400 |
+| `note` of 501 characters | 400 |
+| `note` is a number | 400 |
 | `{appointment}` = `abc` | 404 `APPOINTMENT_NOT_FOUND` |
-| Không `If-Match` | 428 |
+| No `If-Match` | 428 |
 | `If-Match: W/"1"` | 400 |
-| Không `Idempotency-Key` | 400 `IDEMPOTENCY_KEY_REQUIRED` |
-| Cùng khoá, `reason` khác | 422 `IDEMPOTENCY_KEY_MISMATCH` |
-| Body có `status: "CONFIRMED"` | Bỏ qua |
+| No `Idempotency-Key` | 400 `IDEMPOTENCY_KEY_REQUIRED` |
+| Same key, different `reason` | 422 `IDEMPOTENCY_KEY_MISMATCH` |
+| Body has `status: "CONFIRMED"` | Ignored |
 
-## B5. Giới hạn
+## B5. Bounds
 
-`note` ≤ 500. Giới hạn 2 giờ cho khách. Không rate limit riêng (mỗi lịch chỉ huỷ được một lần).
+`note` ≤ 500. The 2-hour customer limit. No dedicated rate limit (a booking can be cancelled only once).

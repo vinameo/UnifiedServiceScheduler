@@ -1,202 +1,202 @@
-# F07 · Huỷ lịch hẹn · Requirement spec (RQ)
+# F07 · Cancel an appointment · Requirement spec (RQ)
 
-Nhánh: `feature/07-cancel-appointment` · Ưu tiên: Should · Quy ước chung: [README](../README.md)
+Branch: `feature/07-cancel-appointment` · Priority: Should · Shared conventions: [README](../README.md)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-## A1. Câu chuyện
+## A1. Story
 
-**Vì sao có feature này.** Khi khách báo không đến được, khung giờ phải được trả lại **ngay** để người khác đặt. Khách cũng muốn tự huỷ trong app.
+**Why this feature exists.** When a customer says they cannot come, the slot must be released **at once** so someone else can book it. Customers also want to cancel in the app themselves.
 
-**Feature làm gì.**
-- Cố vấn huỷ một lịch từ trang chi tiết, bắt buộc chọn lý do (có thể thêm ghi chú).
-- Khách huỷ lịch của mình trong app, lý do tuỳ chọn, chỉ khi còn ít nhất 2 giờ trước giờ hẹn; sát giờ hơn thì app hiện số điện thoại đại lý.
-- Huỷ giải phóng kỹ thuật viên, khoang và xe trong cùng một lần lưu; ghi tin nhắn huỷ vào outbox.
-- Huỷ một lịch đã huỷ trả lại trạng thái hiện tại, không lỗi.
+**What it does.**
+- An advisor cancels a booking from the details page and must pick a reason (an optional note too).
+- A customer cancels their own booking in the app, reason optional, only while at least 2 hours remain before the start; closer than that, the app shows the dealership's phone number.
+- Cancelling releases the technician, bay and vehicle in the same save, and writes the cancellation message to the outbox.
+- Cancelling an already-cancelled booking returns its current state, without an error.
 
-**Ai dùng.** Cố vấn (web, Appointment details), khách (app, Details).
+**Who uses it.** Advisors (web, Appointment details), customers (app, Details).
 
-**Không làm.** Phí huỷ, khôi phục lịch đã huỷ, huỷ hàng loạt.
+**What it does not do.** Cancellation fees, restoring a cancelled booking, bulk cancellation.
 
-## A2. Các bước sử dụng
+## A2. Usage steps
 
-**Cố vấn**: Appointment details → "Cancel appointment" → hộp thoại "Cancel this appointment?" → chọn lý do, ghi chú → "Cancel appointment" → trang hiện banner "closed", trạng thái Cancelled.
+**Advisor**: Appointment details → "Cancel appointment" → dialog "Cancel this appointment?" → pick a reason, add a note → "Cancel appointment" → the page shows the closed banner and status Cancelled.
 
-**Khách**: My bookings → View details → "Cancel appointment" → bảng dưới "Cancel your 10:00 appointment on Mon 2 Nov?" → chọn lý do (tuỳ chọn) → "Cancel appointment" → banner "You cancelled this appointment".
+**Customer**: My bookings → View details → "Cancel appointment" → bottom sheet "Cancel your 10:00 appointment on Mon 2 Nov?" → pick a reason (optional) → "Cancel appointment" → banner "You cancelled this appointment".
 
-## A3. Màn hình và khác biệt so với bản vẽ
+## A3. Screens and deviations from the drafts
 
-Bản vẽ: `Admin/05-appointment-details.png` (hộp thoại huỷ), `Customer/06-details-and-cancel.png`.
+Drafts: `Admin/05-appointment-details.png` (cancel dialog), `Customer/06-details-and-cancel.png`.
 
-| Bản vẽ | Spec | Lý do |
+| Draft | Spec | Reason |
 | --- | --- | --- |
-| Khách: "A cancellation SMS is on its way." | "We'll send you a cancellation SMS." | Tin nằm trong outbox, F11 gửi |
-| Hộp thoại nhân viên ghi tên khoang và kỹ thuật viên | Giữ nguyên, lấy từ lịch | — |
+| Customer: "A cancellation SMS is on its way." | "We'll send you a cancellation SMS." | The message sits in the outbox; F11 sends it |
+| The staff dialog names the bay and technician | Kept, taken from the booking | — |
 
-## A4. Luật chính bằng lời thường
+## A4. Key rules in plain words
 
-- Chỉ huỷ được lịch **Đã xác nhận** hoặc **Đang giữ chỗ**. Lịch đã tiếp nhận xe, đang làm, đã xong → không huỷ được.
-- Khách chỉ huỷ lịch của mình, và chỉ khi còn ≥ 2 giờ trước giờ bắt đầu. Cố vấn không bị giới hạn giờ.
-- Huỷ dựa trên phiên bản mới nhất: nếu người khác vừa sửa lịch, người huỷ thấy bản mới và quyết định lại.
+- Only **Confirmed** or **On hold** bookings can be cancelled. Checked-in, in-progress and finished bookings cannot.
+- Customers cancel only their own bookings, and only while ≥ 2 hours remain before the start. Advisors have no time limit.
+- A cancel is based on the latest version: if someone else just changed the booking, the person cancelling sees the new version and decides again.
 
-## A5. Ngoài phạm vi
+## A5. Out of scope
 
-Phí huỷ, chính sách huỷ khác nhau theo dịch vụ, huỷ thay mặt bởi quản đốc/admin.
+Cancellation fees, per-service cancel policies, cancellations by foremen/admins.
 
-## A6. Tiêu chí thành công
+## A6. Success criteria
 
-- Sau khi huỷ, khung giờ đặt lại được ngay (AC-07.1).
-- Không có lịch đã huỷ còn phân bổ active (M-04.2 = 0).
+- After a cancel, the slot can be booked again at once (AC-07.1).
+- No cancelled booking keeps active allocations (M-04.2 = 0).
 
-## A7. Quyết định
+## A7. Decisions
 
-| ID | Quyết định |
+| ID | Decision |
 | --- | --- |
-| D-07.1 | Lý do của cố vấn (bắt buộc): `CUSTOMER_REQUEST`, `CUSTOMER_BUSY`, `DONE_ELSEWHERE`, `DEALERSHIP_ISSUE`, `OTHER`. Lý do của khách (tuỳ chọn): `SOMETHING_CAME_UP`, `DONE_ELSEWHERE`, `OTHER`. Ghi chú ≤ 500 ký tự, tuỳ chọn cho cả hai. |
-| D-07.2 | Chỉ advisor và khách huỷ (README §4); foreman, admin → 403. |
-| D-07.3 | Giới hạn 2 giờ (BR-07.2) áp cho khách với lịch `CONFIRMED`: được huỷ khi `start − now ≥ 2 giờ`. Khách huỷ giữ chỗ `HELD` thì không giới hạn. |
-| D-07.4 | Huỷ lịch đã `CANCELLED` → 200 với trạng thái hiện tại, không ghi gì, không tăng phiên bản (FR-07.2), kể cả khi `If-Match` cũ. `If-Match` vẫn bắt buộc (428 nếu thiếu). |
-| D-07.5 | Nếu cập nhật có phiên bản trả 0 dòng mà đọc lại thấy lịch đã `CANCELLED` (người khác vừa huỷ) → 200 trạng thái hiện tại (kết quả người dùng muốn đã đạt); trạng thái khác → 412. |
-| D-07.6 | Outbox `AppointmentCancelled` chỉ khi huỷ từ `CONFIRMED`; huỷ giữ chỗ không gửi tin. |
-| D-07.7 | F07 là endpoint thay đổi đầu tiên qua HTTP thật, nên chứng minh lại 412 và 428 của F04 trên endpoint thật. |
+| D-07.1 | Advisor reasons (required): `CUSTOMER_REQUEST`, `CUSTOMER_BUSY`, `DONE_ELSEWHERE`, `DEALERSHIP_ISSUE`, `OTHER`. Customer reasons (optional): `SOMETHING_CAME_UP`, `DONE_ELSEWHERE`, `OTHER`. Note ≤ 500 characters, optional for both. |
+| D-07.2 | Only advisors and customers cancel (README §4); foreman, admin → 403. |
+| D-07.3 | The 2-hour limit (BR-07.2) applies to customers on `CONFIRMED` bookings: allowed while `start − now ≥ 2 hours`. A customer cancelling a `HELD` has no limit. |
+| D-07.4 | Cancelling a `CANCELLED` booking → 200 with the current state, nothing written, no version bump (FR-07.2), even with an old `If-Match`. `If-Match` is still required (428 when missing). |
+| D-07.5 | If the versioned update hits 0 rows and a fresh read shows the booking is now `CANCELLED` (someone just cancelled it) → 200 with the current state (what the user wanted already happened); any other status → 412. |
+| D-07.6 | Outbox `AppointmentCancelled` only when cancelling from `CONFIRMED`; cancelling a hold sends nothing. |
+| D-07.7 | F07 is the first change endpoint over real HTTP, so it proves F04's 412 and 428 again on a real endpoint. |
 
-## A8. Câu hỏi mở
+## A8. Open questions
 
-| ID | Câu hỏi | Mặc định |
+| ID | Question | Default |
 | --- | --- | --- |
-| Q-07.a | Lý do `OTHER` của cố vấn có bắt buộc ghi chú? | Không. |
-| Q-07.b | Khách có xem lý do cố vấn ghi khi huỷ? | Không; chỉ thấy "Cancelled by the dealership". |
+| Q-07.a | Does the advisor's `OTHER` reason require a note? | No. |
+| Q-07.b | Do customers see the reason an advisor recorded? | No; they only see "Cancelled by the dealership". |
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
-## B1. Trạng thái code hiện tại
+## B1. Current code state
 
-Giả định F00–F06 đã merge: `TransitionAppointment`, `AppointmentStatus::canMoveTo`, middleware `idempotent`, `if-match`, `ExpectedVersion`, `AppointmentModified` (412 có bản mới), `findVisibleTo`, `OutboxWriter`, `AppointmentResponder`, web `appointmentQuery`, `AppointmentDetailsLayout`, `AppointmentModifiedAlert`, `SubmitButton`, `useIdempotencyKey`.
+Assumes F00–F06 are merged: `TransitionAppointment`, `AppointmentStatus::canMoveTo`, middleware `idempotent`, `if-match`, `ExpectedVersion`, `AppointmentModified` (412 with latest data), `findVisibleTo`, `OutboxWriter`, `AppointmentResponder`, web `appointmentQuery`, `AppointmentDetailsLayout`, `AppointmentModifiedAlert`, `SubmitButton`, `useIdempotencyKey`.
 
-## B2. Phạm vi
+## B2. Scope
 
-| ID | Trong phạm vi |
+| ID | In scope |
 | --- | --- |
 | S-07.1 | `POST /api/v1/appointments/{appointment}/cancel`. |
 | S-07.2 | Action `CancelAppointment`; enum `CancelReason`. |
-| S-07.3 | Web: hộp thoại huỷ (nhân viên), bảng huỷ (khách), banner sau huỷ. |
+| S-07.3 | Web: cancel dialog (staff), cancel sheet (customer), banners after cancelling. |
 
-## B3. Bất biến
+## B3. Invariants
 
-| ID | Bất biến | Đọc ở đâu, khi nào |
+| ID | Invariant | Where and when it is read |
 | --- | --- | --- |
-| INV-07.1 | Huỷ đặt `status = CANCELLED` và mọi phân bổ `active = false` trong **một** transaction (FR-07.1), qua `TransitionAppointment` (F04 INV-04.5). | Transaction của `TransitionAppointment`. |
-| INV-07.2 | Chỉ `CONFIRMED`, `HELD` → `CANCELLED` (BR-07.1); khác → 422 `INVALID_STATUS_TRANSITION` với `currentStatus`. | `canMoveTo` trên trạng thái đọc qua `findVisibleTo`; 412 thắng 422 khi phiên bản cũ (F04 TC-04-26). |
-| INV-07.3 | Khách: `start_at − now ≥ 2 giờ` cho lịch `CONFIRMED`; `now` từ đồng hồ app; `start_at` đọc cùng lần đọc với trạng thái. | `CancelAppointment` trước transaction. Đổi giờ song song (F09) làm `start_at` cũ → `UPDATE … version` sẽ 0 dòng → 412, nên luật 2 giờ không bị lách. |
-| INV-07.4 | Người huỷ phải xem được lịch (`findVisibleTo`); khách huỷ lịch người khác → 404. | Bước đầu. |
-| INV-07.5 | Huỷ lại lịch đã huỷ không ghi gì (D-07.4); va chạm với người huỷ khác trả 200 (D-07.5). Không bao giờ tự thử lại 412 với trạng thái khác (BR-04.2). | `CancelAppointment`. |
-| INV-07.6 | `cancel_reason`, `cancel_note`, `cancelled_at`, `cancelled_by_user_id` được ghi cùng `UPDATE` tăng phiên bản. | `changes` truyền vào `TransitionAppointment`. |
+| INV-07.1 | Cancel sets `status = CANCELLED` and every allocation `active = false` in **one** transaction (FR-07.1), through `TransitionAppointment` (F04 INV-04.5). | `TransitionAppointment`'s transaction. |
+| INV-07.2 | Only `CONFIRMED`, `HELD` → `CANCELLED` (BR-07.1); anything else → 422 `INVALID_STATUS_TRANSITION` with `currentStatus`. | `canMoveTo` on the status read through `findVisibleTo`; 412 beats 422 when the version is old (F04 TC-04-26). |
+| INV-07.3 | Customers: `start_at − now ≥ 2 hours` for `CONFIRMED`; `now` from the app clock; `start_at` from the same read as the status. | `CancelAppointment` before the transaction. A parallel reschedule (F09) makes `start_at` stale → the versioned `UPDATE` hits 0 rows → 412, so the 2-hour rule cannot be bypassed. |
+| INV-07.4 | The person cancelling must be able to see the booking (`findVisibleTo`); a customer cancelling someone else's → 404. | First step. |
+| INV-07.5 | Cancelling a cancelled booking writes nothing (D-07.4); a clash with another canceller returns 200 (D-07.5). A 412 for another status is never retried (BR-04.2). | `CancelAppointment`. |
+| INV-07.6 | `cancel_reason`, `cancel_note`, `cancelled_at`, `cancelled_by_user_id` are written in the same version-incrementing `UPDATE`. | `changes` passed to `TransitionAppointment`. |
 
-Trường hợp biên:
+Edge cases:
 
-| Quyết định | Trường hợp biên | TC |
+| Decision | Edge case | TC |
 | --- | --- | --- |
-| Trạng thái (INV-07.2) | `COMPLETED`, `CHECKED_IN`, `IN_PROGRESS`, `NO_SHOW`, `EXPIRED`, `HELD` | TC-07-03, TC-07-12 |
-| 2 giờ (INV-07.3) | Còn 1 giờ; đúng 2 giờ; 1 giờ 59 phút; cố vấn còn 30 phút; khách huỷ `HELD` sát giờ | TC-07-04, TC-07-05, TC-07-13 |
-| Huỷ trùng (INV-07.5) | Huỷ lại sau khi đã huỷ; hai người huỷ cùng lúc; cùng khoá gửi lại | TC-07-02, TC-07-09, TC-07-14 |
-| Quyền (INV-07.4, D-07.2) | Khách khác; foreman; nhân viên đại lý khác | TC-07-07, TC-07-08 |
+| Status (INV-07.2) | `COMPLETED`, `CHECKED_IN`, `IN_PROGRESS`, `NO_SHOW`, `EXPIRED`, `HELD` | TC-07-03, TC-07-12 |
+| 2 hours (INV-07.3) | 1 hour left; exactly 2 hours; 1 h 59 min; advisor with 30 minutes left; customer cancels a `HELD` close to the start | TC-07-04, TC-07-05, TC-07-13 |
+| Duplicate cancel (INV-07.5) | Cancel again after cancelling; two people cancel at once; same key resent | TC-07-02, TC-07-09, TC-07-14 |
+| Permission (INV-07.4, D-07.2) | Another customer; foreman; staff of another dealership | TC-07-07, TC-07-08 |
 
-## B4. Thay đổi theo file
+## B4. File-by-file changes
 
-| File | Thay đổi |
+| File | Change |
 | --- | --- |
 | `api/app/Domain/Booking/CancelReason.php` | Enum + `forStaff()`, `forCustomer()`. |
 | `api/app/Domain/Booking/Actions/CancelAppointment.php` | B7. |
-| `api/app/Domain/Booking/Exceptions/TooLateToCancel.php` | 422 `TOO_LATE_TO_CANCEL`, field `dealershipPhone`. |
+| `api/app/Domain/Booking/Exceptions/TooLateToCancel.php` | 422 `TOO_LATE_TO_CANCEL`, member `dealershipPhone`. |
 | `api/app/Http/Requests/CancelAppointmentRequest.php` | API §B2. |
-| `api/app/Http/Controllers/Api/V1/AppointmentController.php` | Thêm `cancel`. |
+| `api/app/Http/Controllers/Api/V1/AppointmentController.php` | Add `cancel`. |
 | `api/app/Providers/AuthServiceProvider.php` | Ability `cancel-appointment` (advisor, customer). |
-| `api/routes/api.php` | Route với `auth:sanctum`, `can:cancel-appointment`, `idempotent`, `if-match`. |
-| `api/app/Http/Resources/AppointmentResource.php` | `cancellation` (F04 API §B2); khách nhận `byRole` nhưng không nhận `reason`/`note` của nhân viên (Q-07.b). |
+| `api/routes/api.php` | Route with `auth:sanctum`, `can:cancel-appointment`, `idempotent`, `if-match`. |
+| `api/app/Http/Resources/AppointmentResource.php` | `cancellation` (F04 API §B2); customers get `byRole` but not the staff `reason`/`note` (Q-07.b). |
 | `web/src/staff/appointments/CancelAppointmentModal.tsx`, `web/src/customer/bookings/CancelBookingSheet.tsx`, `web/src/shared/api/appointments.ts` (`useCancelAppointment`) | WEB. |
 
-## B5. Hợp đồng
+## B5. Contracts
 
-[4-api-spec.md](4-api-spec.md), [5-web-spec.md](5-web-spec.md). Không có bảng mới ([3-database-spec.md](3-database-spec.md)).
+[4-api-spec.md](4-api-spec.md), [5-web-spec.md](5-web-spec.md). No new tables ([3-database-spec.md](3-database-spec.md)).
 
 ```php
-// minh hoạ
+// illustrative
 final class CancelAppointment {
     public function __invoke(User $actor, string $appointmentId, int $expectedVersion, ?CancelReason $reason, ?string $note, CarbonImmutable $now): Appointment;
 }
 ```
 
-## B6. Seam
+## B6. Seams
 
-Dùng: `findVisibleTo`, `TransitionAppointment`, `ExpectedVersion`, web `appointmentQuery`, `AppointmentDetailsLayout`, `AppointmentModifiedAlert`.
-Giao mới: hàm `isWithinCustomerChangeWindow(appointment, now)` (2 giờ) trong `api/app/Domain/Booking/CustomerChangePolicy.php` và `web/src/shared/appointments/changeWindow.ts` — F09 dùng lại cho đổi giờ.
+Uses: `findVisibleTo`, `TransitionAppointment`, `ExpectedVersion`, web `appointmentQuery`, `AppointmentDetailsLayout`, `AppointmentModifiedAlert`.
+New: `isWithinCustomerChangeWindow(appointment, now)` (2 hours) in `api/app/Domain/Booking/CustomerChangePolicy.php` and `web/src/shared/appointments/changeWindow.ts` — reused by F09 for reschedule.
 
-## B7. Thuật toán (`CancelAppointment`)
+## B7. Algorithm (`CancelAppointment`)
 
 1. `appointment = findVisibleTo(actor, id)` (404).
-2. `status == CANCELLED` → trả 200 với lịch hiện tại (D-07.4).
-3. Vai trò: cố vấn cần `reason` ∈ `forStaff()` (FormRequest đã kiểm, 400); khách `reason` ∈ `forCustomer()` hoặc null.
-4. Khách + `CONFIRMED` + `start − now < 2 giờ` → 422 `TOO_LATE_TO_CANCEL` (`dealershipPhone`).
+2. `status == CANCELLED` → return 200 with the current booking (D-07.4).
+3. Role: advisors need `reason` ∈ `forStaff()` (checked by the FormRequest, 400); customers `reason` ∈ `forCustomer()` or null.
+4. Customer + `CONFIRMED` + `start − now < 2 hours` → 422 `TOO_LATE_TO_CANCEL` (`dealershipPhone`).
 5. `TransitionAppointment(id, expected, CANCELLED, changes{cancel_reason, cancel_note, cancelled_at = now, cancelled_by_user_id}, outbox = was CONFIRMED ? AppointmentCancelled : null, actor, now)`.
    - `InvalidStatusTransition` → 422.
-   - `AppointmentModified` → đọc lại; `CANCELLED` → 200 với bản mới (D-07.5); khác → ném lại (412).
-6. 200 `AppointmentResource` + `ETag` mới.
+   - `AppointmentModified` → read again; `CANCELLED` → 200 with the new version (D-07.5); otherwise rethrow (412).
+6. 200 `AppointmentResource` + new `ETag`.
 
-## B8. Bảng lỗi
+## B8. Error table
 
-| Tình huống | HTTP | `code` |
+| Situation | HTTP | `code` |
 | --- | --- | --- |
-| Thiếu `reason` (cố vấn); `reason` không thuộc danh sách của vai trò; `note` > 500 | 400 | `VALIDATION_ERROR` |
-| Thiếu `Idempotency-Key` | 400 | `IDEMPOTENCY_KEY_REQUIRED` |
+| Missing `reason` (advisor); `reason` not in the role's list; `note` > 500 | 400 | `VALIDATION_ERROR` |
+| Missing `Idempotency-Key` | 400 | `IDEMPOTENCY_KEY_REQUIRED` |
 | Foreman, admin | 403 | `FORBIDDEN` |
-| Không thấy lịch | 404 | `APPOINTMENT_NOT_FOUND` |
-| Phiên bản cũ (và chưa bị huỷ) | 412 | `APPOINTMENT_MODIFIED` |
-| Trạng thái không huỷ được | 422 | `INVALID_STATUS_TRANSITION` |
-| Khách huỷ sát giờ | 422 | `TOO_LATE_TO_CANCEL` |
-| Thiếu `If-Match` | 428 | `PRECONDITION_REQUIRED` |
+| Booking not visible | 404 | `APPOINTMENT_NOT_FOUND` |
+| Old version (and not already cancelled) | 412 | `APPOINTMENT_MODIFIED` |
+| Status cannot be cancelled | 422 | `INVALID_STATUS_TRANSITION` |
+| Customer cancels too close to the start | 422 | `TOO_LATE_TO_CANCEL` |
+| Missing `If-Match` | 428 | `PRECONDITION_REQUIRED` |
 
 ## B9. Acceptance criteria
 
 | AC | Given | When | Then | TC |
 | --- | --- | --- | --- | --- |
-| AC-07.1 | Lịch A 09:00 dùng kỹ thuật viên duy nhất | Huỷ A, rồi đặt B 09:00 | Huỷ 200; B 201 | TC-07-01 |
-| AC-07.2 | Lịch đã `CANCELLED` | Huỷ lại | 200, vẫn `CANCELLED`, phiên bản không đổi | TC-07-02 |
-| AC-07.3 | Lịch `COMPLETED` | Huỷ | 422 `INVALID_STATUS_TRANSITION` | TC-07-03 |
-| AC-07.4 | Lịch của khách bắt đầu sau 1 giờ | Khách huỷ trong app | 422 `TOO_LATE_TO_CANCEL` | TC-07-04 |
-| AC-07.5 (mới) | Lịch bắt đầu sau 30 phút | Cố vấn huỷ | 200 | TC-07-05 |
-| AC-07.6 (mới) | — | Cố vấn huỷ không có `reason` | 400 `VALIDATION_ERROR` | TC-07-06 |
-| AC-07.7 (mới) | Lịch của khách B | Khách A huỷ | 404 `APPOINTMENT_NOT_FOUND` | TC-07-07 |
-| AC-07.8 (mới) | Foreman | Huỷ | 403 `FORBIDDEN` | TC-07-08 |
-| AC-07.9 (mới) | 5 request huỷ song song (khoá khác nhau, cùng `If-Match`) | Chạy | Cả 5 nhận 200 `CANCELLED`; phiên bản tăng đúng 1; 1 dòng lịch sử; 1 sự kiện outbox | TC-07-09 |
-| AC-07.10 (mới) | Lịch `CONFIRMED`; lịch `HELD` | Huỷ mỗi cái | `CONFIRMED`: 1 sự kiện `AppointmentCancelled`; `HELD`: không có | TC-07-10 |
-| AC-07.11 (mới) | Lịch v2 | Huỷ với `If-Match: "1"`; không `If-Match` | 412 có `appointment` + `ETag: "2"`; 428 | TC-07-11 |
-| AC-07.12 (mới) | Nhân viên huỷ trên web | Bấm "Cancel appointment" | Hộp thoại đúng câu chữ; sau khi xác nhận: badge Cancelled + banner closed; nút hành động ẩn | TC-07-15 |
-| AC-07.13 (mới) | Khách, lịch còn 1 giờ | Mở chi tiết | Không có nút huỷ; câu "It's less than 2 hours…" với số đại lý | TC-07-16 |
+| AC-07.1 | Booking A at 09:00 uses the only technician | Cancel A, then book B at 09:00 | Cancel returns 200; B gets 201 | TC-07-01 |
+| AC-07.2 | The booking is already `CANCELLED` | Cancel again | 200, still `CANCELLED`, version unchanged | TC-07-02 |
+| AC-07.3 | The booking is `COMPLETED` | Cancel | 422 `INVALID_STATUS_TRANSITION` | TC-07-03 |
+| AC-07.4 | A customer's booking starts in 1 hour | The customer cancels in the app | 422 `TOO_LATE_TO_CANCEL` | TC-07-04 |
+| AC-07.5 (new) | A booking starts in 30 minutes | An advisor cancels | 200 | TC-07-05 |
+| AC-07.6 (new) | — | An advisor cancels without `reason` | 400 `VALIDATION_ERROR` | TC-07-06 |
+| AC-07.7 (new) | Customer B's booking | Customer A cancels it | 404 `APPOINTMENT_NOT_FOUND` | TC-07-07 |
+| AC-07.8 (new) | A foreman | Cancels | 403 `FORBIDDEN` | TC-07-08 |
+| AC-07.9 (new) | 5 parallel cancel requests (different keys, same `If-Match`) | Run them | All 5 get 200 `CANCELLED`; version up by exactly 1; 1 history row; 1 outbox event | TC-07-09 |
+| AC-07.10 (new) | A `CONFIRMED` booking; a `HELD` booking | Cancel each | `CONFIRMED`: 1 `AppointmentCancelled` event; `HELD`: none | TC-07-10 |
+| AC-07.11 (new) | Booking v2 | Cancel with `If-Match: "1"`; without `If-Match` | 412 with `appointment` + `ETag: "2"`; 428 | TC-07-11 |
+| AC-07.12 (new) | Staff cancels on the web | Click "Cancel appointment" | Dialog with the right copy; after confirming: Cancelled badge + closed banner; action buttons hidden | TC-07-15 |
+| AC-07.13 (new) | Customer, booking 1 hour away | Opens details | No cancel button; "It's less than 2 hours…" with the dealership's number | TC-07-16 |
 
-## B10. Thứ tự triển khai
+## B10. Implementation order
 
-1. Ticket 01 (prefactor): `CustomerChangePolicy` (+ bản web) tách riêng; không đổi gì người dùng thấy.
-2. Tracer bullet: endpoint + hộp thoại nhân viên, rồi `/code-review`.
-3. Luật khách + bảng huỷ khách.
-4. Đồng thời + nghiệm thu.
+1. Ticket 01 (prefactor): `CustomerChangePolicy` (+ web version) split out; nothing users can see.
+2. Tracer bullet: endpoint + staff dialog, then `/code-review`.
+3. Customer rules + customer sheet.
+4. Concurrency + acceptance.
 
 ## B11. Definition of Done
 
-Mọi TC xanh; README §8 xanh; `AssertsNoOverlap` sau mọi test.
+Every TC green; README §8 green; `AssertsNoOverlap` after every test.
 
-## B12. Rủi ro kỹ thuật
+## B12. Technical risks
 
-| ID | Rủi ro | Giảm thiểu |
+| ID | Risk | Mitigation |
 | --- | --- | --- |
-| R-07.1 | Kiểm 2 giờ trên dữ liệu cũ | INV-07.3: cập nhật có phiên bản chặn |
-| R-07.2 | Trả 200 cho huỷ trùng che mất lỗi thật | Chỉ khi trạng thái đọc lại là `CANCELLED` (D-07.5) |
+| R-07.1 | The 2-hour check runs on stale data | INV-07.3: the versioned update blocks it |
+| R-07.2 | Returning 200 on a duplicate cancel hides a real error | Only when the fresh status is `CANCELLED` (D-07.5) |

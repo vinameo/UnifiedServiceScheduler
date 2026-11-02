@@ -1,72 +1,72 @@
-# F06 · Gợi ý giờ trống khác · Business analysis (BA)
+# F06 · Suggest other free times · Business analysis (BA)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-## A1. Vì sao
+## A1. Why
 
-Không có lưới giờ trống, người dùng thử từng giờ và gặp 409 liên tục (RB-02.1). Khi chỗ kín, một câu "không còn chỗ" không đủ: người dùng cần ngay giờ khác. Bản vẽ phân biệt rõ "409 · business outcome, not an outage": hết chỗ là chuyện bình thường của xưởng, không phải lỗi hệ thống.
+Without a free-time grid, users try time after time and keep hitting 409 (RB-02.1). When the slot is gone, "no availability" alone is not enough: users need another time right away. The drafts clearly separate "409 · business outcome, not an outage": a full workshop is normal, not a system failure.
 
-## A2. Bằng chứng
+## A2. Evidence
 
-| ID | Nguồn | Nội dung |
+| ID | Source | Content |
 | --- | --- | --- |
-| E-06.1 | Requirement F06 | FR-06.1–06.5, BR-06.1, 3 AC. |
-| E-06.2 | Bản vẽ New booking | "Struck-through slots have no free bay or technician." |
-| E-06.3 | Bản vẽ Booking error states | "Nearest available slots: 10:00 today · 11:15 today · 08:00 Tue 3 Nov". |
-| E-06.4 | Bản vẽ khách bước 2 | "Morning {n} free slots", "This day is fully booked", "Next available slot for Oil change: Fri 6 Nov · 08:00". |
-| E-06.5 | SDD §12 | Đọc thẳng DB, không cache. |
-| E-06.6 | NFR-02 | Giờ trống một ngày p95 < 300 ms. |
+| E-06.1 | Requirements F06 | FR-06.1–06.5, BR-06.1, 3 ACs. |
+| E-06.2 | New booking draft | "Struck-through slots have no free bay or technician." |
+| E-06.3 | Booking error states draft | "Nearest available slots: 10:00 today · 11:15 today · 08:00 Tue 3 Nov". |
+| E-06.4 | Customer step 2 draft | "Morning {n} free slots", "This day is fully booked", "Next available slot for Oil change: Fri 6 Nov · 08:00". |
+| E-06.5 | SDD §12 | Read straight from the DB, no cache. |
+| E-06.6 | NFR-02 | Free times for one day p95 < 300 ms. |
 
-## A3. Ưu tiên
+## A3. Priorities
 
-Should (requirement). Trong F06: lưới + gợi ý khi 409 là cốt lõi; `next` và đếm "free slots" là Should; `excludeAppointmentId` cần cho F09.
+Should (requirements). Within F06: the grid + suggestions on 409 are the core; `next` and "free slots" counts are Should; `excludeAppointmentId` is needed by F09.
 
-## A4. Rủi ro nghiệp vụ
+## A4. Business risks
 
-| ID | Rủi ro | Xử lý |
+| ID | Risk | Handling |
 | --- | --- | --- |
-| RB-06.1 | Người dùng tưởng lưới là cam kết | Câu "Times can be taken by someone else until you confirm." dưới lưới (khách) |
-| RB-06.2 | Gợi ý ngày xa (7 ngày) không phù hợp khách | Chấp nhận; khách có thể chọn ngày khác trên lưới |
+| RB-06.1 | Users think the grid is a promise | The line "Times can be taken by someone else until you confirm." under the grid (customer) |
+| RB-06.2 | A suggestion 7 days away does not suit the customer | Accepted; the customer can pick another day on the grid |
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
-## B1. ADR
+## B1. ADRs
 
-### ADR-06.1 · Một snapshot, tính trong bộ nhớ
+### ADR-06.1 · One snapshot, computed in memory
 
-- FR-06.4 bắt buộc. Dùng lại `CandidateFinder` của F03 cho từng khung → một định nghĩa "trống" duy nhất cho lưới và cho đặt lịch.
+- Required by FR-06.4. Reusing F03's `CandidateFinder` for each slot gives one single definition of "free" for both the grid and booking.
 
-### ADR-06.2 · Trả mọi khung kèm `available`
+### ADR-06.2 · Return every slot with `available`
 
-- **Lựa chọn:** (a) chỉ trả khung trống; (b) trả mọi khung + cờ.
-- **Chọn (b):** FR-06.5 (gạch ngang, giữ hình lưới) và web không phải tự tính giờ mở cửa.
+- **Options:** (a) return only free slots; (b) return every slot + a flag.
+- **Chosen: (b):** FR-06.5 (strike through, keep the grid's shape), and the web does not have to compute opening hours itself.
 
-### ADR-06.3 · Gợi ý tính sau rollback
+### ADR-06.3 · Suggestions after rollback
 
-- Trong transaction lỗi 23P01, PostgreSQL không cho truy vấn tiếp. Tính sau rollback với snapshot mới cũng cho gợi ý đúng hơn.
+- Inside a transaction broken by 23P01, PostgreSQL refuses further queries. Computing after rollback on a fresh snapshot also gives better suggestions.
 
-## B2. Chỉ số
+## B2. Metrics
 
-| ID | Chỉ số | SQL / nguồn | Ngưỡng |
+| ID | Metric | SQL / source | Threshold |
 | --- | --- | --- | --- |
-| M-06.1 | p95 availability | `api_events` route `GET api/v1/dealerships/{dealership}/availability` (F08) | < 300 ms |
-| M-06.2 | Tỉ lệ 409 có gợi ý được dùng (đặt lại thành công trong 5 phút với giờ thuộc gợi ý) | Ghép `api_events` 409 (`detail->alternatives`) với lịch tạo sau của cùng user | Theo dõi |
-| M-06.3 | Tỉ lệ 409 `NO_AVAILABILITY` có `alternatives` rỗng | `SELECT count(*) FILTER (WHERE jsonb_array_length(detail->'alternatives') = 0)::float / count(*) FROM api_events WHERE code = 'NO_AVAILABILITY' AND occurred_at > now() - interval '7 days';` | Cảnh báo > 20% (thiếu nguồn lực) |
+| M-06.1 | Availability p95 | `api_events` route `GET api/v1/dealerships/{dealership}/availability` (F08) | < 300 ms |
+| M-06.2 | Share of 409s whose suggestion was used (rebooked within 5 minutes at a suggested time) | Join `api_events` 409 (`detail->alternatives`) with later bookings by the same user | Watch |
+| M-06.3 | Share of 409 `NO_AVAILABILITY` with empty `alternatives` | `SELECT count(*) FILTER (WHERE jsonb_array_length(detail->'alternatives') = 0)::float / count(*) FROM api_events WHERE code = 'NO_AVAILABILITY' AND occurred_at > now() - interval '7 days';` | Alert > 20% (capacity shortage) |
 
-## B3. Ràng buộc cho tương lai
+## B3. Future constraints
 
-| ID | Ràng buộc | Seam |
+| ID | Constraint | Seam |
 | --- | --- | --- |
-| FC-06.1 | Gợi ý theo kỹ thuật viên quen | `AllocationRequest.preferTechnicianId` |
-| FC-06.2 | Tải rất cao | Cache bị cấm (INV-06.4); SDD phase 2/3 thay vì cache |
-| FC-06.3 | Gợi ý đại lý khác | `AlternativeTimesFinder` nhận danh sách đại lý |
+| FC-06.1 | Suggestions by familiar technician | `AllocationRequest.preferTechnicianId` |
+| FC-06.2 | Very high load | Cache forbidden (INV-06.4); SDD phase 2/3 instead |
+| FC-06.3 | Suggest other dealerships | `AlternativeTimesFinder` takes a list of dealerships |

@@ -1,135 +1,135 @@
-# F06 · Gợi ý giờ trống khác · Requirement spec (RQ)
+# F06 · Suggest other free times · Requirement spec (RQ)
 
-Nhánh: `feature/06-alternative-times` · Ưu tiên: Should · Quy ước chung: [README](../README.md)
+Branch: `feature/06-alternative-times` · Priority: Should · Shared conventions: [README](../README.md)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-## A1. Câu chuyện
+## A1. Story
 
-**Vì sao có feature này.** Khách không nên phải đoán giờ này đến giờ khác. Cố vấn đang nói chuyện điện thoại cần thấy ngay giờ nào còn trống.
+**Why this feature exists.** Customers should not have to guess one time after another. An advisor on the phone needs to see at once which times are still free.
 
-**Feature làm gì.**
-- Lưới giờ của một ngày (bước 15 phút trong giờ mở cửa) cho biết giờ nào **thật sự** có một kỹ thuật viên và một khoang rảnh cho **trọn** thời gian dịch vụ. Giờ không trống bị gạch ngang (không ẩn) để lưới giữ hình dạng.
-- Khi giờ đã chọn vừa bị người khác lấy (`409`), câu trả lời kèm tối đa 3 giờ trống gần nhất: trước hết trong cùng ngày, rồi tối đa 7 ngày sau.
-- Khi cả ngày đã kín (app khách), hiện "This day is fully booked" và giờ trống gần nhất.
+**What it does.**
+- A time grid for one day (15-minute steps within opening hours) that shows which times **really** have a technician and a bay free for the **whole** service. Taken times are struck through (not hidden) so the grid keeps its shape.
+- When the chosen time was just taken (`409`), the answer carries up to 3 nearest free times: first on the same day, then up to 7 days ahead.
+- When the whole day is full (customer app), it shows "This day is fully booked" and the next free time.
 
-**Ai dùng.** Cố vấn (New booking), khách (Choose date and time); F09 (đổi giờ) và F10 (giữ chỗ) dùng lại.
+**Who uses it.** Advisors (New booking), customers (Choose date and time); reused by F09 (reschedule) and F10 (hold).
 
-**Không làm.** Giữ chỗ (F10). Danh sách giờ là **gợi ý, không phải giữ chỗ**: người khác có thể lấy trước; khi đó 409 là đúng (BR-06.1).
+**What it does not do.** Holds (F10). The list is **a hint, not a hold**: someone else may take a time first; then a 409 is correct (BR-06.1).
 
-## A2. Các bước sử dụng
+## A2. Usage steps
 
-1. Chọn dịch vụ và ngày → lưới hiện giờ trống (bình thường) và giờ kín (gạch ngang).
-2. Chọn giờ trống → đặt (F02).
-3. Nếu bị 409 → thẻ lỗi có "Nearest available slots" → bấm một giờ → giờ được chọn sẵn → xác nhận lại.
+1. Pick a service and a date → the grid shows free times (normal) and taken times (struck through).
+2. Pick a free time → book (F02).
+3. On a 409 → the error card has "Nearest available slots" → tap one → it is selected → confirm again.
 
-## A3. Màn hình và khác biệt so với bản vẽ
+## A3. Screens and deviations from the drafts
 
-Bản vẽ: `Admin/01-new-booking.png` (lưới có gạch ngang), `Admin/03-booking-error-states.png` (gợi ý), `Customer/02-choose-date-time.png` ("{n} free slots", "This day is fully booked", "Next available slot"). F06 làm đúng như bản vẽ; không có khác biệt.
+Drafts: `Admin/01-new-booking.png` (struck-through grid), `Admin/03-booking-error-states.png` (suggestions), `Customer/02-choose-date-time.png` ("{n} free slots", "This day is fully booked", "Next available slot"). F06 matches the drafts; no deviations.
 
-## A4. Luật chính bằng lời thường
+## A4. Key rules in plain words
 
-- Một giờ được coi là trống chỉ khi F03 tìm được ít nhất một cặp kỹ thuật viên + khoang cho trọn thời lượng dịch vụ.
-- Giờ cuối cùng trong ngày = giờ đóng cửa − thời lượng (dịch vụ 60 phút, đóng cửa 17:00 → giờ cuối 16:00).
-- Giờ đã qua trong hôm nay không trống.
-- Lịch đang giữ chỗ (của khách khác) làm giờ đó kín.
+- A time is free only when F03 finds at least one technician + bay pair for the whole service duration.
+- The last time of the day = closing time − duration (60-minute service, closing 17:00 → last start 16:00).
+- Past times today are not free.
+- A hold (by another customer) makes that time taken.
 
-## A5. Ngoài phạm vi
+## A5. Out of scope
 
-Gợi ý theo kỹ thuật viên yêu thích, gợi ý đại lý khác, thông báo khi có giờ trống.
+Suggestions by favourite technician, other dealerships, notifications when a time frees up.
 
-## A6. Tiêu chí thành công
+## A6. Success criteria
 
-- NFR-02: giờ trống cho một ngày p95 < 300 ms với 20 khoang, 30 kỹ thuật viên.
-- Số truy vấn DB cho một ngày không phụ thuộc số khung giờ (FR-06.4).
+- NFR-02: free times for one day p95 < 300 ms with 20 bays, 30 technicians.
+- The number of DB queries for one day does not depend on the number of slots (FR-06.4).
 
-## A7. Quyết định
+## A7. Decisions
 
-| ID | Quyết định |
+| ID | Decision |
 | --- | --- |
-| D-06.1 | Endpoint `GET /dealerships/{d}/availability?serviceTypeId=&date=` trả **mọi** khung (trống và không) kèm `available` và `reason`, để web gạch ngang (FR-06.5). |
-| D-06.2 | `reason` của khung không trống: `PAST`, hoặc lý do F03 (`NO_QUALIFIED_TECHNICIAN`, `NO_TECHNICIAN_AVAILABLE`, `NO_BAY_AVAILABLE`). |
-| D-06.3 | `date` trước hôm nay → 422 `START_IN_PAST`; sau hôm nay + 90 → 422 `START_TOO_FAR_AHEAD` (luật F02). Ngày đóng cửa → 200, `closed: true`, `slots: []`. |
-| D-06.4 | Thứ tự gợi ý (FR-06.3): khung trống cùng ngày, xa giờ muốn dần (khoảng cách tuyệt đối; bằng nhau thì giờ sớm trước), bỏ giờ đã qua và chính giờ muốn; nếu chưa đủ 3, thêm các ngày +1…+7 theo thứ tự thời gian (sớm nhất trước). Tổng ≤ 3. |
-| D-06.5 | Gợi ý được tính **sau** khi transaction lỗi đã rollback, ngoài transaction, với snapshot mới. |
-| D-06.6 | `excludeAppointmentId` (tuỳ chọn) bỏ qua lịch đó khi tính trống, để F09 đổi giờ thấy cả khung của chính lịch mình. Người gọi phải xem được lịch đó (`findVisibleTo`), không thì 404 `APPOINTMENT_NOT_FOUND`. |
-| D-06.7 | `GET /dealerships/{d}/availability/next?serviceTypeId=&after=` trả khung trống đầu tiên sau `after` trong 7 ngày (cho thẻ "Next available slot"), hoặc `null`. |
-| D-06.8 | Giới hạn 120 request/phút mỗi người dùng cho hai endpoint availability. |
-| D-06.9 | Web thay `TimeGrid` (F02) bằng `SlotGrid`; luồng F02 không đổi. |
+| D-06.1 | `GET /dealerships/{d}/availability?serviceTypeId=&date=` returns **every** slot (free or not) with `available` and `reason`, so the web can strike them through (FR-06.5). |
+| D-06.2 | The `reason` of a taken slot: `PAST`, or an F03 reason (`NO_QUALIFIED_TECHNICIAN`, `NO_TECHNICIAN_AVAILABLE`, `NO_BAY_AVAILABLE`). |
+| D-06.3 | `date` before today → 422 `START_IN_PAST`; after today + 90 → 422 `START_TOO_FAR_AHEAD` (F02 rules). A closed day → 200, `closed: true`, `slots: []`. |
+| D-06.4 | Suggestion order (FR-06.3): free slots of the same day by distance from the wanted time (absolute; ties → earlier first), skipping past times and the wanted time itself; if fewer than 3, add days +1…+7 in time order (earliest first). At most 3 in total. |
+| D-06.5 | Suggestions are computed **after** the failed transaction rolled back, outside it, on a fresh snapshot. |
+| D-06.6 | `excludeAppointmentId` (optional) ignores that booking when computing free times, so F09's reschedule sees its own slot as free. The caller must be able to see that booking (`findVisibleTo`), otherwise 404 `APPOINTMENT_NOT_FOUND`. |
+| D-06.7 | `GET /dealerships/{d}/availability/next?serviceTypeId=&after=` returns the first free slot after `after` within 7 days (for the "Next available slot" card), or `null`. |
+| D-06.8 | 120 requests/minute per user on both availability endpoints. |
+| D-06.9 | The web replaces `TimeGrid` (F02) with `SlotGrid`; the F02 flow does not change. |
 
-## A8. Câu hỏi mở
+## A8. Open questions
 
-| ID | Câu hỏi | Mặc định |
+| ID | Question | Default |
 | --- | --- | --- |
-| Q-06.a | Gợi ý có tính giờ **trước** giờ muốn trong cùng ngày? | Có (khoảng cách tuyệt đối). |
-| Q-06.b | Lưới có tự làm mới? | Có: khi đổi ngày/dịch vụ, khi quay lại tab, và ngay sau một 409. |
+| Q-06.a | Do suggestions include times **before** the wanted time on the same day? | Yes (absolute distance). |
+| Q-06.b | Does the grid refresh itself? | Yes: on date/service change, when returning to the tab, and right after a 409. |
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
-## B1. Trạng thái code hiện tại
+## B1. Current code state
 
-Giả định F00–F05 đã merge: `CandidateFinder`, `OpeningHours`, `AllocationSnapshotRepository::forDay`, `BookingTimeRules`, `CreateBooking` (ném `NoAvailability`), `findVisibleTo`, web `TimeGrid`, `BookingErrorCard` (slot `actions`), `BookingDraft`.
+Assumes F00–F05 are merged: `CandidateFinder`, `OpeningHours`, `AllocationSnapshotRepository::forDay`, `BookingTimeRules`, `CreateBooking` (throws `NoAvailability`), `findVisibleTo`, web `TimeGrid`, `BookingErrorCard` (`actions` slot), `BookingDraft`.
 
-## B2. Phạm vi
+## B2. Scope
 
-| ID | Trong phạm vi |
+| ID | In scope |
 | --- | --- |
 | S-06.1 | `AvailabilityCalculator::forDay(dealershipId, serviceType, localDate, now, ?excludeAppointmentId)`. |
 | S-06.2 | `AlternativeTimesFinder::near(…)`, `::next(…)`. |
-| S-06.3 | 2 endpoint availability. |
-| S-06.4 | Gắn `alternatives` vào mọi `409 NO_AVAILABILITY` (F02 hôm nay; F09 dùng lại). |
-| S-06.5 | Web: `SlotGrid`, thẻ "fully booked", chip gợi ý trong thẻ lỗi. |
+| S-06.3 | 2 availability endpoints. |
+| S-06.4 | `alternatives` attached to every `409 NO_AVAILABILITY` (F02 today; F09 reuses it). |
+| S-06.5 | Web: `SlotGrid`, the "fully booked" card, suggestion chips in the error card. |
 
-## B3. Bất biến
+## B3. Invariants
 
-| ID | Bất biến | Đọc ở đâu, khi nào |
+| ID | Invariant | Where and when it is read |
 | --- | --- | --- |
-| INV-06.1 | Khung `t` có `available: true` khi và chỉ khi `t > now`, `[t, t+duration)` nằm trong giờ mở cửa ngày đó, và `CandidateFinder::find` trả ít nhất một cặp trên snapshot của ngày (FR-06.2). | `AvailabilityCalculator`, một snapshot cho cả ngày. |
-| INV-06.2 | Khung đầu = giờ mở cửa; khung cuối = giờ đóng − thời lượng; bước 15 phút (FR-06.1). | `OpeningHours` + `BookingTimeRules::STEP_MINUTES`. |
-| INV-06.3 | Số truy vấn DB cho một ngày cố định, không phụ thuộc số khung (FR-06.4). | `forDay` gọi `AllocationSnapshotRepository::forDay` **một** lần. |
-| INV-06.4 | Không có cache giữa các request (SDD §12). | — |
-| INV-06.5 | Gợi ý chỉ chứa khung `available: true` tại thời điểm tính, ≤ 3, theo D-06.4, không trùng nhau, không chứa giờ muốn. | `AlternativeTimesFinder`. |
-| INV-06.6 | Nhân viên chỉ hỏi đại lý mình (404 `DEALERSHIP_NOT_FOUND`); khách hỏi mọi đại lý nhưng chỉ dịch vụ `active` (404 `SERVICE_TYPE_NOT_FOUND`). | Route binding `{dealership}` (F01) + đọc dịch vụ. |
-| INV-06.7 | `excludeAppointmentId` chỉ có tác dụng nếu người gọi xem được lịch đó; không thì 404, không lặng lẽ bỏ qua. | `findVisibleTo` trước khi tính. |
+| INV-06.1 | Slot `t` has `available: true` if and only if `t > now`, `[t, t+duration)` fits that day's opening hours, and `CandidateFinder::find` returns at least one pair on the day's snapshot (FR-06.2). | `AvailabilityCalculator`, one snapshot for the whole day. |
+| INV-06.2 | First slot = opening time; last slot = closing − duration; 15-minute step (FR-06.1). | `OpeningHours` + `BookingTimeRules::STEP_MINUTES`. |
+| INV-06.3 | The DB query count for one day is fixed, whatever the number of slots (FR-06.4). | `forDay` calls `AllocationSnapshotRepository::forDay` **once**. |
+| INV-06.4 | No cache between requests (SDD §12). | — |
+| INV-06.5 | Suggestions hold only slots that were `available: true` when computed, ≤ 3, per D-06.4, no duplicates, never the wanted time. | `AlternativeTimesFinder`. |
+| INV-06.6 | Staff only ask about their own dealership (404 `DEALERSHIP_NOT_FOUND`); customers ask about any dealership but only `active` services (404 `SERVICE_TYPE_NOT_FOUND`). | Route binding `{dealership}` (F01) + the service read. |
+| INV-06.7 | `excludeAppointmentId` takes effect only if the caller may see that booking; otherwise 404, never silently ignored. | `findVisibleTo` before computing. |
 
-Trường hợp biên:
+Edge cases:
 
-| Quyết định | Trường hợp biên | TC |
+| Decision | Edge case | TC |
 | --- | --- | --- |
-| INV-06.1 | Kỹ thuật viên duy nhất bận 09–10; giờ đã qua; khung chạm giờ đóng; giữ chỗ còn hạn / hết hạn | TC-06-01, 06-04, 06-02, TC-10-xx (F10) |
-| INV-06.5 | Cùng ngày đủ 3; cùng ngày thiếu; 7 ngày kín hết; hai khung cách đều giờ muốn | TC-06-03, 06-07, 06-08, 06-09 |
-| INV-06.6 | Nhân viên đại lý khác; khách dịch vụ inactive | TC-06-06 |
-| INV-06.7 | Khách exclude lịch của người khác | TC-06-11 |
+| INV-06.1 | The only technician busy 09–10; past times; slot touching closing; a valid / expired hold | TC-06-01, 06-04, 06-02, TC-10-xx (F10) |
+| INV-06.5 | Same day has 3; same day short; 7 days all full; two slots equally far from the wanted time | TC-06-03, 06-07, 06-08, 06-09 |
+| INV-06.6 | Staff of another dealership; customer with an inactive service | TC-06-06 |
+| INV-06.7 | Customer excludes someone else's booking | TC-06-11 |
 
-## B4. Thay đổi theo file
+## B4. File-by-file changes
 
-| File | Thay đổi |
+| File | Change |
 | --- | --- |
 | `api/app/Domain/Booking/Availability/AvailabilityCalculator.php` | S-06.1. |
 | `api/app/Domain/Booking/Availability/AlternativeTimesFinder.php` | S-06.2. |
-| `api/app/Domain/Booking/Exceptions/NoAvailability.php` | Thêm field `alternatives` (mảng `{start, end}`), mặc định `[]`. |
-| `api/app/Domain/Booking/Actions/CreateBooking.php` | Bắt `NoAvailability`, tính gợi ý (D-06.5), ném lại kèm `alternatives`. |
+| `api/app/Domain/Booking/Exceptions/NoAvailability.php` | Adds `alternatives` (array of `{start, end}`), default `[]`. |
+| `api/app/Domain/Booking/Actions/CreateBooking.php` | Catches `NoAvailability`, computes suggestions (D-06.5), rethrows with `alternatives`. |
 | `api/app/Http/Controllers/Api/V1/AvailabilityController.php`, `Requests/AvailabilityRequest.php`, `Resources/AvailabilityResource.php` | API. |
-| `api/routes/api.php` | 2 route + `throttle:120,1`. |
+| `api/routes/api.php` | 2 routes + `throttle:120,1`. |
 | `web/src/shared/booking/SlotGrid.tsx`, `web/src/shared/api/availability.ts` | WEB. |
-| `web/src/staff/booking/NewBookingPage.tsx`, `web/src/customer/booking/ChooseTimePage.tsx`, `web/src/shared/booking/BookingErrorCard.tsx` | Dùng `SlotGrid`, chip gợi ý. |
+| `web/src/staff/booking/NewBookingPage.tsx`, `web/src/customer/booking/ChooseTimePage.tsx`, `web/src/shared/booking/BookingErrorCard.tsx` | Use `SlotGrid`, suggestion chips. |
 
-## B5. Hợp đồng
+## B5. Contracts
 
-[4-api-spec.md](4-api-spec.md), [5-web-spec.md](5-web-spec.md). Không có bảng mới.
+[4-api-spec.md](4-api-spec.md), [5-web-spec.md](5-web-spec.md). No new tables.
 
 ```php
-// minh hoạ — INV-06.1, 06.3
+// illustrative — INV-06.1, 06.3
 final class AvailabilityCalculator {
     /** @return list<SlotState> SlotState{start: CarbonImmutable, available: bool, reason: ?string} */
     public function forDay(string $dealershipId, ServiceType $type, string $localDate, CarbonImmutable $now, ?string $excludeAppointmentId = null): DayAvailability;
@@ -141,72 +141,72 @@ final class AlternativeTimesFinder {
 }
 ```
 
-## B6. Seam
+## B6. Seams
 
-| Seam | Dùng lại ở |
+| Seam | Reused in |
 | --- | --- |
-| `AvailabilityCalculator` | F09 (lưới đổi giờ với `excludeAppointmentId`), F10 |
-| `AlternativeTimesFinder::near` | F09 (409 khi đổi giờ) |
-| Web `SlotGrid`, `AlternativeChips` | F09 (nhân viên, khách), F10 |
+| `AvailabilityCalculator` | F09 (reschedule grid with `excludeAppointmentId`), F10 |
+| `AlternativeTimesFinder::near` | F09 (409 on reschedule) |
+| Web `SlotGrid`, `AlternativeChips` | F09 (staff, customer), F10 |
 
-FC: FC-06.1 (gợi ý kỹ thuật viên quen) → `AllocationRequest.preferTechnicianId` đã có; FC-06.2 (cache ngắn khi tải cao) → bị cấm hiện tại (INV-06.4), cân nhắc ở SDD phase 2.
+FCs: FC-06.1 (suggest a familiar technician) → `AllocationRequest.preferTechnicianId` exists; FC-06.2 (short cache under high load) → forbidden today (INV-06.4), consider in SDD phase 2.
 
-## B7. Thuật toán
+## B7. Algorithms
 
-**`forDay`**: lấy cửa sổ mở cửa của ngày (đóng → `closed`); nạp snapshot một lần; với mỗi `t` từ `opens` đến `closes − duration` bước 15: `t <= now` → `PAST`; còn lại `find(AllocationRequest(range = [t, t+duration), excludeAppointmentId))` → `available` hoặc `reason`.
+**`forDay`**: get the day's opening window (closed → `closed`); load the snapshot once; for each `t` from `opens` to `closes − duration` in 15-minute steps: `t <= now` → `PAST`; otherwise `find(AllocationRequest(range = [t, t+duration), excludeAppointmentId))` → `available` or `reason`.
 
-**`near`**: `forDay(ngày của wanted)` → lọc `available`, bỏ `wanted` → sắp `(|t − wanted|, t)` → lấy tối đa 3. Nếu < 3: lần lượt ngày +1…+7: `forDay` → lấy các khung `available` theo thứ tự thời gian tới khi đủ 3. Dừng sớm khi đủ.
+**`near`**: `forDay(wanted's day)` → keep `available`, drop `wanted` → sort by `(|t − wanted|, t)` → take up to 3. If < 3: for days +1…+7: `forDay` → take `available` slots in time order until there are 3. Stop early when full.
 
-**`next`**: như phần "ngày sau" của `near` nhưng bắt đầu từ `after` (cùng ngày, các khung > `after`), giới hạn 1.
+**`next`**: like the "later days" part of `near`, starting from `after` (same day, slots > `after`), limit 1.
 
-## B8. Bảng lỗi
+## B8. Error table
 
-| Tình huống | HTTP | `code` |
+| Situation | HTTP | `code` |
 | --- | --- | --- |
-| Thiếu/sai `serviceTypeId`, `date`, `after`; `excludeAppointmentId` sai dạng | 400 | `VALIDATION_ERROR` |
-| Vượt 120/phút | 429 | `TOO_MANY_ATTEMPTS` |
-| Đại lý khác (nhân viên) | 404 | `DEALERSHIP_NOT_FOUND` |
-| Dịch vụ không có/inactive/khác đại lý | 404 | `SERVICE_TYPE_NOT_FOUND` |
-| `excludeAppointmentId` không xem được | 404 | `APPOINTMENT_NOT_FOUND` |
-| `date` đã qua | 422 | `START_IN_PAST` |
-| `date` quá 90 ngày | 422 | `START_TOO_FAR_AHEAD` |
+| Missing/bad `serviceTypeId`, `date`, `after`; malformed `excludeAppointmentId` | 400 | `VALIDATION_ERROR` |
+| Over 120/minute | 429 | `TOO_MANY_ATTEMPTS` |
+| Another dealership (staff) | 404 | `DEALERSHIP_NOT_FOUND` |
+| Service missing/inactive/another dealership | 404 | `SERVICE_TYPE_NOT_FOUND` |
+| `excludeAppointmentId` not visible | 404 | `APPOINTMENT_NOT_FOUND` |
+| `date` in the past | 422 | `START_IN_PAST` |
+| `date` more than 90 days ahead | 422 | `START_TOO_FAR_AHEAD` |
 
 ## B9. Acceptance criteria
 
 | AC | Given | When | Then | TC |
 | --- | --- | --- | --- | --- |
-| AC-06.1 | Kỹ thuật viên đủ điều kiện duy nhất bận 09:00–10:00 | Lấy giờ trống cho dịch vụ 60 phút | 08:15 đến 09:45 không trống; 08:00 và 10:00 trống | TC-06-01 |
-| AC-06.2 | Đóng cửa 17:00 | Lấy giờ trống cho dịch vụ 60 phút | Khung cuối là 16:00 | TC-06-02 |
-| AC-06.3 | 09:00 kín, 10:00 và 11:00 trống | Đặt 09:00 | 409 với gợi ý bắt đầu bằng 10:00 | TC-06-03 (qua `POST /appointments`) |
-| AC-06.4 (mới) | Hôm nay, bây giờ 10:05 | Lấy giờ trống hôm nay | Khung ≤ 10:00 `available: false`, `reason: PAST` | TC-06-04 |
-| AC-06.5 (mới) | Chủ nhật đóng cửa | Lấy giờ trống Chủ nhật | 200, `closed: true`, `slots: []` | TC-06-05 |
-| AC-06.6 (mới) | Nhân viên D2; khách | Nhân viên hỏi D1; khách hỏi D1 với dịch vụ inactive | 404 `DEALERSHIP_NOT_FOUND`; 404 `SERVICE_TYPE_NOT_FOUND` | TC-06-06 |
-| AC-06.7 (mới) | Hôm nay chỉ còn 15:00 trống; ngày mai trống từ 08:00 | Đặt 09:00 bị 409 | Gợi ý: 15:00 hôm nay, 08:00 và 08:15 ngày mai | TC-06-07 |
-| AC-06.8 (mới) | 8 ngày tới kín hết | Đặt bị 409 | `alternatives: []` | TC-06-08 |
-| AC-06.9 (mới) | 10:00 và 08:00 cùng cách 09:00 một giờ | Gợi ý cho 09:00 | 08:00 trước 10:00 | TC-06-09 |
-| AC-06.10 (mới) | 36 khung và 4 khung (dịch vụ dài) | Đếm truy vấn | Bằng nhau | TC-06-10 |
-| AC-06.11 (mới) | Lịch X của khách A giữ An 10–11 (An là người duy nhất) | A hỏi 10:00 với `excludeAppointmentId=X`; B hỏi với X | A: 10:00 trống; B: 404 | TC-06-11 |
-| AC-06.12 (mới) | Ngày kín, thứ Sáu 08:00 trống | `GET …/availability/next` | `nextAvailable` = thứ Sáu 08:00 | TC-06-12 |
-| AC-06.13 (mới) | Lưới có giờ kín | Màn hình | Giờ kín gạch ngang, không bấm được, vẫn hiện | TC-06-14 |
-| AC-06.14 (mới) | App khách, ngày kín | Màn hình | "This day is fully booked" + "Next available slot for Oil change: Fri 6 Nov · 08:00"; bấm → chọn ngày và giờ đó | TC-06-15 |
-| AC-06.15 (mới) | New booking nhận 409 có gợi ý | Bấm chip "10:00 today" | Giờ 10:00 được chọn; thẻ lỗi biến mất; khoá mới cho lần xác nhận | TC-06-16 |
-| AC-06.16 (mới) | 20 khoang, 30 kỹ thuật viên, 200 lịch | Gọi availability | p95 < 300 ms | TC-06-13 |
+| AC-06.1 | The only qualified technician is busy 09:00–10:00 | Get free times for a 60-minute service | 08:15 to 09:45 are not free; 08:00 and 10:00 are free | TC-06-01 |
+| AC-06.2 | The dealership closes at 17:00 | Get free times for a 60-minute service | The last slot is 16:00 | TC-06-02 |
+| AC-06.3 | 09:00 is full, 10:00 and 11:00 are free | Book 09:00 | 409 with suggestions starting at 10:00 | TC-06-03 (through `POST /appointments`) |
+| AC-06.4 (new) | Today, now 10:05 | Get today's free times | Slots ≤ 10:00 have `available: false`, `reason: PAST` | TC-06-04 |
+| AC-06.5 (new) | Closed on Sunday | Get Sunday's free times | 200, `closed: true`, `slots: []` | TC-06-05 |
+| AC-06.6 (new) | D2 staff; a customer | Staff ask about D1; the customer asks D1 with an inactive service | 404 `DEALERSHIP_NOT_FOUND`; 404 `SERVICE_TYPE_NOT_FOUND` | TC-06-06 |
+| AC-06.7 (new) | Today only 15:00 is free; tomorrow is free from 08:00 | Booking 09:00 gets 409 | Suggestions: 15:00 today, 08:00 and 08:15 tomorrow | TC-06-07 |
+| AC-06.8 (new) | The next 8 days are full | Booking gets 409 | `alternatives: []` | TC-06-08 |
+| AC-06.9 (new) | 10:00 and 08:00 are both one hour from 09:00 | Suggestions for 09:00 | 08:00 before 10:00 | TC-06-09 |
+| AC-06.10 (new) | 36 slots vs 4 slots (long service) | Count queries | Equal | TC-06-10 |
+| AC-06.11 (new) | Customer A's booking X holds An 10–11 (An is the only one) | A asks for 10:00 with `excludeAppointmentId=X`; B asks with X | A: 10:00 free; B: 404 | TC-06-11 |
+| AC-06.12 (new) | The day is full, Friday 08:00 is free | `GET …/availability/next` | `nextAvailable` = Friday 08:00 | TC-06-12 |
+| AC-06.13 (new) | The grid has taken times | Screen | Taken times are struck through, not clickable, still shown | TC-06-14 |
+| AC-06.14 (new) | Customer app, a full day | Screen | "This day is fully booked" + "Next available slot for Oil change: Fri 6 Nov · 08:00"; tapping it selects that day and time | TC-06-15 |
+| AC-06.15 (new) | New booking gets a 409 with suggestions | Tap the "10:00 today" chip | 10:00 is selected; the error card disappears; a new key for the next confirm | TC-06-16 |
+| AC-06.16 (new) | 20 bays, 30 technicians, 200 bookings | Call availability | p95 < 300 ms | TC-06-13 |
 
-## B10. Thứ tự triển khai
+## B10. Implementation order
 
-1. Ticket 01 (prefactor): `TimeGrid` nhận trạng thái từng chip từ props; không đổi hành vi.
-2. Tracer bullet: `AvailabilityCalculator` + endpoint + `SlotGrid` ở New booking, rồi `/code-review`.
-3. `AlternativeTimesFinder` + gắn vào 409 + chip gợi ý.
-4. App khách: đếm "free slots", "fully booked", `next`.
-5. `excludeAppointmentId`, hiệu năng, nghiệm thu.
+1. Ticket 01 (prefactor): `TimeGrid` takes per-chip state from props; no behaviour change.
+2. Tracer bullet: `AvailabilityCalculator` + endpoint + `SlotGrid` on New booking, then `/code-review`.
+3. `AlternativeTimesFinder` + attach to 409 + suggestion chips.
+4. Customer app: "free slots" counts, "fully booked", `next`.
+5. `excludeAppointmentId`, performance, acceptance.
 
 ## B11. Definition of Done
 
-Mọi TC xanh; README §8 xanh; TC-06-13 đạt ngưỡng.
+Every TC green; README §8 green; TC-06-13 meets its threshold.
 
-## B12. Rủi ro kỹ thuật
+## B12. Technical risks
 
-| ID | Rủi ro | Giảm thiểu |
+| ID | Risk | Mitigation |
 | --- | --- | --- |
-| R-06.1 | Gợi ý 8 ngày = 8 snapshot → chậm 409 | Dừng sớm khi đủ 3; mỗi snapshot ≤ 6 truy vấn; đo TC-06-13 |
-| R-06.2 | Lưới cũ (người khác vừa đặt) → người dùng chọn giờ đã kín | BR-06.1: chấp nhận; 409 + làm mới lưới ngay |
+| R-06.1 | Suggestions over 8 days = 8 snapshots → slow 409 | Stop early at 3; each snapshot ≤ 6 queries; measured by TC-06-13 |
+| R-06.2 | A stale grid (someone just booked) → the user picks a taken time | BR-06.1: accepted; 409 + refresh the grid at once |

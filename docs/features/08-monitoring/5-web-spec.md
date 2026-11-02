@@ -1,10 +1,10 @@
-# F08 · Giám sát · Web spec (WEB)
+# F08 · Monitoring · Web spec (WEB)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-Màn hình "System monitoring" (`/staff/monitoring`, chỉ admin), theo bản vẽ `Admin/11-system-monitoring.png`:
+The "System monitoring" screen (`/staff/monitoring`, admin only), per the draft `Admin/11-system-monitoring.png`:
 
 ```
 System monitoring                                 [1 hour | 24 hours | 7 days]
@@ -23,65 +23,65 @@ Time      Endpoint            Error code       HTTP  correlationId  Details
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
-## B1. Route và dữ liệu
+## B1. Route and data
 
 | Path | Element | Guard |
 | --- | --- | --- |
 | `/staff/monitoring` | `staff/monitoring/MonitoringPage` | `RequireRole ['ADMIN']` |
 
-| ID | Hook | API | Ghi chú |
+| ID | Hook | API | Note |
 | --- | --- | --- | --- |
-| WEB-08.1 | `useMonitoringSummary(range)` | API-08.1 | `refetchInterval` 30 s; `range` trong URL `?range=24h` (mặc định `1h`) |
-| WEB-08.2 | `useMonitoringErrors(correlationId)` | API-08.2 | Chạy khi ô tìm có ≥ 8 ký tự (debounce 300 ms) |
+| WEB-08.1 | `useMonitoringSummary(range)` | API-08.1 | `refetchInterval` 30 s; `range` in the URL `?range=24h` (default `1h`) |
+| WEB-08.2 | `useMonitoringErrors(correlationId)` | API-08.2 | Runs when the search box has ≥ 8 characters (300 ms debounce) |
 
-## B2. Hiển thị
+## B2. Display
 
-- Thẻ sức khoẻ: badge `UP` xanh / `DOWN` đỏ; Outbox "{n} events · oldest {age}" (`age` "7 min", "2 h"); nút "View" → `/staff/notifications?status=PENDING` khi F11 đã có trang.
-- Thẻ số: số định dạng `en-GB` (1,248); phần trăm 1 chữ số thập phân so với `total`; p95 đỏ khi ≥ 300.
-- Bảng lỗi: Time `HH:mm:ss` theo múi giờ đại lý; correlationId hiện 8 ký tự đầu, bấm để chép cả chuỗi (`CopyButton`); dòng 5xx màu đỏ nhạt.
-- Khi đang tìm: bảng hiện kết quả tìm; xoá ô → quay lại "Recent errors".
-- Lỗi tải: `Alert` + "Retry"; 403 không xảy ra vì guard.
-- Có thêm `HealthBadge` (có sẵn ở `web/src/shared/HealthBadge.tsx`) cho `/health/ready` ở góc thẻ Application.
+- Health cards: `UP` badge green / `DOWN` red; Outbox "{n} events · oldest {age}" (`age` like "7 min", "2 h"); the "View" button → `/staff/notifications?status=PENDING` once F11 has the page.
+- Figure cards: numbers formatted `en-GB` (1,248); percentages with 1 decimal against `total`; p95 red when ≥ 300.
+- Error table: Time `HH:mm:ss` in the dealership's zone; correlationId shows the first 8 characters, click to copy the whole string (`CopyButton`); 5xx rows light red.
+- While searching: the table shows the search results; clearing the box returns to "Recent errors".
+- Load error: `Alert` + "Retry"; 403 cannot happen because of the guard.
+- The existing `HealthBadge` (`web/src/shared/HealthBadge.tsx`) for `/health/ready` sits in the corner of the Application card.
 
-## B3. Câu chữ
+## B3. Copy
 
-| Key | en | vi |
-| --- | --- | --- |
-| `title` | System monitoring | Giám sát hệ thống |
-| `subtitle` | Service health, booking metrics and recent errors. | Sức khoẻ dịch vụ, số liệu đặt lịch và lỗi gần đây. |
-| `range.1h` / `24h` / `7d` | 1 hour / 24 hours / 7 days | 1 giờ / 24 giờ / 7 ngày |
-| `health.app` | Application | Ứng dụng |
-| `health.appBody` | Running · p95 {ms} ms (bookings) | Đang chạy · p95 {ms} ms (đặt lịch) |
-| `health.db` | Database | Cơ sở dữ liệu |
-| `health.dbBody` | PostgreSQL · {used}/{max} connections | PostgreSQL · {used}/{max} kết nối |
-| `health.outbox` | Outbox pending | Outbox đang chờ |
-| `health.outboxBody` | {n} events · oldest {age} | {n} sự kiện · cũ nhất {age} |
-| `health.view` | View | Xem |
-| `bookings.title` | Bookings in the last {range} | Đặt lịch trong {range} qua |
-| `bookings.total` | Booking requests | Yêu cầu đặt lịch |
-| `bookings.totalNote` | Total POST /appointments | Tổng POST /appointments |
-| `bookings.confirmed` | Confirmed | Đã xác nhận |
-| `bookings.ofRequests` | {pct}% of requests | {pct}% số yêu cầu |
-| `bookings.noAvailability` | No availability (409) | Hết chỗ (409) |
-| `bookings.noAvailabilityNote` | {pct}% · business outcome, not an outage | {pct}% · kết quả nghiệp vụ, không phải sự cố |
-| `bookings.errors` | System errors (5xx) | Lỗi hệ thống (5xx) |
-| `bookings.p95` | p95 response time | Thời gian phản hồi p95 |
-| `bookings.p95Note` | Target under 300 ms | Mục tiêu dưới 300 ms |
-| `bookings.retries` | Allocation retries | Lần thử lại phân bổ |
-| `bookings.retriesNote` | Constraint conflicts, retried automatically | Xung đột ràng buộc, đã tự thử lại |
-| `bookings.replays` | Idempotent replays | Trả lại kết quả cũ |
-| `bookings.replaysNote` | Returned the original result, no duplicate | Trả kết quả ban đầu, không tạo trùng |
-| `errors.title` | Recent errors | Lỗi gần đây |
-| `errors.search` | Search by correlationId | Tìm theo correlationId |
-| `errors.columns` | Time · Endpoint · Error code · HTTP · correlationId · Details | Giờ · Endpoint · Mã lỗi · HTTP · correlationId · Chi tiết |
-| `errors.empty` | No errors in this period. | Không có lỗi trong khoảng này. |
-| `errors.notFound` | No error with this correlation id. | Không có lỗi nào với mã này. |
-| `errors.copied` | Copied | Đã chép |
+| Key | Copy |
+| --- | --- |
+| `title` | System monitoring |
+| `subtitle` | Service health, booking metrics and recent errors. |
+| `range.1h` / `24h` / `7d` | 1 hour / 24 hours / 7 days |
+| `health.app` | Application |
+| `health.appBody` | Running · p95 {ms} ms (bookings) |
+| `health.db` | Database |
+| `health.dbBody` | PostgreSQL · {used}/{max} connections |
+| `health.outbox` | Outbox pending |
+| `health.outboxBody` | {n} events · oldest {age} |
+| `health.view` | View |
+| `bookings.title` | Bookings in the last {range} |
+| `bookings.total` | Booking requests |
+| `bookings.totalNote` | Total POST /appointments |
+| `bookings.confirmed` | Confirmed |
+| `bookings.ofRequests` | {pct}% of requests |
+| `bookings.noAvailability` | No availability (409) |
+| `bookings.noAvailabilityNote` | {pct}% · business outcome, not an outage |
+| `bookings.errors` | System errors (5xx) |
+| `bookings.p95` | p95 response time |
+| `bookings.p95Note` | Target under 300 ms |
+| `bookings.retries` | Allocation retries |
+| `bookings.retriesNote` | Constraint conflicts, retried automatically |
+| `bookings.replays` | Idempotent replays |
+| `bookings.replaysNote` | Returned the original result, no duplicate |
+| `errors.title` | Recent errors |
+| `errors.search` | Search by correlationId |
+| `errors.columns` | Time · Endpoint · Error code · HTTP · correlationId · Details |
+| `errors.empty` | No errors in this period. |
+| `errors.notFound` | No error with this correlation id. |
+| `errors.copied` | Copied |

@@ -1,66 +1,66 @@
-# F07 · Huỷ lịch hẹn · Business analysis (BA)
+# F07 · Cancel an appointment · Business analysis (BA)
 
 ---
 
-# PHẦN A · Cho người đọc
+# PART A · For readers
 
-## A1. Vì sao
+## A1. Why
 
-Một khung giờ bị giữ bởi khách không đến là doanh thu mất. Huỷ phải trả chỗ ngay. Giới hạn 2 giờ cho khách giữ cho xưởng thời gian sắp xếp; cố vấn không bị giới hạn vì họ đang nói chuyện trực tiếp với khách.
+A slot held by a customer who will not come is lost revenue. Cancelling must return the slot at once. The 2-hour limit for customers gives the workshop time to rearrange; advisors have no limit because they talk to the customer directly.
 
-## A2. Bằng chứng
+## A2. Evidence
 
-| ID | Nguồn | Nội dung |
+| ID | Source | Content |
 | --- | --- | --- |
-| E-07.1 | Requirement F07 | FR-07.1–07.4, BR-07.1–07.2, 4 AC. |
-| E-07.2 | SDD §6 | "Customer and advisor: customer moves while advisor cancels → cancelled booking comes back" — lý do cần `If-Match`. |
-| E-07.3 | SDD §10 | Huỷ: kiểm phiên bản, không EXCLUDE, lỗi 412. |
-| E-07.4 | Bản vẽ | Hộp thoại nhân viên (Reason + Note), bảng khách (3 lý do), banner sau huỷ, số đại lý "028 3812 3456". |
+| E-07.1 | Requirements F07 | FR-07.1–07.4, BR-07.1–07.2, 4 ACs. |
+| E-07.2 | SDD §6 | "Customer moves while advisor cancels → the cancelled booking comes back" — why `If-Match` is needed. |
+| E-07.3 | SDD §10 | Cancel: version check, no EXCLUDE, error 412. |
+| E-07.4 | Drafts | Staff dialog (Reason + Note), customer sheet (3 reasons), banner after cancelling, dealership number "028 3812 3456". |
 
-## A3. Ưu tiên
+## A3. Priorities
 
-Should. Trong F07: endpoint + luật là cốt lõi; giao diện khách Should.
+Should. Within F07: endpoint + rules are the core; the customer UI is Should.
 
-## A4. Rủi ro nghiệp vụ
+## A4. Business risks
 
-| ID | Rủi ro | Xử lý |
+| ID | Risk | Handling |
 | --- | --- | --- |
-| RB-07.1 | Khách huỷ sát giờ hàng loạt | Luật 2 giờ; M-07.2 |
-| RB-07.2 | Cố vấn huỷ nhầm | Hộp thoại xác nhận nói rõ "This cannot be undone."; lịch sử ghi người huỷ |
+| RB-07.1 | Many last-minute customer cancellations | The 2-hour rule; M-07.2 |
+| RB-07.2 | An advisor cancels by mistake | The confirmation dialog says "This cannot be undone."; history records who cancelled |
 
 ---
 
-# PHẦN B · Cho agent triển khai
+# PART B · For implementing agents
 
-## B0. Quy tắc đọc
+## B0. Reading rules
 
-> - **PHẢI** / **KHÔNG ĐƯỢC**: bắt buộc. **NÊN**: làm trừ khi có lý do ghi trong commit. **CÓ THỂ**: tuỳ chọn. `CLAUDE.md` áp dụng toàn bộ.
-> - Yêu cầu là AC, INV, quyền và câu chữ. Code mẫu, query và thứ tự bước là **giả thuyết**: agent kiểm chúng với code và dữ liệu thật ở HEAD (`implement-ticket` bước 4).
-> - Giả thuyết sai mà bản đúng vẫn giữ mọi AC, quyền và câu chữ → làm bản đúng, ghi vào commit và sửa spec. Bản đúng đổi điều người dùng thấy → dừng lại và hỏi.
+> - **MUST** / **MUST NOT**: required. **SHOULD**: do it unless the commit gives a reason. **MAY**: optional. `CLAUDE.md` applies in full.
+> - The requirements are the ACs, INVs, permissions and copy. Code sketches, queries and step orders are **hypotheses**: the agent checks them against the code and real data at HEAD (`implement-ticket` step 4).
+> - A wrong hypothesis whose sound version keeps every AC, permission and copy → build the sound version, note it in the commit and fix the spec. A sound version that changes what users see → stop and ask.
 
-## B1. ADR
+## B1. ADRs
 
-### ADR-07.1 · Huỷ trùng là thành công
+### ADR-07.1 · A duplicate cancel is a success
 
-- **Lựa chọn:** (a) 412/422 khi đã huỷ; (b) 200 với trạng thái hiện tại.
-- **Chọn (b)** theo FR-07.2 và mở rộng cho va chạm đồng thời (D-07.5): mục tiêu của người dùng đã đạt, báo lỗi chỉ gây hoang mang.
-- **Ràng buộc:** chỉ khi trạng thái đọc lại là `CANCELLED`; không ghi thêm gì.
+- **Options:** (a) 412/422 when already cancelled; (b) 200 with the current state.
+- **Chosen: (b)** per FR-07.2, extended to concurrent clashes (D-07.5): the user's goal is already met; an error only confuses.
+- **Constraint:** only when the fresh status is `CANCELLED`; nothing else is written.
 
-### ADR-07.2 · Lý do là mã cố định
+### ADR-07.2 · Reasons are fixed codes
 
-- Mã cho phép thống kê (M-07.1) và dịch câu chữ; ghi chú tự do riêng.
+- Codes allow statistics (M-07.1) and translation; the free note is separate.
 
-## B2. Chỉ số
+## B2. Metrics
 
-| ID | Chỉ số | SQL | Ngưỡng |
+| ID | Metric | SQL | Threshold |
 | --- | --- | --- | --- |
-| M-07.1 | Huỷ theo lý do và kênh (30 ngày) | `SELECT cancel_reason, source, count(*) FROM appointments WHERE status = 'CANCELLED' AND cancelled_at > now() - interval '30 days' GROUP BY 1, 2;` | Theo dõi |
-| M-07.2 | Khách bị chặn vì sát giờ | `SELECT count(*) FROM api_events WHERE code = 'TOO_LATE_TO_CANCEL' AND occurred_at > now() - interval '7 days';` | Theo dõi |
-| M-07.3 | Khung đã huỷ được đặt lại | Lịch mới có cùng kỹ thuật viên + khoảng giao với lịch đã huỷ, tạo sau `cancelled_at` | Theo dõi |
+| M-07.1 | Cancellations by reason and channel (30 days) | `SELECT cancel_reason, source, count(*) FROM appointments WHERE status = 'CANCELLED' AND cancelled_at > now() - interval '30 days' GROUP BY 1, 2;` | Watch |
+| M-07.2 | Customers blocked for being too late | `SELECT count(*) FROM api_events WHERE code = 'TOO_LATE_TO_CANCEL' AND occurred_at > now() - interval '7 days';` | Watch |
+| M-07.3 | Cancelled slots booked again | New bookings with the same technician and an overlapping range, created after `cancelled_at` | Watch |
 
-## B3. Ràng buộc cho tương lai
+## B3. Future constraints
 
-| ID | Ràng buộc | Seam |
+| ID | Constraint | Seam |
 | --- | --- | --- |
-| FC-07.1 | Phí huỷ | `CancelAppointment` trả thêm thông tin phí; không cột nào hôm nay |
-| FC-07.2 | Giới hạn giờ theo đại lý | `CustomerChangePolicy` nhận số giờ từ đại lý |
+| FC-07.1 | Cancellation fees | `CancelAppointment` returns fee details; no columns today |
+| FC-07.2 | Per-dealership time limits | `CustomerChangePolicy` takes the hours from the dealership |
