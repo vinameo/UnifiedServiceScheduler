@@ -4,7 +4,7 @@
 
 **Blocked by:** [05-requirerole-route-guard-and-safe-returnto](05-requirerole-route-guard-and-safe-returnto.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/00-accounts-and-sign-in`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-00-25
 
-- [ ] TC-00-25 (WEB §B3 menu; Web component): given `me` is an advisor, then an admin; when Render `StaffLayout`; then Advisor: no Monitoring; admin: Master data, Notifications, Monitoring. Test: `web/src/staff/StaffLayout.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-00-25 (WEB §B3 menu; Web component): given `me` is an advisor, then an admin; when Render `StaffLayout`; then Advisor: no Monitoring; admin: Master data, Notifications, Monitoring. Test: `web/src/staff/StaffLayout.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
