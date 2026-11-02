@@ -1,5 +1,5 @@
 // PreToolUse hook (Bash): a feature/fix/refactor/chore/review branch can be
-// merged only after its whole-branch self-review (CLAUDE.md §8) is written to
+// merged only after its whole-branch self-review (CLAUDE.md "Branch workflow for agents") is written to
 // .claude/reviews/<branch with "/" as "__">.md, newer than the branch tip.
 // A remote-tracking ref (origin/fix/x) is checked as the branch it names (fix/x).
 // Claude Code runs it from .claude/settings.json, Antigravity from .agents/hooks.json.
@@ -96,7 +96,7 @@ if (command !== null) {
     if (!existsSync(report)) {
       deny(
         `Merge of ${ref} blocked: no self-review at ${report}. Review \`git diff develop...${ref}\` ` +
-          `(design pass, OWASP list, duplication across tickets; CLAUDE.md §8), fix or list every finding in that file, then merge.`,
+          `(design pass, OWASP list, duplication across tickets; implement-ticket feature review), fix or list every finding in that file, then merge.`,
       );
       break;
     }

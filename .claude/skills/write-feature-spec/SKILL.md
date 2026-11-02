@@ -1,15 +1,15 @@
 ---
 name: write-feature-spec
-description: Write or update an OpenPlany feature spec set (docs/features/<n>-<feature>/: requirement, business analysis, database, API, web, test cases) from a draft UI or a request, then gate it with spec review and split it into tickets. Use when asked to write requirements, specs, BA/DB/API/web specs, test cases, or to turn a draft into tickets.
+description: Write or update a Unified Service Scheduler feature spec set (docs/features/<n>-<feature>/: requirement, business analysis, database, API, web, test cases) from a draft UI or a request, then gate it with spec review and split it into tickets. Use when asked to write requirements, specs, BA/DB/API/web specs, test cases, or to turn a draft into tickets.
 ---
 
 # Write a feature spec
 
-Specs live in `docs/features/<n>-<feature-slug>/` next to the draft UI images. Write every file in English by default (headings, prose, tables, comments in sketches); use another language only when the user asks for it for that spec. The directory name is also the branch name (`feature/<n>-<feature-slug>`, CLAUDE.md §8).
+Specs live in `docs/features/<n>-<feature-slug>/` next to the draft UI images. Write every file in English by default (headings, prose, tables, comments in sketches); use another language only when the user asks for it for that spec. The directory name is also the branch name (`feature/<n>-<feature-slug>`, `CLAUDE.md` "Branch workflow for agents").
 
 ## Steps
 
-1. **Settle the decisions with the user.** Run a grilling session (`mattpocock-skills:grill-with-docs`) over the draft, the code and `CONTEXT.md` until no decision is left assumed. Facts come from the code and the DB (via MCP: schema and aggregate counts only, never personal data). Never name the reference product the drafts imitate; describe its ideas as OpenPlany's own. Done when the user confirms shared understanding.
+1. **Settle the decisions with the user.** Run a grilling session (`mattpocock-skills:grilling`) over the draft, the code and `CONTEXT.md` until no decision is left assumed. Facts come from the code and the DB (via MCP: schema and aggregate counts only, never personal data). Done when the user confirms shared understanding.
 2. **Write the six files** in the format below: the five spec files first, then `6-test-case.md` from them. Done when every decision from step 1 has a `D` row, every part B section exists, and every `AC-`, `INV-`, edge case and adversarial input row has a `TC-` row.
 3. **Gate with spec review.** Dispatch the `spec-reviewer` subagent on the directory. Bring each blocker and major finding to the user with your recommended fix, apply the agreed fixes to every affected file, and keep IDs consistent across files. Each scenario that breaks a sketch (check P8) becomes an invariant or edge case plus a `TC-` row. Done when no blocker or major finding is open.
 4. **Split into tickets** with `mattpocock-skills:to-tickets`, writing `tickets/README.md` plus one `NN-slug.md` per ticket, using the ticket rules below. That skill sets `disable-model-invocation`, so the Skill tool cannot load it: read its `SKILL.md` (`~/.claude/plugins/cache/*/mattpocock-skills/*/skills/engineering/to-tickets/SKILL.md`, newest version) and follow it in place, including its step that shows the proposed breakdown to the user and waits for approval before writing files. This skill overrides two of its defaults: tickets go in the spec directory's `tickets/`, not `.scratch/`, and they may cite spec IDs and section numbers. Done when the user has approved the breakdown and every ticket file exists.

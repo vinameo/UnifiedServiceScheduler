@@ -111,7 +111,7 @@ function check(command, root) {
   const branch = runGit(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
   if (!branch.startsWith("feature/")) return null;
   const docsDir = branch.slice("feature/".length);
-  const ticketsDir = join(root, "packages", "docs", docsDir, "tickets");
+  const ticketsDir = join(root, "docs", "features", docsDir, "tickets");
   if (!existsSync(ticketsDir)) return null;
 
   const type = commitSubject(command)?.match(/^(\w+)[(!:]/)?.[1];

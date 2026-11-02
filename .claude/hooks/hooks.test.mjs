@@ -1,4 +1,4 @@
-// Tests for the PreToolUse hooks. Run with `pnpm test:hooks` (node:test).
+// Tests for the PreToolUse hooks. Run with `node --test .claude/hooks/hooks.test.mjs`.
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -209,7 +209,7 @@ describe("requireTicketDesignNotes", () => {
   let root;
   before(() => {
     root = makeRepo("feature/1-sample");
-    mkdirSync(join(root, "packages", "docs", "1-sample", "tickets"), {
+    mkdirSync(join(root, "docs", "features", "1-sample", "tickets"), {
       recursive: true,
     });
   });
@@ -228,6 +228,19 @@ describe("requireTicketDesignNotes", () => {
 
   it("allows exempt commit types", async () => {
     const result = await commit("chore(repo): tidy");
+    assert.equal(result.stdout, "");
+  });
+
+  it("allows a ticket commit with complete design notes", async () => {
+    writeFileSync(
+      join(root, "docs", "features", "1-sample", "tickets", "01-sample.design.md"),
+      [
+        "| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| API B2 sample | INV-01.1 | `api/routes/api.php:1` | none: read-only route | none: no soft deletes | none: grep finds one use | follow |",
+      ].join("\n"),
+    );
+    const result = await commit("feat(api): add sample");
     assert.equal(result.stdout, "");
   });
 });
