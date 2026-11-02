@@ -8,6 +8,7 @@ use App\Domain\Auth\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 
 class SignInService implements SignInServiceInterface
 {
@@ -21,6 +22,7 @@ class SignInService implements SignInServiceInterface
         if ($user === null) {
             // Constant-time check to prevent timing attack enumeration (INV-00.4)
             Hash::check($password, self::DUMMY_HASH);
+            Log::warning('Sign-in failed', ['outcome' => 'INVALID_CREDENTIALS']);
 
             throw new InvalidCredentials;
         }
@@ -30,17 +32,21 @@ class SignInService implements SignInServiceInterface
 
         if ($portal === Portal::STAFF && ! $isStaff) {
             Hash::check($password, $user->password);
+            Log::warning('Sign-in failed', ['outcome' => 'INVALID_CREDENTIALS']);
 
             throw new InvalidCredentials;
         }
 
         if ($portal === Portal::CUSTOMER && $isStaff) {
             Hash::check($password, $user->password);
+            Log::warning('Sign-in failed', ['outcome' => 'INVALID_CREDENTIALS']);
 
             throw new InvalidCredentials;
         }
 
         if (! Hash::check($password, $user->password)) {
+            Log::warning('Sign-in failed', ['outcome' => 'INVALID_CREDENTIALS']);
+
             throw new InvalidCredentials;
         }
 
