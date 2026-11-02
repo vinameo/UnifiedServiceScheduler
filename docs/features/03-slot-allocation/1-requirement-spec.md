@@ -54,8 +54,8 @@ Global optimisation (planning a whole day), splitting work, VIP priority, lunch 
 | D-03.5 | Reason order: no active technician with `level ≥ required level` → `NO_QUALIFIED_TECHNICIAN`; qualified ones exist but all are busy → `NO_TECHNICIAN_AVAILABLE`; someone is free but no bay → `NO_BAY_AVAILABLE` (also when the dealership has no bay of that type). Both technicians and bays busy → `NO_TECHNICIAN_AVAILABLE`. |
 | D-03.6 | "Booked minutes that day" = the sum of the technician's busy intervals within the local day of the searched range, ignoring the excluded appointment. |
 | D-03.7 | A `HELD` appointment with `expires_at <= now` does not count as busy in the snapshot (FR-10.5). Deactivating its allocations in the DB is F10's job. |
-| D-03.9 | No shifts (README D-G.16): F03 does not model working hours; the range is already inside opening hours (F02 `BookingTimeRules`). FR-03.1's shift rule and AC-03.6 no longer apply. |
-| D-03.10 | Qualification is `technician.level >= request.requiredLevel` (`Level::qualifiesFor`, F01). Ranking prefers the **lowest** qualifying level, replacing FR-03.4's "fewest skills" rule. |
+| D-03.9 | No shifts (README D-G.16, FR-03.1): F03 does not model working hours; the range is already inside opening hours (F02 `BookingTimeRules`). |
+| D-03.10 | Qualification is `technician.level >= request.requiredLevel` (`Level::qualifiesFor`, F01). Ranking prefers the **lowest** qualifying level (FR-03.4). |
 | D-03.8 | Preferences: `preferTechnicianId` (F09 keeps the same person) and `preferBayId` (F12 keeps the bay) move to the front **if** they qualify; otherwise they are ignored, without error. |
 
 ## A7. Open questions
@@ -171,7 +171,7 @@ Every AC runs as a unit test with `SnapshotBuilder`, unless noted.
 | AC-03.3 | An is booked 08:00–12:00 | Search 09:00–10:00 | An is removed | TC-03-03 |
 | AC-03.4 | A bay is free, every qualified technician is busy | Search that range | No pairs, reason `NO_TECHNICIAN_AVAILABLE` | TC-03-04 |
 | AC-03.5 | A technician is free, every matching bay is busy | Search | `NO_BAY_AVAILABLE` | TC-03-05 |
-| AC-03.6 | (Requirement AC about shifts — does not apply: no shifts, D-03.9.) Replaced by: Dũng (level 3) and Em (level 6) are free, An (level 2) too | Search the 20,000 km service (level 3) | Dũng and Em are candidates, An is not | TC-03-06 |
+| AC-03.6 | An (level 2), Dũng (level 3) and Em (level 6) are free | Search the 20,000 km service (level 3) | Dũng and Em are candidates, An is not | TC-03-06 |
 | AC-03.7 | An (level 2) and Em (level 6) both qualify for an oil change (level 1) | Search | An is ranked first (lowest level first, D-03.10) | TC-03-07 |
 | AC-03.8 | No active technician has level ≥ 5 | Search for the EV battery check (level 5) | `NO_QUALIFIED_TECHNICIAN` | TC-03-08 |
 | AC-03.9 (new) | Two technicians with the same level and different booked minutes; then equal minutes | Search twice, reversing the input order | Fewer minutes first; equal minutes by id; both runs give the same result | TC-03-09, TC-03-10 |

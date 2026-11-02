@@ -29,7 +29,7 @@ This document lists the requirements for the 12 features F01 to F12, plus **F00 
 | F09 | Reschedule | Could | Customer (own only), Service advisor | Staff: Reschedule. Customer: Change time |
 | F10 | Temporary hold for self-booking | Could | Customer | Customer: Temporary hold |
 | F11 | Notifications through the outbox | Could | System; Admin views the outbox | Staff: Notifications and outbox |
-| F12 | Day-of-service operations | Could | Workshop foreman, Service advisor | Staff: Workshop board, Report absence and reassign, Appointment details |
+| F12 | Day-of-service operations | Could | Workshop foreman, Service advisor | Staff: Workshop board, Appointment details |
 
 **How to read the IDs.** FR = functional requirement, BR = business rule, AC = acceptance criterion in Given / When / Then form, written so each one becomes a test. Must = in the code with tests. Should = build if time allows. Could = describe in the SDD, schema ready.
 
@@ -83,39 +83,43 @@ A customer creates an account with email and password, then signs in to the cust
 
 ## F01 · Master data
 
-The system knows what each dealership has, who can do which job, and when they work.
+The system knows what each dealership has, which technicians take bookings and at what level, and when the dealership is open.
 
-**Who:** Admin can view. All staff can read master data through the API. **Screen:** Staff web: Master data (read only in this version). **API:** `GET /api/v1/dealerships/{id}/service-types`, `/bays`, `/technicians`.
+**Who:** Admin can view, and can disable or enable a technician. All staff can read master data through the API. **Screen:** Staff web: Master data (read only in this version, except technician status). **API:** `GET /api/v1/dealerships/{id}/service-types`, `/bays`, `/technicians`; `PUT /api/v1/dealerships/{id}/technicians/{technicianId}/status`.
 
 | Item | Required fields | Notes |
 | --- | --- | --- |
 | Dealership | id, name, time zone (for example `Asia/Ho_Chi_Minh`), opening hours per weekday | Opening hours are local time |
-| Service type | id, name, duration in minutes, required skill, required bay type | Duration must be more than 0 |
+| Service type | id, name, duration in minutes, required level (1–7), required bay type | Duration must be more than 0 |
 | Service bay | id, dealership, name, bay type, active |  |
-| Technician | id, dealership, name, skills, active |  |
-| Technician shift | technician, weekday, start, end (local time) | A technician can have several shifts |
+| Technician | id, dealership, name, level (1–7), active | Level is the trade grade (bậc nghề), 1 lowest, 7 highest. No shifts: an active technician works whenever the dealership is open |
 | Staff account | id, email, password hash, role, dealership | From seed data (F00) |
 | Customer | id, account, full name, phone, email | Created at sign-up (F00) |
 | Vehicle | id, customer, licence plate, VIN, make, model | VIN and plate are unique |
 
 **Requirements**
 
-- **FR-01.1** Seed data is loaded by a database migration on start: at least 1 dealership, 3 service types, 3 bays of 2 types, 4 technicians with different skills, 3 staff accounts (one per role), 2 customers and 3 vehicles.
+- **FR-01.1** Seed data is loaded by a database migration on start: at least 1 dealership, 3 service types, 3 bays of 2 types, 4 technicians with different levels, 3 staff accounts (one per role), 2 customers and 3 vehicles.
 - **FR-01.2** The Master data screen shows service types, bays, technicians and opening hours in tabs. It shows a note that data comes from migrations in this version.
 - **FR-01.3** Read-only APIs return master data of the signed-in staff member's dealership only.
+- **FR-01.4** An admin can disable a technician (no new bookings) or enable them again. Disabling is refused with 409 `TECHNICIAN_HAS_BOOKINGS` while the technician still has upcoming appointments; the answer lists them so an advisor can move or cancel them first.
 
 **Business rules**
 
-- **BR-01.1** Each service type needs exactly one skill and one bay type. A technician qualifies when their skills include the required skill.
+- **BR-01.1** Each service type needs exactly one level and one bay type. A technician qualifies when they are active and their level is at or above the required level: a higher-level technician can also do lower-level services.
+- **BR-01.2** There are no shifts, attendance or leave in this version. An active technician is available whenever the dealership is open.
+- **BR-01.3** A disabled technician never has an upcoming appointment, even when a booking and the disable happen at the same moment.
 
 **Acceptance criteria**
 
 | AC | Given | When | Then |
 | --- | --- | --- | --- |
-| AC-01.1 | The app has just started on an empty database | Admin calls `GET /dealerships/{id}/service-types` | All 3 service types, each with duration and required skill |
+| AC-01.1 | The app has just started on an empty database | Admin calls `GET /dealerships/{id}/service-types` | All 3 service types, each with duration and required level |
 | AC-01.2 | Admin of dealership D1 is signed in | Call the same API for dealership D2 | 404 `DEALERSHIP_NOT_FOUND` |
+| AC-01.7 | Technician Chi has no upcoming appointment | Admin disables Chi | Chi is disabled and gets no new bookings |
+| AC-01.8 | Technician Chi has a confirmed booking tomorrow | Admin disables Chi | 409 `TECHNICIAN_HAS_BOOKINGS` with that booking listed; Chi stays active |
 
-**Out of scope:** screens to add or change master data.
+**Out of scope:** screens to add or change master data (other than technician status); technician skills, shifts, attendance and leave.
 
 ## F02 · Create a booking
 
@@ -161,12 +165,12 @@ For one time range and one service type, the system finds a technician and a bay
 
 **Requirements**
 
-- **FR-03.1** Technicians: same dealership, active, have the required skill, and have a shift that covers the whole `[start, end)`.
+- **FR-03.1** Technicians: same dealership, active, and level at or above the service's required level. There are no shifts: the caller has already checked that `[start, end)` is inside opening hours.
 - **FR-03.2** Bays: same dealership, active, the required bay type.
 - **FR-03.3** Remove technicians and bays that already have an active booking overlapping the range.
-- **FR-03.4** Rank technicians in a fixed order: fewest skills first, then fewest booked minutes that day, then by id. Rank bays by id. The same input always gives the same result, so it can be tested.
+- **FR-03.4** Rank technicians in a fixed order: lowest level first (keep high-level technicians free for harder jobs), then fewest booked minutes that day, then by id. Rank bays by id. The same input always gives the same result, so it can be tested.
 - **FR-03.5** The ranking rule sits behind one interface (`AllocationStrategy`), so it can be swapped later.
-- **FR-03.6** When nothing is found, give a clear reason: `NO_QUALIFIED_TECHNICIAN` (nobody has the skill), `NO_TECHNICIAN_AVAILABLE` (busy or off shift), `NO_BAY_AVAILABLE`.
+- **FR-03.6** When nothing is found, give a clear reason: `NO_QUALIFIED_TECHNICIAN` (no active technician has a high enough level), `NO_TECHNICIAN_AVAILABLE` (qualified technicians are all busy), `NO_BAY_AVAILABLE`.
 
 **Business rules**
 
@@ -182,9 +186,9 @@ For one time range and one service type, the system finds a technician and a bay
 | AC-03.3 | An is booked 08:00–12:00 | Search 09:00–10:00 (fully inside) | An is removed |
 | AC-03.4 | A bay is free, every qualified technician is busy | Search that range | No result, reason `NO_TECHNICIAN_AVAILABLE` |
 | AC-03.5 | A technician is free, every matching bay is busy | Search that range | Reason `NO_BAY_AVAILABLE` |
-| AC-03.6 | Technician B's shift ends at 12:00 | Search 11:30–12:30 | B is removed |
-| AC-03.7 | An has 1 skill, Chi has 4 skills, both qualify | Search | An is ranked first |
-| AC-03.8 | No technician has the skill `EV_HIGH_VOLTAGE` | Search for the EV battery check | Reason `NO_QUALIFIED_TECHNICIAN` |
+| AC-03.6 | An (level 2), Dũng (level 3) and Em (level 6) are free | Search the 20,000 km service (level 3) | Dũng and Em are candidates; An is not |
+| AC-03.7 | An (level 2) and Em (level 6) both qualify for an oil change (level 1) | Search | An is ranked first |
+| AC-03.8 | No active technician has level 5 or higher | Search for the EV battery check (level 5) | Reason `NO_QUALIFIED_TECHNICIAN` |
 
 ## F04 · No double booking, no duplicate requests
 
@@ -412,20 +416,20 @@ Confirmations, reminders and DMS updates are sent after the booking is saved, so
 
 ## F12 · Day-of-service operations
 
-The foreman records arrivals, no-shows and jobs that run late, and moves work when a technician is absent or a bay is broken.
+The foreman records arrivals, no-shows and jobs that run late, and the system moves the next booking when a late job is extended.
 
-**User story:** as a workshop foreman, I want to check cars in, mark customers who do not come, and move work when a technician is sick or a bay breaks.
+**User story:** as a workshop foreman, I want to check cars in, mark customers who do not come, and extend a job that runs late without double-booking the next customer.
 
-**Who:** Workshop foreman (all actions), Service advisor (check-in, no-show). **Screens:** Staff web: Workshop board (timeline by bay, technician list), Report absence and reassign, Appointment details (Check in, Mark no-show). **API:** `POST /api/v1/appointments/{id}/check-in`, `/start`, `/extend`, `/complete`, `/no-show`; `POST /api/v1/technicians/{id}/absences`; `POST /api/v1/bays/{id}/out-of-service`. Path names are proposed. All changes need `If-Match` and `Idempotency-Key`.
+**Who:** Workshop foreman (all actions), Service advisor (check-in, no-show). **Screens:** Staff web: Workshop board (timeline by bay, technician list), Appointment details (Check in, Mark no-show). **API:** `POST /api/v1/appointments/{id}/check-in`, `/start`, `/extend`, `/complete`, `/no-show`. Path names are proposed. All changes need `If-Match` and `Idempotency-Key`.
 
 **Requirements**
 
 - **FR-12.1** Allowed status changes: `CONFIRMED → CHECKED_IN → IN_PROGRESS → COMPLETED`, and `CONFIRMED → NO_SHOW`. Any other change returns 422 `INVALID_STATUS_TRANSITION`.
 - **FR-12.2** `COMPLETED` and `NO_SHOW` free the slot (`active = false`) in the same transaction.
-- **FR-12.3** Mark a technician absent or a bay out of service for a time range. The system lists the affected bookings and tries to reassign each one with F03.
-- **FR-12.4** Each reassignment is its own transaction with its own version check. A 412 on one booking does not stop the others.
+- **FR-12.3** (Removed in this version.) Marking a technician absent or a bay out of service is out of scope: there is no attendance or leave tracking. A technician who stops working is disabled in Master data (FR-01.4).
+- **FR-12.4** (Removed in this version, with FR-12.3.)
 - **FR-12.5** Bookings that cannot be reassigned go to a "contact the customer" list. They are never cancelled automatically.
-- **FR-12.6** When a job runs late, the foreman can extend it (for example by 30 minutes). The extra time passes the EXCLUDE check. If it clashes with the next booking, that booking is handled as in FR-12.3.
+- **FR-12.6** When a job runs late, the foreman can extend it (for example by 30 minutes). The extra time passes the EXCLUDE check. If it clashes with the next booking on the same technician or bay, that booking is moved to another technician or bay at the same time with F03, or put on the "contact the customer" list (FR-12.5). The extension and these moves are saved in one transaction.
 
 **Business rules**
 
@@ -437,7 +441,7 @@ The foreman records arrivals, no-shows and jobs that run late, and moves work wh
 | --- | --- | --- | --- |
 | AC-12.1 | A `CONFIRMED` booking | Check in, start, complete | Status ends `COMPLETED`; allocations are inactive |
 | AC-12.2 | A `COMPLETED` booking | Check in | 422 `INVALID_STATUS_TRANSITION` |
-| AC-12.3 | Technician An has 3 bookings tomorrow; Chi is free for 2 of them | Mark An absent tomorrow | 2 bookings move to Chi; 1 goes to "contact the customer" |
+| AC-12.3 | — | — | Removed in this version (technician absence is out of scope, FR-12.3) |
 | AC-12.4 | A job in Bay 1 runs late; the next booking in Bay 1 starts right after | Extend by 30 minutes | The extension is saved; the next booking is reassigned or listed for contact |
 
 ## Shared rules and open questions
@@ -452,7 +456,7 @@ Every feature follows these rules. Numbers marked "assumption" are ours; the bri
 | 401 | `UNAUTHENTICATED`, `INVALID_CREDENTIALS` | No session, session ended, wrong email or password |
 | 403 | `FORBIDDEN` | The role may not use this feature |
 | 404 | `DEALERSHIP_NOT_FOUND`, `SERVICE_TYPE_NOT_FOUND`, `VEHICLE_NOT_FOUND`, `APPOINTMENT_NOT_FOUND` | Not found, or it belongs to someone else |
-| 409 | `NO_AVAILABILITY`, `VEHICLE_ALREADY_BOOKED`, `REQUEST_IN_PROGRESS`, `EMAIL_ALREADY_USED` | Clashes with the current data |
+| 409 | `NO_AVAILABILITY`, `VEHICLE_ALREADY_BOOKED`, `REQUEST_IN_PROGRESS`, `EMAIL_ALREADY_USED`, `TECHNICIAN_HAS_BOOKINGS` | Clashes with the current data |
 | 410 | `HOLD_EXPIRED` | The 5-minute hold has ended |
 | 412 | `APPOINTMENT_MODIFIED` | The version in `If-Match` is old |
 | 422 | `START_IN_PAST`, `OUTSIDE_OPENING_HOURS`, `VEHICLE_NOT_OWNED_BY_CUSTOMER`, `INVALID_STATUS_TRANSITION`, `IDEMPOTENCY_KEY_MISMATCH`, `WEAK_PASSWORD`, `TOO_LATE_TO_CANCEL` | Correct format, but breaks a business rule |

@@ -79,7 +79,7 @@ Editing master data in the UI (except technician status); shifts, attendance, le
 | D-01.7 | The 15-minute slot step is an app constant (`BookingTimeRules::STEP_MINUTES`, F02), returned by the dealership API as `slotStepMinutes` for display; not stored in the DB. |
 | D-01.8 | Customers can read the dealership list and the **active** service types of any dealership; they cannot read bays or technicians. |
 | D-01.9 | One opening interval per day (unique on `dealership_id, weekday`); a day without a row is closed. |
-| D-01.10 | No shifts: an active technician is available for any range inside the dealership's opening hours (README D-G.16). FR-03.1's shift rule is replaced by the opening-hours check (F02 `BookingTimeRules`). |
+| D-01.10 | No shifts: an active technician is available for any range inside the dealership's opening hours (README D-G.16). The opening-hours check (F02 `BookingTimeRules`) is the only time rule (FR-03.1, BR-01.2). |
 | D-01.11 | Admins disable/enable a technician with `PUT /dealerships/{dealership}/technicians/{technician}/status` `{ "active": false }`. Disabling is refused with 409 `TECHNICIAN_HAS_BOOKINGS` while the technician has an **upcoming appointment**: an active `TECHNICIAN` allocation whose period ends after now, except expired holds (README D-G.6 clock). The answer lists up to 20 of them (reference, time, customer name) with the real `count`. Enabling is always allowed. Setting the current value again → 200, nothing changes. |
 | D-01.12 | `PUT` sets an absolute value, so repeating it is harmless: it needs neither `Idempotency-Key` (the rule covers writing `POST`s, README D-G.8) nor `If-Match` (technicians have no version; the last admin's value wins). |
 | D-01.13 | Race between disabling and booking: the disable transaction locks the technician row (`FOR UPDATE`) before counting upcoming appointments; every allocation write (F04 `AppointmentWriter`) reads the technician with `FOR SHARE` in its own transaction and treats an inactive technician like a taken one (next pair). So a booking either commits first (and disabling is refused) or sees the technician disabled. |
@@ -241,8 +241,8 @@ A bay's `supportedServiceTypeIds` = the `active` services of the same dealership
 | AC-01.4 (new) | A service with `active = false` | Customer and admin call service-types | The customer does not see it; the admin does, with `active: false` | TC-01-06 |
 | AC-01.5 (new) | Staff of D1 | `GET /dealerships` | Only D1 | TC-01-07 |
 | AC-01.6 (new) | Admin opens Master data | Screen loads | 4 tabs with counts; "Read only" note; no "Next holiday"; Technicians show a Level column and no Shift column | TC-01-11, TC-01-12 |
-| AC-01.7 (new) | Technician Chi has no upcoming appointment | Admin disables Chi | 200, `active: false`; F03 never offers Chi | TC-01-16 |
-| AC-01.8 (new) | Chi has a confirmed booking tomorrow | Admin disables Chi | 409 `TECHNICIAN_HAS_BOOKINGS`, `count 1`, the booking listed; Chi stays active | TC-01-17 |
+| AC-01.7 | Technician Chi has no upcoming appointment | Admin disables Chi | 200, `active: false`; F03 never offers Chi | TC-01-16 |
+| AC-01.8 | Chi has a confirmed booking tomorrow | Admin disables Chi | 409 `TECHNICIAN_HAS_BOOKINGS`, `count 1`, the booking listed; Chi stays active | TC-01-17 |
 | AC-01.9 (new) | A booking for Chi and Chi's disable run at the same moment | Both finish | Either the booking exists and Chi is active (409), or Chi is disabled and the booking used someone else or got 409; never a disabled Chi with an upcoming booking | TC-01-18 |
 | AC-01.10 (new) | Advisor; D2's technician; a disabled technician | Advisor disables; admin of D1 disables D2's technician; admin enables | 403; 404 `TECHNICIAN_NOT_FOUND`; 200 `active: true` | TC-01-20 |
 

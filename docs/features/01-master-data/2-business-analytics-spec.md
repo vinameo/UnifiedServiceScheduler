@@ -14,7 +14,7 @@ F03 (allocation) and every booking screen read master data. Wrong master data (s
 | --- | --- | --- |
 | E-01.1 | Requirements F01 | Entity list, FR-01.1 (minimums), BR-01.1, 2 ACs. |
 | E-01.2 | Master data draft | 3 services, 4 bays (2 Quick, 1 Standard, 1 EV), 5 technicians, 3 opening-hour rows, time zone, 15-minute step. |
-| E-01.3 | SDD §4 | `service_type(required_skill, required_bay_type)`, `technician_skill` with many skills — replaced by levels (README D-G.16). |
+| E-01.3 | SDD §4 (updated 2026-11-03) | `service_type(required_level, required_bay_type)`, `technician(level, active)`; technician rules in SDD §4 "Technicians". |
 | E-01.4 | User decision 2026-11-03 | Technicians have a level 1–7; a service needs one level; higher levels can do lower-level services; no shifts, attendance or leave; admins can disable technicians; disabling is refused while upcoming appointments exist. |
 | E-01.5 | `docker/php/entrypoint.sh` | Seeders must be safe to rerun (`RUN_SEEDERS`). |
 

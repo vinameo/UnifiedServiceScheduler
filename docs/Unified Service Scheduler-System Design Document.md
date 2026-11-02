@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-The Unified Service Scheduler lets customers and service advisors book a service appointment. Each appointment needs three things at the same time: a technician with the right skill, a service bay of the right type, and the customer's vehicle.
+The Unified Service Scheduler lets customers and service advisors book a service appointment. Each appointment needs three things at the same time: a technician whose level is high enough for the service, a service bay of the right type, and the customer's vehicle.
 
 The main risk is **double booking**. It can happen at two moments:
 
@@ -29,8 +29,8 @@ A dealership has a fixed number of technicians and bays. Today, bookings come fr
 | --- | --- |
 | Customer | Books, moves or cancels their own appointment in the app. A chosen slot is held for 5 minutes while they confirm. |
 | Service advisor | Creates and changes appointments at the desk, often while talking to the customer. |
-| Workshop foreman | Runs the day: check-in, start, extend a job that runs late, move work when a technician is absent. |
-| Admin | Keeps master data: services, bays, technicians, skills, opening hours. |
+| Workshop foreman | Runs the day: check-in, start, extend a job that runs late (the next booking is moved to another technician or bay, or flagged for a call). |
+| Admin | Keeps master data: services, bays, technicians and their levels, opening hours. Disables a technician who no longer takes bookings. |
 
 **Features in scope**
 
@@ -67,8 +67,8 @@ Both apps call one REST API. All modules write to the same PostgreSQL database i
 | --- | --- | --- |
 | Booking | Create, move, cancel and confirm appointments. Applies the status rules. | `appointment`, `idempotency_key` |
 | Allocation | Finds free slots. Picks a technician and a bay for a service. | `resource_allocation` |
-| Workshop | Check-in, start, overruns, moving work when a technician is absent. | uses Booking and Allocation |
-| Master data | Services, bays, technicians, skills, opening hours. | `service_type`, `bay`, `technician`, `technician_skill` |
+| Workshop | Check-in, start, overruns, moving the next booking when a job runs late. | uses Booking and Allocation |
+| Master data | Services, bays, technicians (with a level), opening hours. | `service_type`, `bay`, `technician` |
 | Notifications | Sends SMS, email and DMS messages after a commit. | `outbox` |
 
 Two background jobs run beside the API. The **hold expiry job** turns old HELD appointments into EXPIRED and frees their slot. The **outbox relay** sends messages to outside systems and retries up to 5 times.
@@ -83,11 +83,18 @@ Two tables carry the two protections: `appointment` holds the **version** for up
 | --- | --- | --- |
 | `appointment` | id, dealership\_id, customer\_id, vehicle\_id, service\_type\_id, status, start\_at, end\_at, expires\_at, **version**, updated\_at | One row per booking. `version` starts at 1 and goes up by 1 on every change. `expires_at` is used only for HELD. |
 | `resource_allocation` | id, appointment\_id, resource\_type, resource\_id, period, active | Three rows per booking: TECHNICIAN, BAY, VEHICLE. `period` is a time range `[start, end)`. The EXCLUDE constraint lives here. |
-| `service_type` | id, name, duration\_min, required\_skill, required\_bay\_type | Example: Oil change, 60 min, skill OIL, bay type STANDARD. |
-| `technician`, `technician_skill` | id, dealership\_id, name; technician\_id, skill | A technician can have many skills. |
+| `service_type` | id, name, duration\_min, required\_level, required\_bay\_type | Example: Oil change, 60 min, level 1, bay type QUICK. |
+| `technician` | id, dealership\_id, name, level, active | `level` is the trade grade, 1 (lowest) to 7 (highest). |
 | `bay` | id, dealership\_id, name, bay\_type | Example: Bay 2, type LIFT. |
 | `outbox` | id, event\_type, payload, status, attempts, next\_try\_at | Written in the same transaction as the booking. |
 | `idempotency_key` | key, request\_hash, response, created\_at | Stops the same request from being saved twice. |
+
+**Technicians**
+
+- Each technician has one **level** from 1 to 7 (trade grade). Each service type needs one level. A technician can do a service when they are active and their level is **at or above** the service's level, so a level-6 technician can also do a level-1 oil change.
+- When several technicians qualify, the system picks the **lowest** level first, then the one with the fewest booked minutes that day, then by id. This keeps high-level technicians free for the services only they can do.
+- There are no shifts, attendance or leave in this version: an active technician works whenever the dealership is open. Absences and bay outages are out of scope.
+- An admin can disable a technician (they get no new bookings) or enable them again. Disabling is refused (409 `TECHNICIAN_HAS_BOOKINGS`) while the technician still has upcoming appointments; an advisor must move or cancel those first. To stay correct when a booking and a disable happen at the same moment, the disable locks the technician row (`SELECT … FOR UPDATE`) before counting upcoming appointments, and every booking reads its technician with `FOR SHARE` inside its transaction and skips an inactive one like a taken one.
 
 **Status of an appointment**
 
@@ -199,8 +206,8 @@ In plain words: "For the same resource type and the same resource, no two active
 **How a new booking is saved**
 
 1. Check the Idempotency-Key. If we have seen this key before, return the saved answer and stop.
-2. Read free technicians and bays for the time, and make a short list of (technician, bay) pairs, best first.
-3. Start a transaction. Insert the appointment (version 1) and three `resource_allocation` rows: technician, bay and vehicle.
+2. Read free technicians (active, level high enough) and bays for the time, and make a short list of (technician, bay) pairs, best first.
+3. Start a transaction. Read the pair's technician with `FOR SHARE`; if it was disabled meanwhile, roll back and try the next pair. Insert the appointment (version 1) and three `resource_allocation` rows: technician, bay and vehicle.
 4. If the commit works, return **201 Created**.
 5. If we get 23P01 on the technician or bay, roll back and try the next pair from the list.
 6. If we get 23P01 on the vehicle, the car is already booked at that time. Return **409 VEHICLE\_ALREADY\_BOOKED** at once.
@@ -330,7 +337,8 @@ COMMIT;
 | Confirm a hold (F10) | Yes | No, the slot is already held | 412, 410 HOLD\_EXPIRED |
 | Reschedule (F09) | Yes | Yes, for the new time | 412 or 409 |
 | Extend a late job (F12) | Yes | Yes, for the extra time | 412 or 409 |
-| Reassign when a technician is absent (F12) | Yes, for each appointment | Yes, for the new technician | 412 for that appointment only |
+| Move the next booking when a job is extended (F12) | Yes, inside the extend transaction | Yes, for the new technician or bay | The whole extend is retried once, then 409 |
+| Disable a technician (F01) | No, it locks the technician row | No | 409 TECHNICIAN\_HAS\_BOOKINGS |
 | Cancel, no-show, complete (F07, F12) | Yes | No, it only frees the slot | 412 |
 | Check-in, start work (F12) | Yes | No, the time does not change | 412 |
 | Hold expiry job | Yes, plus `status = 'HELD'` | No | None: skips the booking if the customer just confirmed |
@@ -370,6 +378,7 @@ Every write needs an **Idempotency-Key**, and every change to an existing appoin
 | 422 | `INVALID_STATUS_TRANSITION` | For example, cancel a job that is already IN\_PROGRESS | Show the current status. |
 | 422 | `START_IN_PAST`, `OUTSIDE_OPENING_HOURS` | The time is not allowed | Pick another time. |
 | 422 | `VEHICLE_NOT_OWNED_BY_CUSTOMER` | The vehicle belongs to someone else | Check the customer and vehicle. |
+| 409 | `TECHNICIAN_HAS_BOOKINGS` | Disabling a technician who still has upcoming appointments | List those appointments; move or cancel them first. |
 
 **409 or 412?** 409 means "the time is taken", so the user picks another time. 412 means "your screen is old", so the user reloads first. Keeping them apart lets the app show the right message.
 

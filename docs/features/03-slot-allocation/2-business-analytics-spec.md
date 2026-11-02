@@ -49,7 +49,7 @@ Must: filtering, reasons, ranking, strategy, `OpeningHours`, snapshot. Should: `
 
 ### ADR-03.2 · Lowest level first
 
-- Replaces FR-03.4's "fewest skills first" now that technicians have a level instead of skills (README D-G.16, F01 ADR-01.1). Benefit: keeps high-level people for the services only they can do. Swappable through `AllocationStrategy` (FR-03.5).
+- FR-03.4 (updated 2026-11-03, when technicians got a level instead of skills, README D-G.16, F01 ADR-01.1). Benefit: keeps high-level people for the services only they can do. Swappable through `AllocationStrategy` (FR-03.5).
 - **Cost accepted:** junior technicians get the most work on busy days; booked minutes break ties only within one level.
 
 ### ADR-03.3 · Busy intervals come through `BusyIntervalReader`
