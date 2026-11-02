@@ -1,0 +1,34 @@
+{
+  "enabledPlugins": {
+    "code-review@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "evon@evondevkit": true,
+    "backend-tools@claudekit-skills": true,
+    "web-dev-tools@claudekit-skills": true,
+    "vercel@claude-plugins-official": true,
+    "agentic-bundle-business-analyst@agentic-awesome-skills": true,
+    "postgres-skills@postgres-skills": true,
+    "mattpocock-skills@claude-plugins-official": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/requireBranchReview.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Checking branch review before merge"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/requireTicketDesignNotes.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Checking ticket design notes before commit"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "require-branch-review": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ../.claude/hooks/requireBranchReview.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "require-ticket-design-notes": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ../.claude/hooks/requireTicketDesignNotes.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
