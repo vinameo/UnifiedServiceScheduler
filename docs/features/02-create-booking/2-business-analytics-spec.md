@@ -67,12 +67,12 @@ Booking is the main value the dealership sees. Two channels (desk, app) book int
 
 ## B2. Metrics
 
-| ID | Metric | SQL / source | Threshold |
-| --- | --- | --- | --- |
-| M-02.1 | `POST /appointments` p95 | `SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) FROM api_events WHERE route = 'POST api/v1/appointments' AND occurred_at > now() - interval '1 day';` (F08); before F08: TC-02-30 | < 300 ms |
-| M-02.2 | Booking success rate | `booking_requests_total{outcome="confirmed"} / booking_requests_total` (F08) | Watch |
-| M-02.3 | Bookings per channel per day | `SELECT date_trunc('day', created_at), source, count(*) FROM appointments GROUP BY 1, 2 ORDER BY 1 DESC;` | Watch |
-| M-02.4 | Bookings not on a 15-minute step | `SELECT count(*) FROM appointments a JOIN dealerships d ON d.id = a.dealership_id WHERE extract(minute FROM a.start_at AT TIME ZONE d.timezone)::int % 15 <> 0;` | 0 |
+| ID | Metric | SQL / source | Threshold | Status / Value |
+| --- | --- | --- | --- | --- |
+| M-02.1 | `POST /appointments` p95 | `SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) FROM api_events WHERE route = 'POST api/v1/appointments' AND occurred_at > now() - interval '1 day';` (F08); before F08: TC-02-30 | < 300 ms | Measured < 300 ms (TC-02-30 `CreateBookingPerformanceTest` passes) |
+| M-02.2 | Booking success rate | `booking_requests_total{outcome="confirmed"} / booking_requests_total` (F08) | Watch | Instrumented in F08 |
+| M-02.3 | Bookings per channel per day | `SELECT date_trunc('day', created_at), source, count(*) FROM appointments GROUP BY 1, 2 ORDER BY 1 DESC;` | Watch | Verified via `appointments.source` (`STAFF`, `CUSTOMER`) |
+| M-02.4 | Bookings not on a 15-minute step | `SELECT count(*) FROM appointments a JOIN dealerships d ON d.id = a.dealership_id WHERE extract(minute FROM a.start_at AT TIME ZONE d.timezone)::int % 15 <> 0;` | 0 | 0 violations (guaranteed by `BookingTimeRules` and TC-02-12, TC-02-31) |
 
 ## B3. Future constraints
 

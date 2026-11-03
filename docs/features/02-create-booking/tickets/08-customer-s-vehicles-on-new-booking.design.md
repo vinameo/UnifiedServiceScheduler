@@ -1,0 +1,7 @@
+# 08: Customer's vehicles on New booking — Design Notes
+
+| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| `GET /api/v1/customers/{customer}/vehicles` endpoint (API-02.3) | AC-02.15, INV-02.2 | `api/app/Domain/Booking/Repositories/VehicleRepository.php:20-30` and `api/app/Http/Controllers/Api/V1/CustomerController.php:30-45` | Read-only vehicle query scoped to customer_id; no concurrency issues. | Non-existent customer or invalid UUID answers 404 `CUSTOMER_NOT_FOUND`. | API-02.3 in `docs/features/02-create-booking/4-api-spec.md:25`. | follow |
+| `VehicleResource` JSON contract (API §B2) | AC-02.15 | `api/app/Http/Resources/VehicleResource.php:1-35` | Formats id, licencePlate, make, model, year, vin as camelCase. | Returns all vehicles belonging to the customer. | Reused in customer `GET /me/vehicles` and `POST /me/vehicles`. | follow |
+| Date picker min date evaluated in dealership timezone (WEB §B3, TC-02-37) | INV-02.4, TC-02-37 | `web/src/shared/format/time.ts:60-68` and `web/src/staff/booking/NewBookingPage.tsx:75-90` | Evaluated using `todayInZone(timeZone)`; ignores browser's local timezone. | Closed day shows "The dealership is closed on this day." and suppresses time slots. | WEB §B3 date specification in `docs/features/02-create-booking/5-web-spec.md:82`. | follow |

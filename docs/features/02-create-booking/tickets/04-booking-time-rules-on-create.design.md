@@ -1,0 +1,12 @@
+# 04: Booking time rules on create — Design Notes
+
+| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| `POST /appointments` refuses start in the past (AC-02.2) | INV-02.5, AC-02.2 | `api/app/Domain/Booking/BookingTimeRules.php:33-35` | `$start <= $now` throws `StartInPast` (422) during domain check. | Independent of database rows. | Shared with F09 (reschedule). | follow |
+| `POST /appointments` refuses ending after closing (AC-02.3) | INV-02.4, AC-02.3 | `api/app/Domain/Booking/BookingTimeRules.php:48-69` | Throws `OutsideOpeningHours` (422) with `closesAt`, `opensAt`, and `latestStart`. | Closed days handled by `latestStartFor` returning null. | Shared with F06 (time grid) and F09. | follow |
+| 15-minute step and timezone offset format check (AC-02.11) | INV-02.5, AC-02.11, D-02.6 | `api/app/Http/Requests/Booking/CreateAppointmentRequest.php:48-93` | FormRequest rejects dates without offset, with seconds != 0, or with minute not divisible by 15 (400 `VALIDATION_ERROR`). | Dealership timezone loaded from database. | Reused in customer booking API (ticket 10). | follow |
+| Closed day check (AC-02.13) | INV-02.4, AC-02.13 | `api/app/Domain/Booking/BookingTimeRules.php:67-72` | Throws `OutsideOpeningHours` with null `opensAt`, `closesAt`, and `latestStart`. | Closed day has no opening hours row (Sunday = 7). | Shared across booking create and reschedule. | follow |
+| Timezone conversion from dealership zone (INV-02.4) | INV-02.4, R-02.2 | `api/app/Domain/Booking/Services/BookingService.php:97-108` | UTC time range correctly converted to dealership local time (e.g. `2026-11-01T23:30:00Z` is 06:30 Monday in `Asia/Ho_Chi_Minh`). | Dealership timezone used throughout. | `BookingTimeRules::check` and `TimeRange`. | follow |
+| 90-day booking horizon (AC-02.12) | INV-02.5, AC-02.12 | `api/app/Domain/Booking/BookingTimeRules.php:40-44` | Throws `StartTooFarAhead` (422) with `maxDate` when booking exceeds 90 days. | Evaluated in dealership timezone against local date. | Shared with web date picker min/max bounds. | follow |
+| Boundary checks for clock now and closing time (TC-02-16) | BR-02.1, BR-02.2 | `api/app/Domain/Booking/BookingTimeRules.php:33,48` | Exactly `start === now` throws 422; service ending exactly at closing time (`end === closes_at`) succeeds with 201. | Checked in half-open interval `[start, end)`. | Boundary invariants defined in BR-02.1/2. | follow |
+

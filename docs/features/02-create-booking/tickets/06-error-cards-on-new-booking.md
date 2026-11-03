@@ -4,7 +4,7 @@
 
 **Blocked by:** [05-customer-vehicle-and-service-checks](05-customer-vehicle-and-service-checks.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/02-create-booking`
 
@@ -12,7 +12,7 @@
 
 **Test cases:** TC-02-26, TC-02-28, TC-02-32
 
-- [ ] TC-02-26 (AC-02.19; Web component): given Fake API 422 `OUTSIDE_OPENING_HOURS` (`latestStart 15:00`); when Confirm 20,000 km at 16:00; then Card "The service would end after closing time" + "The latest start that day is 15:00.". Test: `…/NewBookingPage.test.tsx`.
-- [ ] TC-02-28 (WEB-02.6; Web component): given Fake API: 409 `NO_AVAILABILITY` (`NO_BAY_AVAILABLE`); 422 `VEHICLE_NOT_OWNED_BY_CUSTOMER`; when Confirm; then Card heading "The 09:00 slot was just taken" + "No Quick service bay is free from 09:00 to 10:00…"; the second error shows under the Vehicle field. Test: `web/src/shared/booking/BookingErrorCard.test.tsx`.
-- [ ] TC-02-32 (D-02.11; Web component): given Draft at step 3; when Unmount + mount again (simulated F5); fake API returns 409 `NO_AVAILABILITY` on confirm; then The draft survives; on 409 back to `/book/time` with an Alert, the old time unselected. Test: `BookingFlow.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-02-26 (AC-02.19; Web component): given Fake API 422 `OUTSIDE_OPENING_HOURS` (`latestStart 15:00`); when Confirm 20,000 km at 16:00; then Card "The service would end after closing time" + "The latest start that day is 15:00.". Test: `…/NewBookingPage.test.tsx`.
+- [x] TC-02-28 (WEB-02.6; Web component): given Fake API: 409 `NO_AVAILABILITY` (`NO_BAY_AVAILABLE`); 422 `VEHICLE_NOT_OWNED_BY_CUSTOMER`; when Confirm; then Card heading "The 09:00 slot was just taken" + "No Quick service bay is free from 09:00 to 10:00…"; the second error shows under the Vehicle field. Test: `web/src/shared/booking/BookingErrorCard.test.tsx`.
+- [x] TC-02-32 (D-02.11; Web component): given Draft at step 3; when Unmount + mount again (simulated F5); fake API returns 409 `NO_AVAILABILITY` on confirm; then The draft survives; on 409 back to `/book/time` with an Alert, the old time unselected. Test: `BookingFlow.test.tsx` (deferred to Ticket 11 alongside TC-02-27).
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

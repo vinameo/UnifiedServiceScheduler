@@ -26,6 +26,14 @@ class MasterDataRepository implements MasterDataRepositoryInterface
         return array_values($query->get()->all());
     }
 
+    public function findDealership(string $id): ?Dealership
+    {
+        return Dealership::query()
+            ->with(['openingHours' => fn ($q) => $q->orderBy('weekday')])
+            ->where('id', $id)
+            ->first();
+    }
+
     /**
      * @return list<ServiceType>
      */

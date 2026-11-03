@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AppointmentController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BayController;
+use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ServiceTypeController;
@@ -27,6 +29,8 @@ Route::post('/auth/staff/sign-in', [AuthController::class, 'staffSignIn'])
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/sign-out', [AuthController::class, 'signOut']);
     Route::get('/me', [MeController::class, 'me']);
+    Route::get('/me/vehicles', [MeController::class, 'vehicles'])->middleware('can:customer');
+    Route::post('/me/vehicles', [MeController::class, 'addVehicle'])->middleware(['can:customer', 'idempotent']);
 
     // Master data (F01)
     Route::get('/dealerships', [DealershipController::class, 'index']);
@@ -35,4 +39,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dealerships/{dealership}/bays', [BayController::class, 'index'])->middleware('can:staff');
     Route::get('/dealerships/{dealership}/technicians', [TechnicianController::class, 'index'])->middleware('can:staff');
     Route::put('/dealerships/{dealership}/technicians/{technician}/status', [TechnicianController::class, 'updateStatus'])->middleware('can:admin');
+
+    // Booking (F02)
+    Route::post('/appointments', [AppointmentController::class, 'store'])
+        ->middleware(['can:create-appointment', 'idempotent']);
+
+    // Customers (F02)
+    Route::get('/customers', [CustomerController::class, 'index'])
+        ->middleware(['can:search-customers', 'throttle:60,1']);
+    Route::get('/customers/{customer}/vehicles', [CustomerController::class, 'vehicles'])
+        ->middleware('can:search-customers');
 });

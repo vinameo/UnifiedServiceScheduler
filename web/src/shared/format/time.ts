@@ -61,6 +61,15 @@ export function formatInZone(
   return ''
 }
 
+export function todayInZone(timeZone: string, now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
+
 export function formatAppointmentSlot(startIso: string, endIso: string, timeZone: string): string {
   const day = formatInZone(startIso, timeZone, 'dayShort')
   const range = formatInZone(startIso, timeZone, 'range', endIso)

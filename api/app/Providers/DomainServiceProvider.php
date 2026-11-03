@@ -11,6 +11,8 @@ use App\Domain\Auth\Repositories\CustomerRepository;
 use App\Domain\Auth\Repositories\CustomerRepositoryInterface;
 use App\Domain\Auth\Repositories\UserRepository;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
+use App\Domain\Auth\Services\CustomerService;
+use App\Domain\Auth\Services\CustomerServiceInterface;
 use App\Domain\Auth\Services\SignInService;
 use App\Domain\Auth\Services\SignInServiceInterface;
 use App\Domain\Auth\Services\SignUpService;
@@ -23,12 +25,16 @@ use App\Domain\Booking\Repositories\AppointmentRepository;
 use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
 use App\Domain\Booking\Repositories\ResourceAllocationRepository;
 use App\Domain\Booking\Repositories\ResourceAllocationRepositoryInterface;
+use App\Domain\Booking\Repositories\VehicleRepository;
+use App\Domain\Booking\Repositories\VehicleRepositoryInterface;
 use App\Domain\Booking\Services\AppointmentEventRecorder;
 use App\Domain\Booking\Services\AppointmentEventRecorderInterface;
 use App\Domain\Booking\Services\AppointmentTransition;
 use App\Domain\Booking\Services\AppointmentTransitionInterface;
 use App\Domain\Booking\Services\AppointmentWriter;
 use App\Domain\Booking\Services\AppointmentWriterInterface;
+use App\Domain\Booking\Services\BookingService;
+use App\Domain\Booking\Services\BookingServiceInterface;
 use App\Domain\MasterData\Repositories\MasterDataRepository;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\MasterData\Services\MasterDataService;
@@ -53,6 +59,7 @@ class DomainServiceProvider extends ServiceProvider
         // Auth (F00)
         UserRepositoryInterface::class => UserRepository::class,
         CustomerRepositoryInterface::class => CustomerRepository::class,
+        CustomerServiceInterface::class => CustomerService::class,
         UserServiceInterface::class => UserService::class,
         SignInServiceInterface::class => SignInService::class,
         SignUpServiceInterface::class => SignUpService::class,
@@ -72,9 +79,11 @@ class DomainServiceProvider extends ServiceProvider
         // Booking (F04)
         ResourceAllocationRepositoryInterface::class => ResourceAllocationRepository::class,
         AppointmentRepositoryInterface::class => AppointmentRepository::class,
+        VehicleRepositoryInterface::class => VehicleRepository::class,
         AppointmentWriterInterface::class => AppointmentWriter::class,
         AppointmentEventRecorderInterface::class => AppointmentEventRecorder::class,
         AppointmentTransitionInterface::class => AppointmentTransition::class,
+        BookingServiceInterface::class => BookingService::class,
 
         // Notifications (F04, F11)
         OutboxWriterInterface::class => OutboxWriter::class,

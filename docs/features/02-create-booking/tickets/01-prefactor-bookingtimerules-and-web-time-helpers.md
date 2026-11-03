@@ -4,7 +4,7 @@
 
 **Blocked by:** F04 [19-acceptance](../../04-booking-integrity/tickets/19-acceptance.md) (the whole F04 branch merged to `develop`).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/02-create-booking`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** TC-02-29
 
-- [ ] TC-02-29 (WEB-02.1–02.3; Web unit): when `formatInZone('2026-11-01T23:30:00Z','Asia/Ho_Chi_Minh','dayLong')`; `localSlotsForDay` Saturday (08–12), 60 min; `maskPhone('0903123218')`; then "Monday, 2 Nov 2026"; 08:00…11:00 (13 times); "0903 *** 218". Test: `web/src/shared/format/*.test.ts`.
-- [ ] No change users can see; existing tests stay green unchanged
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-02-29 (WEB-02.1–02.3; Web unit): when `formatInZone('2026-11-01T23:30:00Z','Asia/Ho_Chi_Minh','dayLong')`; `localSlotsForDay` Saturday (08–12), 60 min; `maskPhone('0903123218')`; then "Monday, 2 Nov 2026"; 08:00…11:00 (13 times); "0903 *** 218". Test: `web/src/shared/format/*.test.ts`.
+- [x] No change users can see; existing tests stay green unchanged
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

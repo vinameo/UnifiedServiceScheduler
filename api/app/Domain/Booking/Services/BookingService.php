@@ -1,0 +1,143 @@
+<?php
+
+namespace App\Domain\Booking\Services;
+
+use App\Domain\Allocation\AllocationRequest;
+use App\Domain\Allocation\CandidateFinderInterface;
+use App\Domain\Allocation\OpeningHours;
+use App\Domain\Auth\Repositories\CustomerRepositoryInterface;
+use App\Domain\Auth\Role;
+use App\Domain\Booking\AppointmentStatus;
+use App\Domain\Booking\BookingTimeRules;
+use App\Domain\Booking\CreateBookingInput;
+use App\Domain\Booking\Exceptions\CustomerNotFound;
+use App\Domain\Booking\Exceptions\NoAvailability;
+use App\Domain\Booking\Exceptions\VehicleNotFound;
+use App\Domain\Booking\Exceptions\VehicleNotOwnedByCustomer;
+use App\Domain\Booking\NewAppointment;
+use App\Domain\Booking\Repositories\AllocationSnapshotRepositoryInterface;
+use App\Domain\Booking\Repositories\VehicleRepositoryInterface;
+use App\Domain\MasterData\Exceptions\DealershipNotFound;
+use App\Domain\MasterData\Exceptions\ServiceTypeNotFound;
+use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
+use App\Models\Appointment;
+use App\Models\User;
+use Carbon\CarbonImmutable;
+use DateTimeZone;
+
+final readonly class BookingService implements BookingServiceInterface
+{
+    public function __construct(
+        private MasterDataRepositoryInterface $masterDataRepository,
+        private CustomerRepositoryInterface $customerRepository,
+        private VehicleRepositoryInterface $vehicleRepository,
+        private AllocationSnapshotRepositoryInterface $snapshotRepository,
+        private CandidateFinderInterface $candidateFinder,
+        private AppointmentWriterInterface $appointmentWriter,
+    ) {}
+
+    public function create(CreateBookingInput $input, User $actor): Appointment
+    {
+        $role = $actor->role instanceof Role ? $actor->role : Role::tryFrom((string) $actor->role);
+        $isCustomer = $role === Role::CUSTOMER;
+
+        // 1. Dealership
+        $dealershipId = $isCustomer ? $input->dealershipId : $actor->dealership_id;
+        if ($dealershipId === null) {
+            throw new DealershipNotFound;
+        }
+
+        $dealership = $this->masterDataRepository->findDealership($dealershipId);
+        if ($dealership === null) {
+            throw new DealershipNotFound;
+        }
+
+        // 2. Service type
+        $serviceType = $this->masterDataRepository->serviceTypeFor($dealershipId, $input->serviceTypeId);
+        if ($serviceType === null || ! $serviceType->active) {
+            throw new ServiceTypeNotFound;
+        }
+
+        // 3. Customer
+        if ($isCustomer) {
+            $customer = $actor->customer;
+            if ($customer === null) {
+                throw new CustomerNotFound;
+            }
+        } else {
+            if ($input->customerId === null) {
+                throw new CustomerNotFound;
+            }
+            $customer = $this->customerRepository->find($input->customerId);
+            if ($customer === null) {
+                throw new CustomerNotFound;
+            }
+        }
+
+        // 4. Vehicle
+        $vehicle = $this->vehicleRepository->find($input->vehicleId);
+        if ($vehicle === null) {
+            throw new VehicleNotFound;
+        }
+
+        if ($vehicle->customer_id !== $customer->id) {
+            if ($isCustomer) {
+                throw new VehicleNotFound;
+            }
+            throw new VehicleNotOwnedByCustomer;
+        }
+
+        // 5. BookingTimeRules
+        $now = CarbonImmutable::now();
+        $openingHoursList = $this->masterDataRepository->openingHours($dealershipId);
+        $openingHoursMap = [];
+        foreach ($openingHoursList as $oh) {
+            $openingHoursMap[$oh->weekday] = [
+                'opens_at' => $oh->opens_at,
+                'closes_at' => $oh->closes_at,
+            ];
+        }
+
+        $openingHours = OpeningHours::fromWeekdayMap($openingHoursMap, $dealership->timezone);
+        $range = BookingTimeRules::check($input->desiredStart, $serviceType->duration_minutes, $openingHours, $now);
+
+        // 6. Candidate finder
+        $tz = new DateTimeZone($dealership->timezone);
+        $localDate = $range->start->setTimezone($tz)->toDateString();
+        $snapshot = $this->snapshotRepository->forDay($dealershipId, $localDate, $now);
+
+        $allocationRequest = new AllocationRequest(
+            dealershipId: $dealershipId,
+            requiredLevel: $serviceType->requiredLevel(),
+            requiredBayType: $serviceType->required_bay_type,
+            range: $range,
+        );
+
+        $result = $this->candidateFinder->find($allocationRequest, $snapshot);
+        if (empty($result->pairs)) {
+            throw new NoAvailability(
+                reason: $result->failure !== null ? $result->failure->value : 'SLOT_TAKEN',
+                requestedStart: $range->start,
+                requestedEnd: $range->end,
+                dealershipId: $dealershipId,
+            );
+        }
+
+        // 7. Write appointment
+        $source = $isCustomer ? 'CUSTOMER' : 'STAFF';
+        $newAppointment = new NewAppointment(
+            dealershipId: $dealershipId,
+            customerId: $customer->id,
+            vehicleId: $vehicle->id,
+            serviceTypeId: $serviceType->id,
+            range: $range,
+            status: AppointmentStatus::CONFIRMED,
+            expiresAt: null,
+            reminderOptIn: $input->reminderOptIn,
+            source: $source,
+            createdByUserId: $actor->id,
+        );
+
+        return $this->appointmentWriter->create($newAppointment, $result->pairs, $now);
+    }
+}
