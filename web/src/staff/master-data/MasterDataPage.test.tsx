@@ -16,7 +16,9 @@ describe('MasterDataPage', () => {
     apiMock.restore()
   })
 
-  function setupStandardMocks() {
+  function setupStandardMocks(options?: {
+    technicians?: () => Array<{ id: string; name: string; level: number; active: boolean }>
+  }) {
     apiMock.get('/me', [
       200,
       {
@@ -109,18 +111,25 @@ describe('MasterDataPage', () => {
       },
     ])
 
-    apiMock.get(`/dealerships/${dealershipId}/technicians`, [
-      200,
-      {
-        data: [
-          { id: 'tech-1', name: 'Trần Minh An', level: 2, active: true },
-          { id: 'tech-2', name: 'Lý Hoàng Dũng', level: 3, active: true },
-          { id: 'tech-3', name: 'Võ Thị Chi', level: 4, active: true },
-          { id: 'tech-4', name: 'Ngô Bảo Em', level: 6, active: true },
-          { id: 'tech-5', name: 'Huỳnh Tấn Phát', level: 1, active: false },
-        ],
-      },
-    ])
+    if (options?.technicians) {
+      apiMock.get(`/dealerships/${dealershipId}/technicians`, () => [
+        200,
+        { data: options.technicians!() },
+      ])
+    } else {
+      apiMock.get(`/dealerships/${dealershipId}/technicians`, [
+        200,
+        {
+          data: [
+            { id: 'tech-1', name: 'Trần Minh An', level: 2, active: true },
+            { id: 'tech-2', name: 'Lý Hoàng Dũng', level: 3, active: true },
+            { id: 'tech-3', name: 'Võ Thị Chi', level: 4, active: true },
+            { id: 'tech-4', name: 'Ngô Bảo Em', level: 6, active: true },
+            { id: 'tech-5', name: 'Huỳnh Tấn Phát', level: 1, active: false },
+          ],
+        },
+      ])
+    }
   }
 
   it('TC-01-11: renders 4 tabs with counts 3/4/5, read-only badges and seed callout without holiday text', async () => {
@@ -342,5 +351,194 @@ describe('MasterDataPage', () => {
 
     // No next holiday box
     expect(panelHrs.queryByText(/holiday/i)).not.toBeInTheDocument()
+  })
+
+  it('TC-01-21: disable refused with 409 shows blocked appointments and enable succeeds (WEB-01.5)', async () => {
+    let technicians = [
+      { id: 'tech-1', name: 'Trần Minh An', level: 2, active: true },
+      { id: 'tech-2', name: 'Lý Hoàng Dũng', level: 3, active: true },
+      { id: 'tech-3', name: 'Võ Thị Chi', level: 4, active: true },
+      { id: 'tech-4', name: 'Ngô Bảo Em', level: 6, active: true },
+      { id: 'tech-5', name: 'Huỳnh Tấn Phát', level: 1, active: false },
+    ]
+
+    setupStandardMocks({
+      technicians: () => technicians,
+    })
+
+    const appointments = Array.from({ length: 20 }, (_, i) => {
+      const num = (i + 1).toString().padStart(4, '0')
+      return {
+        id: `apt-${i + 1}`,
+        reference: `APT-20261103-${num}`,
+        start: '2026-11-03T09:00:00+07:00',
+        end: '2026-11-03T10:00:00+07:00',
+        customerName: `Customer ${i + 1}`,
+      }
+    })
+
+    // Mock disable tech-3 (Võ Thị Chi) -> 409 TECHNICIAN_HAS_BOOKINGS with count: 23, 20 appointments
+    apiMock.put(`/dealerships/${dealershipId}/technicians/tech-3/status`, () =>
+      apiMock.replyProblem(
+        409,
+        'TECHNICIAN_HAS_BOOKINGS',
+        'Technician has upcoming appointments.',
+        {
+          detail: 'Server internal detail that must never be displayed in the UI',
+          count: 23,
+          appointments,
+        },
+      ),
+    )
+
+    // Mock enable tech-5 (Huỳnh Tấn Phát) -> 200
+    apiMock.put(`/dealerships/${dealershipId}/technicians/tech-5/status`, () => {
+      technicians = technicians.map((t) =>
+        t.id === 'tech-5' ? { ...t, active: true } : t,
+      )
+      return [
+        200,
+        { data: { id: 'tech-5', name: 'Huỳnh Tấn Phát', level: 1, active: true } },
+      ]
+    })
+
+    const user = userEvent.setup()
+    renderRoute('/staff/master-data')
+
+    // Navigate to Technicians tab
+    const techTab = await screen.findByRole('tab', { name: /Technicians/i })
+    await user.click(techTab)
+
+    // 1. Click "Disable" on row Võ Thị Chi
+    const rowChi = screen.getByText('Võ Thị Chi').closest('tr')!
+    const disableChiBtn = within(rowChi).getByRole('button', { name: 'Disable' })
+    await user.click(disableChiBtn)
+
+    // Confirm dialog opens
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('Disable Võ Thị Chi?')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Võ Thị Chi will stop getting new appointments. You can enable them again at any time.',
+      ),
+    ).toBeInTheDocument()
+
+    // 2. Click confirm "Disable technician"
+    const confirmBtn = screen.getByRole('button', { name: 'Disable technician' })
+    await user.click(confirmBtn)
+
+    // 3. Modal transitions to blocked view
+    // Verifies: disable.blocked copy with count: 23
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Võ Thị Chi still has 23 upcoming appointments. Move or cancel them before disabling.',
+        ),
+      ).toBeInTheDocument()
+    })
+
+    // Assert server detail is NOT shown (fails if server detail shown)
+    expect(
+      screen.queryByText(/Server internal detail that must never be displayed/),
+    ).not.toBeInTheDocument()
+
+    // Assert 20 references exist with links to /staff/appointments/{id}
+    for (let i = 1; i <= 20; i++) {
+      const num = i.toString().padStart(4, '0')
+      const ref = `APT-20261103-${num}`
+      const link = screen.getByRole('link', { name: ref })
+      expect(link).toBeInTheDocument()
+      expect(link).toHaveAttribute('href', `/staff/appointments/apt-${i}`)
+    }
+
+    // Assert "and 3 more" (since count: 23 and appointments.length: 20)
+    expect(screen.getByText('and 3 more')).toBeInTheDocument()
+
+    // Assert only a "Close" button is present in the dialog actions
+    expect(screen.queryByRole('button', { name: 'Disable technician' })).not.toBeInTheDocument()
+    const closeBtn = screen.getByRole('button', { name: 'Close' })
+    expect(closeBtn).toBeInTheDocument()
+
+    // 4. Click Close
+    await user.click(closeBtn)
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    // Assert row unchanged (Võ Thị Chi still active/Working)
+    const rowChiAfter = screen.getByText('Võ Thị Chi').closest('tr')!
+    expect(within(rowChiAfter).getByText('Working')).toBeInTheDocument()
+    expect(within(rowChiAfter).getByRole('button', { name: 'Disable' })).toBeInTheDocument()
+
+    // 5. Click "Enable" on disabled row (Huỳnh Tấn Phát)
+    const rowPhat = screen.getByText('Huỳnh Tấn Phát').closest('tr')!
+    expect(within(rowPhat).getByText('Not taking bookings')).toBeInTheDocument()
+    const enablePhatBtn = within(rowPhat).getByRole('button', { name: 'Enable' })
+    await user.click(enablePhatBtn)
+
+    // 6. Assert notification "Huỳnh Tấn Phát takes bookings again."
+    await waitFor(() => {
+      expect(
+        screen.getByText('Huỳnh Tấn Phát takes bookings again.'),
+      ).toBeInTheDocument()
+    })
+
+    // Row updates after refetch to active / Working / Disable button
+    await waitFor(() => {
+      const rowPhatUpdated = screen.getByText('Huỳnh Tấn Phát').closest('tr')!
+      expect(within(rowPhatUpdated).getByText('Working')).toBeInTheDocument()
+      expect(within(rowPhatUpdated).getByRole('button', { name: 'Disable' })).toBeInTheDocument()
+    })
+  })
+
+  it('disables an active technician with confirmation dialog and shows success notification (WEB-01.5)', async () => {
+    let technicians = [
+      { id: 'tech-1', name: 'Trần Minh An', level: 2, active: true },
+      { id: 'tech-2', name: 'Lý Hoàng Dũng', level: 3, active: true },
+    ]
+
+    setupStandardMocks({
+      technicians: () => technicians,
+    })
+
+    apiMock.put(`/dealerships/${dealershipId}/technicians/tech-1/status`, () => {
+      technicians = technicians.map((t) =>
+        t.id === 'tech-1' ? { ...t, active: false } : t,
+      )
+      return [
+        200,
+        { data: { id: 'tech-1', name: 'Trần Minh An', level: 2, active: false } },
+      ]
+    })
+
+    const user = userEvent.setup()
+    renderRoute('/staff/master-data')
+
+    const techTab = await screen.findByRole('tab', { name: /Technicians/i })
+    await user.click(techTab)
+
+    const rowAn = screen.getByText('Trần Minh An').closest('tr')!
+    const disableBtn = within(rowAn).getByRole('button', { name: 'Disable' })
+    await user.click(disableBtn)
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('Disable Trần Minh An?')).toBeInTheDocument()
+
+    const confirmBtn = screen.getByRole('button', { name: 'Disable technician' })
+    await user.click(confirmBtn)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    expect(
+      await screen.findByText('Trần Minh An no longer takes bookings.'),
+    ).toBeInTheDocument()
+
+    await waitFor(() => {
+      const rowAnUpdated = screen.getByText('Trần Minh An').closest('tr')!
+      expect(within(rowAnUpdated).getByText('Not taking bookings')).toBeInTheDocument()
+      expect(within(rowAnUpdated).getByRole('button', { name: 'Enable' })).toBeInTheDocument()
+    })
   })
 })

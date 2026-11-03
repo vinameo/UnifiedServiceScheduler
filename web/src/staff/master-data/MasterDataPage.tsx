@@ -1,10 +1,12 @@
 import {
   Alert,
+  Anchor,
   Badge,
   Box,
   Button,
   Container,
   Group,
+  Modal,
   Skeleton,
   Stack,
   Table,
@@ -12,14 +14,21 @@ import {
   Text,
   Title,
 } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router'
 import { useMe } from '../../shared/auth/useMe'
 import {
   useBays,
   useDealership,
   useServiceTypes,
   useTechnicians,
+  useSetTechnicianActive,
+  type Technician,
+  type TechnicianAppointmentPreview,
 } from '../../shared/api/masterData'
+import { toProblem } from '../../shared/api/problem'
+import { formatAppointmentSlot } from '../../shared/format/time'
 import { bayTypeLabel, levelLabel } from '../../shared/copy/enums'
 import { formatTimezoneOffset, groupWeekdays } from '../../shared/format/weekdays'
 import { masterDataCopy as copy } from './copy'
@@ -50,6 +59,62 @@ export function MasterDataPage() {
   } = useTechnicians(dealershipId)
 
   const [activeTab, setActiveTab] = useState<string | null>('service-types')
+  const [technicianToDisable, setTechnicianToDisable] = useState<Technician | null>(null)
+  const [blockedInfo, setBlockedInfo] = useState<{
+    count: number
+    appointments: TechnicianAppointmentPreview[]
+  } | null>(null)
+
+  const setTechnicianActiveMutation = useSetTechnicianActive(dealershipId)
+
+  const handleOpenDisableModal = (tech: Technician) => {
+    setBlockedInfo(null)
+    setTechnicianToDisable(tech)
+  }
+
+  const handleCloseModal = () => {
+    setTechnicianToDisable(null)
+    setBlockedInfo(null)
+  }
+
+  const handleConfirmDisable = async () => {
+    if (!technicianToDisable) return
+    try {
+      await setTechnicianActiveMutation.mutateAsync({
+        technicianId: technicianToDisable.id,
+        active: false,
+      })
+      notifications.show({
+        message: copy.disable.notification(technicianToDisable.name),
+        color: 'green',
+      })
+      handleCloseModal()
+    } catch (err: unknown) {
+      const problem = toProblem(err)
+      if (problem?.code === 'TECHNICIAN_HAS_BOOKINGS') {
+        const count = typeof problem.count === 'number' ? problem.count : 0
+        const appointments = Array.isArray(problem.appointments)
+          ? (problem.appointments as TechnicianAppointmentPreview[])
+          : []
+        setBlockedInfo({ count, appointments })
+      }
+    }
+  }
+
+  const handleEnableTechnician = async (tech: Technician) => {
+    try {
+      await setTechnicianActiveMutation.mutateAsync({
+        technicianId: tech.id,
+        active: true,
+      })
+      notifications.show({
+        message: copy.enable.notification(tech.name),
+        color: 'green',
+      })
+    } catch {
+      // ignore
+    }
+  }
 
   const openingHours = dealership?.openingHours
   const openingHoursGroups = useMemo(() => {
@@ -295,8 +360,19 @@ export function MasterDataPage() {
                               size="xs"
                               variant="light"
                               color={tech.active ? 'red' : 'blue'}
+                              loading={
+                                setTechnicianActiveMutation.isPending &&
+                                setTechnicianActiveMutation.variables?.technicianId === tech.id
+                              }
+                              onClick={() => {
+                                if (tech.active) {
+                                  handleOpenDisableModal(tech)
+                                } else {
+                                  handleEnableTechnician(tech)
+                                }
+                              }}
                             >
-                              {tech.active ? copy.disable : copy.enable}
+                              {tech.active ? copy.disable.label : copy.enable.label}
                             </Button>
                           </Table.Td>
                         )}
@@ -394,6 +470,93 @@ export function MasterDataPage() {
           </Tabs.Panel>
         </Tabs>
       </Stack>
+
+      <Modal
+        opened={technicianToDisable !== null}
+        onClose={handleCloseModal}
+        title={technicianToDisable ? copy.disable.title(technicianToDisable.name) : ''}
+        centered
+        size={blockedInfo ? 'lg' : 'md'}
+        transitionProps={{ duration: 0 }}
+      >
+        {technicianToDisable && (
+          <Stack gap="md">
+            {blockedInfo ? (
+              <>
+                <Text size="sm">
+                  {copy.disable.blocked(technicianToDisable.name, blockedInfo.count)}
+                </Text>
+
+                <Table.ScrollContainer minWidth={400} maxHeight={280}>
+                  <Table striped highlightOnHover withTableBorder>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>{copy.columns.reference}</Table.Th>
+                        <Table.Th>{copy.columns.time}</Table.Th>
+                        <Table.Th>{copy.columns.customer}</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {blockedInfo.appointments.map((apt) => (
+                        <Table.Tr key={apt.id}>
+                          <Table.Td>
+                            <Anchor
+                              component={Link}
+                              to={`/staff/appointments/${apt.id}`}
+                              size="sm"
+                              fw={600}
+                            >
+                              {apt.reference}
+                            </Anchor>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm">
+                              {formatAppointmentSlot(
+                                apt.start,
+                                apt.end,
+                                dealership?.timezone ?? 'Asia/Ho_Chi_Minh',
+                              )}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm">{apt.customerName}</Text>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Table.ScrollContainer>
+
+                {blockedInfo.count > blockedInfo.appointments.length && (
+                  <Text size="sm" c="dimmed">
+                    {copy.disable.more(blockedInfo.count - blockedInfo.appointments.length)}
+                  </Text>
+                )}
+
+                <Group justify="flex-end" mt="md">
+                  <Button onClick={handleCloseModal}>{copy.actions.close}</Button>
+                </Group>
+              </>
+            ) : (
+              <>
+                <Text size="sm">{copy.disable.body(technicianToDisable.name)}</Text>
+                <Group justify="flex-end" mt="md">
+                  <Button variant="default" onClick={handleCloseModal}>
+                    {copy.actions.cancel}
+                  </Button>
+                  <Button
+                    color="red"
+                    loading={setTechnicianActiveMutation.isPending}
+                    onClick={handleConfirmDisable}
+                  >
+                    {copy.disable.confirm}
+                  </Button>
+                </Group>
+              </>
+            )}
+          </Stack>
+        )}
+      </Modal>
     </Container>
   )
 }

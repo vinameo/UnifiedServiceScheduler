@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 
 export interface DealershipOpeningHour {
@@ -43,6 +43,23 @@ export interface Technician {
   name: string
   level: number
   active: boolean
+}
+
+export interface TechnicianAppointmentPreview {
+  id: string
+  reference: string
+  start: string
+  end: string
+  customerName: string
+}
+
+export interface TechnicianHasBookingsProblem {
+  code: 'TECHNICIAN_HAS_BOOKINGS'
+  status: 409
+  count: number
+  appointments: TechnicianAppointmentPreview[]
+  detail?: string
+  title?: string
 }
 
 export function useDealership(id: string | undefined) {
@@ -92,3 +109,40 @@ export function useTechnicians(dealershipId: string | undefined) {
     enabled: Boolean(dealershipId),
   })
 }
+
+export async function setTechnicianStatus(
+  dealershipId: string,
+  technicianId: string,
+  active: boolean,
+): Promise<Technician> {
+  const response = await api.put<{ data: Technician }>(
+    `/dealerships/${dealershipId}/technicians/${technicianId}/status`,
+    { active },
+  )
+  return response.data.data
+}
+
+export function useSetTechnicianActive(dealershipId: string | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      technicianId,
+      active,
+    }: {
+      technicianId: string
+      active: boolean
+    }) => {
+      if (!dealershipId) {
+        throw new Error('Dealership ID is required')
+      }
+      return setTechnicianStatus(dealershipId, technicianId, active)
+    },
+    onSuccess: () => {
+      if (dealershipId) {
+        queryClient.invalidateQueries({ queryKey: ['technicians', dealershipId] })
+      }
+    },
+  })
+}
+
