@@ -283,4 +283,78 @@ class IdempotencyTest extends TestCase
         $response3->assertStatus(422)
             ->assertJsonPath('code', 'IDEMPOTENCY_KEY_MISMATCH');
     }
+
+    public function test_AC_04_17_server_errors_are_not_saved(): void
+    {
+        $world = World::saigonD7();
+        ['user' => $user] = $world->customerWithVehicle();
+        $key = (string) Str::uuid();
+
+        $initialCount = (int) DB::table('_testing_echo_counter')->where('id', 1)->value('count');
+
+        // 1. Request with ?fail=500 -> 500 returned
+        $response500 = $this->actingAs($user)
+            ->postJson('/api/v1/_testing/echo?fail=500', ['foo' => 'bar'], [
+                'Accept' => 'application/json',
+                'Idempotency-Key' => $key,
+            ]);
+        $response500->assertStatus(500);
+
+        // Assert row was deleted
+        $this->assertSame(0, DB::table('idempotency_keys')->where('key', $key)->count());
+
+        // 2. Send key again without fail
+        $response200 = $this->actingAs($user)
+            ->postJson('/api/v1/_testing/echo', ['foo' => 'bar'], [
+                'Accept' => 'application/json',
+                'Idempotency-Key' => $key,
+            ]);
+        $response200->assertStatus(200)
+            ->assertJsonPath('count', $initialCount + 1);
+
+        // Row is now COMPLETED
+        $this->assertSame(1, DB::table('idempotency_keys')->where('key', $key)->where('status', 'COMPLETED')->count());
+    }
+
+    public function test_AC_04_18_stale_lock_is_taken_over(): void
+    {
+        $world = World::saigonD7();
+        ['user' => $user] = $world->customerWithVehicle();
+        $key = (string) Str::uuid();
+        $now = CarbonImmutable::now();
+
+        // 1. Insert row by hand as IN_PROGRESS with locked_until = now - 1s (stale lock)
+        $rowId = (string) Str::uuid();
+        $method = 'POST';
+        $path = '/api/v1/_testing/echo';
+        $rawPayload = "POST\n/api/v1/_testing/echo\n".json_encode(['action' => 'test']);
+        $requestHash = hash('sha256', $rawPayload);
+
+        DB::table('idempotency_keys')->insert([
+            'id' => $rowId,
+            'user_id' => $user->id,
+            'key' => $key,
+            'method' => $method,
+            'path' => $path,
+            'request_hash' => $requestHash,
+            'status' => 'IN_PROGRESS',
+            'locked_until' => $now->subSeconds(1),
+            'created_at' => $now->subMinute(),
+            'expires_at' => $now->addHours(24),
+        ]);
+
+        // 2. Send request with key K -> runs and transitions row to COMPLETED
+        $response = $this->actingAs($user)
+            ->postJson('/api/v1/_testing/echo', ['action' => 'test'], [
+                'Accept' => 'application/json',
+                'Idempotency-Key' => $key,
+            ]);
+
+        $response->assertStatus(200);
+
+        $row = DB::table('idempotency_keys')->where('key', $key)->first();
+        $this->assertNotNull($row);
+        $this->assertSame('COMPLETED', $row->status);
+        $this->assertSame(200, $row->response_status);
+    }
 }
