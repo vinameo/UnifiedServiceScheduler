@@ -143,9 +143,18 @@ class AppointmentWriter implements AppointmentWriterInterface
                                 ->first();
                         }
 
-                        throw new VehicleAlreadyBooked(
-                            $conflicting !== null ? ['id' => (string) $conflicting->appointment_id] : null
-                        );
+                        $existing = null;
+                        if ($conflicting !== null) {
+                            $existing = ['id' => (string) $conflicting->appointment_id];
+                            $conflictingAppt = DB::table('appointments')->where('id', $conflicting->appointment_id)->first();
+                            if ($conflictingAppt !== null) {
+                                $existing['reference'] = (string) $conflictingAppt->reference;
+                                $existing['start'] = (string) $conflictingAppt->start_at;
+                                $existing['end'] = (string) $conflictingAppt->end_at;
+                            }
+                        }
+
+                        throw new VehicleAlreadyBooked($existing);
                     }
 
                     if ($clashType === ResourceType::BAY) {

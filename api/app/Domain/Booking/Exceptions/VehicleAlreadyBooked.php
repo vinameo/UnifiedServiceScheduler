@@ -7,7 +7,7 @@ use App\Support\Problem\ProblemException;
 class VehicleAlreadyBooked extends ProblemException
 {
     /**
-     * @param  array{id: string}|null  $existingAppointment
+     * @param  array<string, mixed>|null  $existingAppointment
      */
     public function __construct(?array $existingAppointment = null)
     {
