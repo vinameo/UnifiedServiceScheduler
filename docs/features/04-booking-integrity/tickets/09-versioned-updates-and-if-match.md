@@ -4,7 +4,7 @@
 
 **Blocked by:** [08-disabled-technicians-and-the-real-upcoming-assignments](08-disabled-technicians-and-the-real-upcoming-assignments.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/04-booking-integrity`
 
@@ -12,7 +12,7 @@
 
 **Test cases:** TC-04-06, TC-04-07, TC-04-22
 
-- [ ] TC-04-06 (AC-04.6; Concurrency): given Appointment at version 3; when 2 processes `POST /_testing/appointments/{id}/touch` with `If-Match: "3"`, different keys; then One 200 (`ETag: "4"`), one 412; final `version` 4. Test: `ParallelVersionTest::test_AC_04_6_two_changes_on_same_version_one_wins`.
-- [ ] TC-04-07 (AC-04.7; Integration): given Appointment at version 1; when `touch` without `If-Match`; then 428 `PRECONDITION_REQUIRED`; `version` still 1; no new history row. Test: `IfMatchTest::test_AC_04_7_missing_if_match_is_428`.
-- [ ] TC-04-22 (AC-04.22, INV-04.4; Integration): given Appointment at version 4; when `touch` with `If-Match: "3"`; then 412 `APPOINTMENT_MODIFIED`; body `appointment.version = 4`; header `ETag: "4"`; `AppointmentModifiedDetected` dispatched. Test: `IfMatchTest::test_AC_04_22_412_carries_latest_data`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-04-06 (AC-04.6; Concurrency): given Appointment at version 3; when 2 processes `POST /_testing/appointments/{id}/touch` with `If-Match: "3"`, different keys; then One 200 (`ETag: "4"`), one 412; final `version` 4. Test: `ParallelVersionTest::test_AC_04_6_two_changes_on_same_version_one_wins`.
+- [x] TC-04-07 (AC-04.7; Integration): given Appointment at version 1; when `touch` without `If-Match`; then 428 `PRECONDITION_REQUIRED`; `version` still 1; no new history row. Test: `IfMatchTest::test_AC_04_7_missing_if_match_is_428`.
+- [x] TC-04-22 (AC-04.22, INV-04.4; Integration): given Appointment at version 4; when `touch` with `If-Match: "3"`; then 412 `APPOINTMENT_MODIFIED`; body `appointment.version = 4`; header `ETag: "4"`; `AppointmentModifiedDetected` dispatched. Test: `IfMatchTest::test_AC_04_22_412_carries_latest_data`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

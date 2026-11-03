@@ -2,6 +2,7 @@
 
 namespace App\Domain\Booking\Repositories;
 
+use App\Domain\Booking\Events\AppointmentModifiedDetected;
 use App\Domain\Booking\Exceptions\AppointmentModified;
 use App\Models\Appointment;
 use Carbon\CarbonImmutable;
@@ -45,6 +46,7 @@ class AppointmentRepository implements AppointmentRepositoryInterface
             ]));
 
         if ($affected === 0) {
+            AppointmentModifiedDetected::dispatch($id, $expectedVersion);
             throw new AppointmentModified($id);
         }
 

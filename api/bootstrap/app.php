@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Middleware\CorrelationId;
+use App\Http\Middleware\Idempotency;
+use App\Http\Middleware\IfMatch;
 use App\Support\Problem\ProblemException;
 use App\Support\Problem\ProblemRenderer;
 use Illuminate\Foundation\Application;
@@ -22,6 +24,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(CorrelationId::class);
         // Sanctum SPA mode: cookie sessions + CSRF for requests from SANCTUM_STATEFUL_DOMAINS.
         $middleware->statefulApi();
+
+        $middleware->alias([
+            'if-match' => IfMatch::class,
+            'idempotent' => Idempotency::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Business outcomes (409, 412, ...) are answers, not failures to alert on.
