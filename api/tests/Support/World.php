@@ -160,4 +160,14 @@ class World
     {
         return User::factory()->advisor($this->dealership)->create($attributes ?? []);
     }
+
+    /**
+     * Helper to create a workshop foreman user for this dealership.
+     *
+     * @param  array<string, mixed>|null  $attributes
+     */
+    public function foreman(?array $attributes = []): User
+    {
+        return User::factory()->foreman($this->dealership)->create($attributes ?? []);
+    }
 }

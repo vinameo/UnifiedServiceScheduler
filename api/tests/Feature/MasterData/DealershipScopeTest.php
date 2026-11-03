@@ -76,8 +76,7 @@ class DealershipScopeTest extends TestCase
             ]);
 
         $dealershipIds = array_column($listResponse->json('data'), 'id');
-        $this->assertContains($dealership1->id, $dealershipIds);
-        $this->assertContains($dealership2->id, $dealershipIds);
+        $this->assertSame([$dealership1->id, $dealership2->id], $dealershipIds);
 
         // Customer calls GET /dealerships/{D2}/service-types -> 200
         $servicesResponse = $this->actingAs($customerUser)
@@ -86,5 +85,87 @@ class DealershipScopeTest extends TestCase
         $servicesResponse->assertOk();
         $servicesData = $servicesResponse->json('data');
         $this->assertCount(3, $servicesData);
+    }
+
+    public function test_AC_01_5_staff_list_only_their_dealership(): void
+    {
+        $world1 = World::saigonD7();
+        $dealership1 = $world1->dealership;
+
+        $dealership2 = Dealership::factory()->create([
+            'code' => 'SGA-BTH',
+            'name' => 'Saigon Auto Binh Thanh',
+            'branch_name' => 'Binh Thanh',
+            'timezone' => 'Asia/Ho_Chi_Minh',
+            'phone' => '028 3812 7890',
+        ]);
+        $world2 = World::forDealership($dealership2);
+
+        $advisor1 = $world1->advisor();
+        $foreman1 = $world1->foreman();
+        $admin1 = $world1->admin();
+        $advisor2 = $world2->advisor();
+
+        // 1. Advisor of D1 sees only D1
+        $advisorResponse = $this->actingAs($advisor1)->getJson('/api/v1/dealerships');
+        $advisorResponse->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $dealership1->id)
+            ->assertJsonPath('data.0.code', 'SGA-D7')
+            ->assertJsonPath('data.0.name', 'Saigon Auto')
+            ->assertJsonPath('data.0.branchName', 'District 7')
+            ->assertJsonPath('data.0.timezone', 'Asia/Ho_Chi_Minh')
+            ->assertJsonPath('data.0.phone', '028 3812 3456')
+            ->assertJsonPath('data.0.slotStepMinutes', 15)
+            ->assertJsonStructure([
+                'data' => [
+                    [
+                        'id',
+                        'code',
+                        'name',
+                        'branchName',
+                        'timezone',
+                        'phone',
+                        'slotStepMinutes',
+                        'openingHours' => [
+                            '*' => ['weekday', 'opensAt', 'closesAt'],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $advisorData = $advisorResponse->json('data.0');
+        $this->assertCount(6, $advisorData['openingHours']); // Mon-Sat open, Sun closed
+
+        // 2. Workshop Foreman of D1 sees only D1
+        $foremanResponse = $this->actingAs($foreman1)->getJson('/api/v1/dealerships');
+        $foremanResponse->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $dealership1->id);
+
+        // 3. Admin of D1 sees only D1
+        $adminResponse = $this->actingAs($admin1)->getJson('/api/v1/dealerships');
+        $adminResponse->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $dealership1->id);
+
+        // 4. Advisor of D2 sees only D2
+        $advisor2Response = $this->actingAs($advisor2)->getJson('/api/v1/dealerships');
+        $advisor2Response->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $dealership2->id);
+
+        // 5. Adversarial input: unknown query param ?dealershipId=<other> is ignored (API §B4)
+        $adversarialResponse = $this->actingAs($advisor1)->getJson("/api/v1/dealerships?dealershipId={$dealership2->id}");
+        $adversarialResponse->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $dealership1->id);
+    }
+
+    public function test_unauthenticated_request_to_list_dealerships_is_401(): void
+    {
+        $response = $this->getJson('/api/v1/dealerships');
+        $response->assertStatus(401)
+            ->assertJsonPath('code', 'UNAUTHENTICATED');
     }
 }

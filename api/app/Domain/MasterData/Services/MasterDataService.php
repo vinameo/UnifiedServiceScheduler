@@ -29,8 +29,14 @@ class MasterDataService implements MasterDataServiceInterface
         $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
         $isStaff = $role?->isStaff() ?? false;
 
-        $scopedId = $isStaff ? $user->dealership_id : null;
+        if ($isStaff) {
+            if ($user->dealership_id === null) {
+                return [];
+            }
 
-        return $this->masterDataRepository->dealerships($scopedId);
+            return $this->masterDataRepository->dealerships($user->dealership_id);
+        }
+
+        return $this->masterDataRepository->dealerships();
     }
 }
