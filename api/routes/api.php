@@ -45,6 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware(['can:create-appointment', 'idempotent']);
     Route::get('/appointments/{appointment}', [AppointmentController::class, 'show'])
         ->middleware('can:view,appointment');
+    Route::get('/appointments/{appointment}/history', [AppointmentController::class, 'history'])
+        ->middleware(['can:staff', 'can:view,appointment']);
 
     // Customers (F02)
     Route::get('/customers', [CustomerController::class, 'index'])

@@ -3,8 +3,10 @@
 namespace App\Domain\Booking\Repositories;
 
 use App\Models\Appointment;
+use App\Models\AppointmentEvent;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 
 interface AppointmentRepositoryInterface
 {
@@ -16,6 +18,11 @@ interface AppointmentRepositoryInterface
     public function find(string $id): ?Appointment;
 
     public function findVisibleTo(User $user, string $id): Appointment;
+
+    /**
+     * @return Collection<int, AppointmentEvent>
+     */
+    public function history(string $appointmentId): Collection;
 
     /**
      * @param  array<string, mixed>  $changes

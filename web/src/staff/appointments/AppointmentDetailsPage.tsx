@@ -1,13 +1,16 @@
 import { useNavigate, useParams } from 'react-router'
 import { Box, Button, Center, Loader, Stack, Text, Title } from '@mantine/core'
 import { useAppointment } from '../../shared/api/appointmentQuery'
+import { useAppointmentHistory } from '../../shared/api/appointments'
 import { AppointmentDetailsLayout } from './AppointmentDetailsLayout'
+import { AppointmentHistorySection } from './AppointmentHistorySection'
 import { appointmentCopy } from './copy'
 
 export function AppointmentDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data, isLoading, isError } = useAppointment(id ?? '')
+  const { data: historyEvents, isLoading: isHistoryLoading } = useAppointmentHistory(id ?? '')
 
   if (isLoading) {
     return (
@@ -33,5 +36,18 @@ export function AppointmentDetailsPage() {
     )
   }
 
-  return <AppointmentDetailsLayout appointment={data.appointment} />
+  const timeZone = data.appointment.dealership?.timezone ?? 'Asia/Ho_Chi_Minh'
+
+  return (
+    <AppointmentDetailsLayout
+      appointment={data.appointment}
+      history={
+        <AppointmentHistorySection
+          events={historyEvents}
+          isLoading={isHistoryLoading}
+          timeZone={timeZone}
+        />
+      }
+    />
+  )
 }

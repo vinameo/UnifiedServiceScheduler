@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from './client'
 
 export interface CreateAppointmentPayload {
@@ -117,6 +117,35 @@ export function useCreateAppointment(options?: {
     }) => createAppointment(payload, idempotencyKey),
     onSuccess: options?.onSuccess,
     onError: options?.onError,
+  })
+}
+
+export interface AppointmentEventActor {
+  name: string
+  role: string
+}
+
+export interface AppointmentEvent {
+  id: string
+  type: string
+  fromStatus: string | null
+  toStatus: string | null
+  version: number
+  actor: AppointmentEventActor | null
+  data: Record<string, unknown>
+  occurredAt: string
+}
+
+export async function getAppointmentHistory(appointmentId: string): Promise<AppointmentEvent[]> {
+  const response = await api.get<AppointmentEvent[]>(`/appointments/${appointmentId}/history`)
+  return response.data
+}
+
+export function useAppointmentHistory(appointmentId: string) {
+  return useQuery({
+    queryKey: ['appointmentHistory', appointmentId],
+    queryFn: () => getAppointmentHistory(appointmentId),
+    enabled: Boolean(appointmentId),
   })
 }
 

@@ -7,8 +7,10 @@ use App\Domain\Booking\Events\AppointmentModifiedDetected;
 use App\Domain\Booking\Exceptions\AppointmentModified;
 use App\Domain\Booking\Exceptions\AppointmentNotFound;
 use App\Models\Appointment;
+use App\Models\AppointmentEvent;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -77,6 +79,20 @@ class AppointmentRepository implements AppointmentRepositoryInterface
         }
 
         return $appointment;
+    }
+
+    /**
+     * @return Collection<int, AppointmentEvent>
+     */
+    public function history(string $appointmentId): Collection
+    {
+        return AppointmentEvent::with(['actorUser', 'dealership'])
+            ->where('appointment_id', $appointmentId)
+            ->orderBy('occurred_at', 'asc')
+            ->orderBy('version', 'asc')
+            ->orderBy('id', 'asc')
+            ->limit(200)
+            ->get();
     }
 
     /**

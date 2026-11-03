@@ -22,4 +22,21 @@ export const appointmentCopy = {
   notFound: "We couldn't find this appointment.",
   backToList: 'Back to appointments',
   viewAppointment: 'View appointment',
+  noHistory: 'No history available.',
+}
+
+export const historyTypeLabels: Record<string, string> = {
+  CREATED: 'Booked',
+  HELD: 'Slot held',
+  CONFIRMED: 'Confirmed',
+  CANCELLED: 'Cancelled',
+  RESCHEDULED: 'Time changed',
+  EXPIRED: 'Hold expired',
+  CHECKED_IN: 'Checked in',
+  STARTED: 'Work started',
+  COMPLETED: 'Completed',
+  NO_SHOW: 'Marked no-show',
+  EXTENDED: 'Time extended',
+  REASSIGNED: 'Technician or bay changed',
+  CONTACT_REQUIRED: 'Customer contact needed',
 }

@@ -7,9 +7,11 @@ use App\Domain\Booking\Services\BookingServiceInterface;
 use App\Http\AppointmentResponder;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Booking\CreateAppointmentRequest;
+use App\Http\Resources\AppointmentEventResource;
 use App\Models\Appointment;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class AppointmentController extends Controller
 {
@@ -23,6 +25,13 @@ class AppointmentController extends Controller
         $appointment = $this->queryService->show($appointment);
 
         return AppointmentResponder::ok($appointment);
+    }
+
+    public function history(Appointment $appointment): AnonymousResourceCollection
+    {
+        $events = $this->queryService->history($appointment);
+
+        return AppointmentEventResource::collection($events);
     }
 
     public function store(CreateAppointmentRequest $request): JsonResponse

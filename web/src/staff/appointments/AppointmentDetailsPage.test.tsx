@@ -3,7 +3,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderRoute } from '../../test/render'
 import { apiMock } from '../../test/apiMock'
-import type { Appointment } from '../../shared/api/appointments'
+import type { Appointment, AppointmentEvent } from '../../shared/api/appointments'
 
 describe('AppointmentDetailsPage', () => {
   const dealershipId = '0192d111-0000-7000-8000-000000000001'
@@ -98,6 +98,7 @@ describe('AppointmentDetailsPage', () => {
       baseAppointment,
       { etag: '"1"' },
     ])
+    apiMock.get(`/appointments/${appointmentId}/history`, [200, []])
 
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderRoute(`/staff/appointments/${appointmentId}`)
@@ -146,6 +147,7 @@ describe('AppointmentDetailsPage', () => {
       closedAppointment,
       { etag: '"2"' },
     ])
+    apiMock.get(`/appointments/${appointmentId}/history`, [200, []])
 
     renderRoute(`/staff/appointments/${appointmentId}`)
 
@@ -172,5 +174,68 @@ describe('AppointmentDetailsPage', () => {
       expect(screen.getByText("We couldn't find this appointment.")).toBeInTheDocument()
     })
     expect(screen.getByRole('button', { name: /Back to appointments/i })).toBeInTheDocument()
+  })
+
+  it('TC-05-15: renders closed banner, history timeline, and reveals full phone number upon clicking Show number', async () => {
+    const cancelledAppointment: Appointment = {
+      ...baseAppointment,
+      status: 'CANCELLED',
+    }
+
+    const mockHistory: AppointmentEvent[] = [
+      {
+        id: 'evt-1',
+        type: 'CREATED',
+        fromStatus: null,
+        toStatus: 'CONFIRMED',
+        version: 1,
+        actor: { name: 'Minh Anh', role: 'SERVICE_ADVISOR' },
+        data: {},
+        occurredAt: '2026-10-28T16:40:00+07:00',
+      },
+      {
+        id: 'evt-2',
+        type: 'CANCELLED',
+        fromStatus: 'CONFIRMED',
+        toStatus: 'CANCELLED',
+        version: 2,
+        actor: { name: 'Minh Anh', role: 'SERVICE_ADVISOR' },
+        data: { reason: 'CUSTOMER_BUSY' },
+        occurredAt: '2026-11-01T15:10:00+07:00',
+      },
+    ]
+
+    apiMock.get(`/appointments/${appointmentId}`, [
+      200,
+      cancelledAppointment,
+      { etag: '"2"' },
+    ])
+    apiMock.get(`/appointments/${appointmentId}/history`, [200, mockHistory])
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderRoute(`/staff/appointments/${appointmentId}`)
+
+    // 1. Closed banner is visible
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'This appointment is closed and can no longer be changed. Its bay and technician have been released for this time slot.',
+        ),
+      ).toBeInTheDocument()
+    })
+
+    // 2. History contains "Cancelled · Minh Anh"
+    await waitFor(() => {
+      expect(screen.getByText(/Cancelled · Minh Anh/i)).toBeInTheDocument()
+    })
+
+    // 3. Masked phone shows initially
+    expect(screen.getByText('0903 *** 218')).toBeInTheDocument()
+    const showButton = screen.getByRole('button', { name: /Show number/i })
+
+    // 4. Click "Show number" -> full number shows
+    await user.click(showButton)
+    const phoneLink = screen.getByRole('link', { name: '0903123218' })
+    expect(phoneLink).toHaveAttribute('href', 'tel:0903123218')
   })
 })
