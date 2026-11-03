@@ -216,4 +216,247 @@ class CreateBookingTest extends TestCase
             CarbonImmutable::setTestNow();
         }
     }
+
+    public function test_AC_02_2_start_in_past(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $response = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:00:00+07:00',
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            $response->assertStatus(422)
+                ->assertJsonPath('code', 'START_IN_PAST');
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_02_3_end_after_closing(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $response = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T16:30:00+07:00',
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            $response->assertStatus(422)
+                ->assertJsonPath('code', 'OUTSIDE_OPENING_HOURS')
+                ->assertJsonPath('closesAt', '17:00')
+                ->assertJsonPath('latestStart', '2026-11-02T16:00:00+07:00');
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_02_11_offset_and_step_required(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            // 1. Off 15-minute step
+            $res1 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:10:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+            $res1->assertStatus(400)->assertJsonValidationErrors('desiredStart');
+
+            // 2. Missing offset
+            $res2 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:00:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+            $res2->assertStatus(400)->assertJsonValidationErrors('desiredStart');
+
+            // 3. Seconds not zero
+            $res3 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:00:30+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+            $res3->assertStatus(400)->assertJsonValidationErrors('desiredStart');
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_02_13_closed_day(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $response = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-08T09:00:00+07:00', // Sunday
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            $response->assertStatus(422)
+                ->assertJsonPath('code', 'OUTSIDE_OPENING_HOURS')
+                ->assertJsonPath('opensAt', null);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_INV_02_4_local_day_from_dealership_zone(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-01 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            // 2026-11-02T01:00:00Z = 08:00 Monday local (valid, opens 08:00) -> 201
+            $res1 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T01:00:00Z',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+            $res1->assertStatus(201);
+
+            // 2026-11-01T23:30:00Z = 06:30 Monday local (before opening 08:00) -> 422 OUTSIDE_OPENING_HOURS
+            ['customer' => $customer2, 'vehicle' => $vehicle2] = $world->customerWithVehicle();
+            $res2 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer2->id,
+                'vehicleId' => $vehicle2->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-01T23:30:00Z',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+            $res2->assertStatus(422)->assertJsonPath('code', 'OUTSIDE_OPENING_HOURS');
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_02_12_ninety_day_horizon(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+
+        // Allow Sunday opening for testing exactly 90 days (2027-01-31 is Sunday)
+        DB::table('dealership_opening_hours')->insert([
+            'id' => (string) Str::uuid(),
+            'dealership_id' => $world->dealership->id,
+            'weekday' => 7,
+            'opens_at' => '08:00:00',
+            'closes_at' => '17:00:00',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            // 91 days ahead (2027-02-01) -> 422 START_TOO_FAR_AHEAD (maxDate 2027-01-31)
+            $res1 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2027-02-01T09:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+
+            $res1->assertStatus(422)
+                ->assertJsonPath('code', 'START_TOO_FAR_AHEAD')
+                ->assertJsonPath('maxDate', '2027-01-31');
+
+            // 90 days ahead (2027-01-31) -> 201
+            ['customer' => $customer2, 'vehicle' => $vehicle2] = $world->customerWithVehicle();
+            $res2 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer2->id,
+                'vehicleId' => $vehicle2->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2027-01-31T09:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+
+            $res2->assertStatus(201);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_boundaries_now_and_closing_time(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 09:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            // Exactly 09:00:00 (equal to now) -> 422 START_IN_PAST
+            $res1 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+            $res1->assertStatus(422)->assertJsonPath('code', 'START_IN_PAST');
+
+            // Book OIL at 16:00 (duration 60 min -> ends exactly 17:00 at closing) -> 201
+            ['customer' => $customer2, 'vehicle' => $vehicle2] = $world->customerWithVehicle();
+            $res2 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer2->id,
+                'vehicleId' => $vehicle2->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T16:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+            $res2->assertStatus(201);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
 }
