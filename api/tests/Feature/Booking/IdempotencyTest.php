@@ -357,4 +357,56 @@ class IdempotencyTest extends TestCase
         $this->assertSame('COMPLETED', $row->status);
         $this->assertSame(200, $row->response_status);
     }
+
+    public function test_AC_04_19_expired_keys_are_pruned_and_ignored(): void
+    {
+        $world = World::saigonD7();
+        ['user' => $user] = $world->customerWithVehicle();
+        $key = (string) Str::uuid();
+        $now = CarbonImmutable::now();
+
+        // 1. Insert row K with expires_at one hour ago
+        $rowId = (string) Str::uuid();
+        $method = 'POST';
+        $path = '/api/v1/_testing/echo';
+        $rawPayload = "POST\n/api/v1/_testing/echo\n".json_encode(['action' => 'prune_test']);
+        $requestHash = hash('sha256', $rawPayload);
+
+        DB::table('idempotency_keys')->insert([
+            'id' => $rowId,
+            'user_id' => $user->id,
+            'key' => $key,
+            'method' => $method,
+            'path' => $path,
+            'request_hash' => $requestHash,
+            'status' => 'COMPLETED',
+            'locked_until' => $now->subHours(2),
+            'response_status' => 200,
+            'response_headers' => json_encode(['Content-Type' => 'application/json']),
+            'response_body' => json_encode(['old' => true]),
+            'created_at' => $now->subHours(25),
+            'expires_at' => $now->subHour(),
+        ]);
+
+        $this->assertSame(1, DB::table('idempotency_keys')->where('key', $key)->count());
+
+        // 2. Run artisan idempotency:prune
+        $exitCode = $this->artisan('idempotency:prune');
+        $this->assertSame(0, $exitCode);
+
+        // Row is deleted
+        $this->assertSame(0, DB::table('idempotency_keys')->where('key', $key)->count());
+
+        // 3. Send K again -> runs as new
+        $response = $this->actingAs($user)
+            ->postJson('/api/v1/_testing/echo', ['action' => 'prune_test'], [
+                'Accept' => 'application/json',
+                'Idempotency-Key' => $key,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertHeaderMissing('Idempotent-Replayed');
+
+        $this->assertSame(1, DB::table('idempotency_keys')->where('key', $key)->where('status', 'COMPLETED')->count());
+    }
 }
