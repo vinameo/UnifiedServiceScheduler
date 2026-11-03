@@ -19,4 +19,4 @@
 - [x] TC-01-11 (AC-01.6; Web component): given Fake API returns the seed data; when Render `MasterDataPage`; then 4 tabs with counts 3/4/5; "Read only"; "Only technician status can be changed here."; "This version loads this data from seed files"; no "holiday" text. Test: `web/src/staff/master-data/MasterDataPage.test.tsx`.
 - [x] TC-01-13 (API §B4; Integration): given Customer; when `service-types?includeInactive=true`; then Still only `active`. Test: `…ServiceTypesTest::test_customer_cannot_include_inactive`.
 - [x] README §8 checks green; no existing test skipped, deleted or weakened
-- [ ] Run `/code-review` on the branch and fix findings before later tickets build on it
+- [x] Run `/code-review` on the branch and fix findings before later tickets build on it
