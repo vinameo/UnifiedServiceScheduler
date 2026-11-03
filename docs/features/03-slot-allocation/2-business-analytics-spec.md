@@ -59,11 +59,11 @@ Must: filtering, reasons, ranking, strategy, `OpeningHours`, snapshot. Should: `
 
 ## B2. Metrics
 
-| ID | Metric | SQL / source | Threshold |
-| --- | --- | --- | --- |
-| M-03.1 | `find()` time in a benchmark of 30 technicians × 20 bays × 36 slots | TC-03-21 | < 50 ms total |
-| M-03.2 | 409s by reason (after F04, F08) | `SELECT detail->>'reason', count(*) FROM api_events WHERE code = 'NO_AVAILABILITY' AND occurred_at > now() - interval '7 days' GROUP BY 1;` | Watch; any `NO_QUALIFIED_TECHNICIAN` means master data is missing something (M-01.1) |
-| M-03.3 | Spread of booked minutes between technicians of the same level in a day | `SELECT resource_id, sum(upper(period)-lower(period)) FROM resource_allocations WHERE resource_type='TECHNICIAN' AND active AND period && tstzrange(:dayStartUtc, :dayEndUtc, '[)') GROUP BY 1;` (`:dayStartUtc`/`:dayEndUtc` = the local day in the dealership's zone, DB §B3) | Watch |
+| ID | Metric | SQL / source | Threshold | Measured (2026-11-03) |
+| --- | --- | --- | --- | --- |
+| M-03.1 | `find()` time in a benchmark of 30 technicians × 20 bays × 36 slots | TC-03-21 | < 50 ms total | 1.748 ms (runs: 1.732 ms, 1.741 ms, 1.748 ms, 1.753 ms, 1.776 ms; median 1.748 ms < 50 ms) |
+| M-03.2 | 409s by reason (after F04, F08) | `SELECT detail->>'reason', count(*) FROM api_events WHERE code = 'NO_AVAILABILITY' AND occurred_at > now() - interval '7 days' GROUP BY 1;` | Watch; any `NO_QUALIFIED_TECHNICIAN` means master data is missing something (M-01.1) | N/A until F04/F08 |
+| M-03.3 | Spread of booked minutes between technicians of the same level in a day | `SELECT resource_id, sum(upper(period)-lower(period)) FROM resource_allocations WHERE resource_type='TECHNICIAN' AND active AND period && tstzrange(:dayStartUtc, :dayEndUtc, '[)') GROUP BY 1;` (`:dayStartUtc`/`:dayEndUtc` = the local day in the dealership's zone, DB §B3) | Watch | N/A until F04 |
 
 ## B3. Future constraints
 
