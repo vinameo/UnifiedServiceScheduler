@@ -1,0 +1,13 @@
+* text=auto eol=lf
+
+*.ts diff=typescript
+*.tsx diff=typescript
+*.js diff=javascript
+*.json diff=json
+*.css diff=css
+*.html diff=html
+*.md diff=markdown
+*.php diff=php
+
+.editorconfig text eol=lf
+.gitattributes text eol=lf
