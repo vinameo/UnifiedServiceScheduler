@@ -2,11 +2,15 @@
 
 namespace App\Domain\Booking\Repositories;
 
+use App\Domain\Auth\Role;
 use App\Domain\Booking\Events\AppointmentModifiedDetected;
 use App\Domain\Booking\Exceptions\AppointmentModified;
+use App\Domain\Booking\Exceptions\AppointmentNotFound;
 use App\Models\Appointment;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class AppointmentRepository implements AppointmentRepositoryInterface
 {
@@ -30,6 +34,49 @@ class AppointmentRepository implements AppointmentRepositoryInterface
             'createdByUser',
             'cancelledByUser',
         ])->find($id);
+    }
+
+    public function findVisibleTo(User $user, string $id): Appointment
+    {
+        if (! Str::isUuid($id)) {
+            throw new AppointmentNotFound;
+        }
+
+        $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
+
+        $query = Appointment::with([
+            'dealership',
+            'customer',
+            'vehicle',
+            'serviceType',
+            'technician',
+            'bay',
+            'createdByUser',
+            'cancelledByUser',
+        ])->where('id', $id);
+
+        if ($role === Role::CUSTOMER) {
+            $customerId = $user->customer->id ?? $user->customer()->value('id');
+            if ($customerId === null) {
+                throw new AppointmentNotFound;
+            }
+            $query->where('customer_id', $customerId);
+        } elseif ($role?->isStaff()) {
+            if ($user->dealership_id === null) {
+                throw new AppointmentNotFound;
+            }
+            $query->where('dealership_id', $user->dealership_id);
+        } else {
+            throw new AppointmentNotFound;
+        }
+
+        $appointment = $query->first();
+
+        if ($appointment === null) {
+            throw new AppointmentNotFound;
+        }
+
+        return $appointment;
     }
 
     /**

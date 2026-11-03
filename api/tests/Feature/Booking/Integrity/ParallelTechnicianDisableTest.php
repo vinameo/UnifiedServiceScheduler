@@ -37,6 +37,8 @@ class ParallelTechnicianDisableTest extends TestCase
         for ($run = 0; $run < $runs; $run++) {
             // Clean state for each run
             DB::table('resource_allocations')->delete();
+            DB::table('appointment_events')->delete();
+            DB::table('outbox_messages')->delete();
             DB::table('appointments')->delete();
             DB::table('technicians')->where('id', $chi->id)->update(['active' => true]);
 
