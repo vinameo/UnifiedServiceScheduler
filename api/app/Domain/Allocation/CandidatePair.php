@@ -9,4 +9,3 @@ final readonly class CandidatePair
         public BayState $bay,
     ) {}
 }
-

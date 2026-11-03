@@ -109,4 +109,3 @@ class TimeRangeTest extends TestCase
         $this->assertSame(90, $range->minutes());
     }
 }
-

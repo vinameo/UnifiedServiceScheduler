@@ -79,4 +79,3 @@ final readonly class TimeRange
         return CarbonImmutable::parse($value)->setTimezone('UTC');
     }
 }
-

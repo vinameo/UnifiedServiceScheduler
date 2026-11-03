@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\Allocation\CandidateFinder;
+use App\Domain\Allocation\CandidateFinderInterface;
 use App\Domain\Auth\Repositories\CustomerRepository;
 use App\Domain\Auth\Repositories\CustomerRepositoryInterface;
 use App\Domain\Auth\Repositories\UserRepository;
@@ -44,5 +46,8 @@ class DomainServiceProvider extends ServiceProvider
         MasterDataServiceInterface::class => MasterDataService::class,
         TechnicianServiceInterface::class => TechnicianService::class,
         UpcomingAssignmentsReader::class => NoUpcomingAssignments::class,
+
+        // Allocation (F03)
+        CandidateFinderInterface::class => CandidateFinder::class,
     ];
 }

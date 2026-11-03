@@ -8,4 +8,3 @@ enum AllocationFailure: string
     case NO_TECHNICIAN_AVAILABLE = 'NO_TECHNICIAN_AVAILABLE';
     case NO_BAY_AVAILABLE = 'NO_BAY_AVAILABLE';
 }
-
