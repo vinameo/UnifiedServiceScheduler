@@ -62,6 +62,18 @@ class AppServiceProvider extends ServiceProvider
             return $role === Role::ADMIN;
         });
 
+        Gate::define('create-appointment', function (User $user): bool {
+            $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
+
+            return $role === Role::SERVICE_ADVISOR || $role === Role::CUSTOMER;
+        });
+
+        Gate::define('search-customers', function (User $user): bool {
+            $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
+
+            return $role === Role::SERVICE_ADVISOR;
+        });
+
         Route::bind('dealership', function (string $value): Dealership {
             /** @var User|null $user */
             $user = request()->user();

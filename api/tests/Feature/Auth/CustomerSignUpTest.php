@@ -212,6 +212,11 @@ class CustomerSignUpTest extends TestCase
                     'phone' => 'invalid_phone_breaks_check',
                 ]);
             }
+
+            public function find(string $id): ?Customer
+            {
+                return null;
+            }
         };
 
         $this->app->instance(CustomerRepositoryInterface::class, $breakingCustomerRepo);

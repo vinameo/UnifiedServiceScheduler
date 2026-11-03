@@ -16,4 +16,9 @@ final class CustomerRepository implements CustomerRepositoryInterface
             'phone' => $phone,
         ]);
     }
+
+    public function find(string $id): ?Customer
+    {
+        return Customer::query()->where('id', $id)->first();
+    }
 }

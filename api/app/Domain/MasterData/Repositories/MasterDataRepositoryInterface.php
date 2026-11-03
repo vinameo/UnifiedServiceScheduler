@@ -15,6 +15,8 @@ interface MasterDataRepositoryInterface
      */
     public function dealerships(?string $scopedDealershipId = null): array;
 
+    public function findDealership(string $id): ?Dealership;
+
     /**
      * @return list<ServiceType>
      */

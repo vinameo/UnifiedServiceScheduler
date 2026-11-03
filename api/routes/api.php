@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AppointmentController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BayController;
 use App\Http\Controllers\Api\V1\DealershipController;
@@ -35,4 +36,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dealerships/{dealership}/bays', [BayController::class, 'index'])->middleware('can:staff');
     Route::get('/dealerships/{dealership}/technicians', [TechnicianController::class, 'index'])->middleware('can:staff');
     Route::put('/dealerships/{dealership}/technicians/{technician}/status', [TechnicianController::class, 'updateStatus'])->middleware('can:admin');
+
+    // Booking (F02)
+    Route::post('/appointments', [AppointmentController::class, 'store'])
+        ->middleware(['can:create-appointment', 'idempotent']);
 });
