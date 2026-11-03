@@ -182,6 +182,11 @@ class ShowAppointmentTest extends TestCase
             'created_by_user_id' => $customerUser->id,
         ]);
 
+        $freshBefore = $appointmentD1->fresh();
+        $this->assertNotNull($freshBefore);
+        $initialUpdatedAt = $freshBefore->updated_at;
+        $this->assertNotNull($initialUpdatedAt);
+
         $dealership2 = Dealership::factory()->create();
         $advisorD2 = User::factory()->advisor($dealership2)->create();
 
@@ -194,10 +199,27 @@ class ShowAppointmentTest extends TestCase
             $uri = str_replace('{appointment}', $appointmentD1->id, $route->uri());
             $methods = array_diff($route->methods(), ['HEAD']);
             foreach ($methods as $method) {
-                $response = $this->actingAs($advisorD2)->json($method, "/{$uri}");
+                $response = $this->actingAs($advisorD2)->json(
+                    $method,
+                    "/{$uri}",
+                    [],
+                    [
+                        'Idempotency-Key' => (string) Str::uuid(),
+                        'If-Match' => '"1"',
+                    ]
+                );
                 $response->assertStatus(404)
                     ->assertJsonPath('code', 'APPOINTMENT_NOT_FOUND');
             }
         }
+
+        // Verify nothing was written to the appointment or database
+        $fresh = $appointmentD1->fresh();
+        $this->assertNotNull($fresh);
+        $this->assertSame(1, $fresh->version);
+        $this->assertNotNull($fresh->updated_at);
+        $this->assertTrue($fresh->updated_at->eq($initialUpdatedAt));
+        $this->assertDatabaseMissing('appointment_events', ['appointment_id' => $appointmentD1->id]);
+        $this->assertNoOverlappingAllocations();
     }
 }
