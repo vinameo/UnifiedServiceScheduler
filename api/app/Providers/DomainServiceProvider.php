@@ -12,6 +12,8 @@ use App\Domain\Auth\Services\SignUpService;
 use App\Domain\Auth\Services\SignUpServiceInterface;
 use App\Domain\Auth\Services\UserService;
 use App\Domain\Auth\Services\UserServiceInterface;
+use App\Domain\MasterData\Repositories\MasterDataRepository;
+use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -30,5 +32,8 @@ class DomainServiceProvider extends ServiceProvider
         UserServiceInterface::class => UserService::class,
         SignInServiceInterface::class => SignInService::class,
         SignUpServiceInterface::class => SignUpService::class,
+
+        // MasterData (F01)
+        MasterDataRepositoryInterface::class => MasterDataRepository::class,
     ];
 }
