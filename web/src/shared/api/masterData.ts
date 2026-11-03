@@ -62,6 +62,16 @@ export interface TechnicianHasBookingsProblem {
   title?: string
 }
 
+export function useDealerships() {
+  return useQuery({
+    queryKey: ['dealerships'],
+    queryFn: async () => {
+      const response = await api.get<{ data: Dealership[] }>('/dealerships')
+      return response.data.data
+    },
+  })
+}
+
 export function useDealership(id: string | undefined) {
   return useQuery({
     queryKey: ['dealership', id],

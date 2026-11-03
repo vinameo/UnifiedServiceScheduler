@@ -2,6 +2,11 @@ import { createBrowserRouter } from 'react-router'
 import { CustomerHomePage } from './customer/CustomerHomePage'
 import { SignUpPage } from './customer/auth/SignUpPage'
 import { SignInPage } from './customer/auth/SignInPage'
+import { ChooseServicePage } from './customer/booking/ChooseServicePage'
+import { ChooseTimePage } from './customer/booking/ChooseTimePage'
+import { ContactDetailsPage } from './customer/booking/ContactDetailsPage'
+import { CustomerBookingConfirmedPage } from './customer/booking/CustomerBookingConfirmedPage'
+import { CustomerBookingLayout } from './customer/booking/CustomerBookingLayout'
 import { StaffHomePage } from './staff/StaffHomePage'
 import { StaffLayout } from './staff/StaffLayout'
 import { StaffSignInPage } from './staff/auth/StaffSignInPage'
@@ -18,9 +23,15 @@ export const routes = [
     path: '/book',
     element: (
       <RequireRole roles={['CUSTOMER']} signInPath="/sign-in">
-        <CustomerHomePage />
+        <CustomerBookingLayout />
       </RequireRole>
     ),
+    children: [
+      { index: true, element: <ChooseServicePage /> },
+      { path: 'time', element: <ChooseTimePage /> },
+      { path: 'details', element: <ContactDetailsPage /> },
+      { path: 'confirmed/:id', element: <CustomerBookingConfirmedPage /> },
+    ],
   },
   {
     path: '/my-bookings',

@@ -51,12 +51,12 @@ export function useAddVehicle() {
       payload: CreateVehiclePayload
       idempotencyKey: string
     }) => {
-      const response = await api.post<{ data: Vehicle }>('/me/vehicles', payload, {
+      const response = await api.post<{ data?: Vehicle } & Vehicle>('/me/vehicles', payload, {
         headers: {
           'Idempotency-Key': idempotencyKey,
         },
       })
-      return response.data.data
+      return response.data.data ?? response.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-vehicles'] })

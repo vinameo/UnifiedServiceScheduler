@@ -1,0 +1,9 @@
+# 11: Customer booking screens — Design Notes
+
+| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Customer 3-step booking flow routes and components (WEB §B1, WEB §B4)` | AC-02.20, D-02.12 | `web/src/router.tsx:18-25` and `web/src/customer/CustomerHomePage.tsx:1-22` | Customer navigates /book -> /book/time -> /book/details -> /book/confirmed/:id. | Active services only; closed days disabled in date chip selection. | WEB §B4 customer flow in `docs/features/02-create-booking/5-web-spec.md:91-102` | follow |
+| `Booking draft context with sessionStorage persistence (WEB-02.8, D-02.11)` | D-02.11, TC-02-32 | `web/src/staff/booking/NewBookingPage.tsx:25-60` | Draft persists in sessionStorage; unmount/remount preserves draft state; confirm clears draft. | 409 NO_AVAILABILITY redirects to /book/time with alert and clears unselected start time. | D-02.11 in `docs/features/02-create-booking/3-database-spec.md:55` | follow |
+| `Multi-dealership picker on Step 1 (D-02.12, TC-02-34)` | D-02.12, TC-02-34 | `web/src/shared/api/masterData.ts:65-75` | If multiple dealerships exist, shows Dealership Select; defaults to first if single. | Missing or non-existent dealership returns 404 DEALERSHIP_NOT_FOUND. | TC-02-34 in `docs/features/02-create-booking/6-test-case.md:131` | follow |
+| `Add vehicle inline on Step 3 before appointment creation (AC-02.20, TC-02-27)` | AC-02.20, INV-02.10 | `web/src/shared/api/vehicles.ts:40-65` | POST /me/vehicles called with its own idempotency key before POST /appointments. | On 409 PLATE_ALREADY_REGISTERED displays error under licence plate field. | TC-02-27 in `docs/features/02-create-booking/6-test-case.md:124` | follow |
+
