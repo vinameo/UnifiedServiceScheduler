@@ -18,4 +18,3 @@ class StartTooFarAhead extends ProblemException
         );
     }
 }
-

@@ -1,8 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import axios from 'axios'
 import {
   ActionIcon,
-  Alert,
   Box,
   Card,
   Grid,
@@ -23,9 +22,57 @@ import { useCreateAppointment } from '../../shared/api/appointments'
 import { useIdempotencyKey } from '../../shared/idempotency/useIdempotencyKey'
 import { SubmitButton } from '../../shared/idempotency/SubmitButton'
 import { TimeGrid } from '../../shared/booking/TimeGrid'
+import { BookingErrorCard, type BookingProblem } from '../../shared/booking/BookingErrorCard'
 import { formatInZone } from '../../shared/format/time'
 import { localSlotsForDay } from '../../shared/format/slots'
 import { maskPhone } from '../../shared/format/phone'
+
+const STAFF_DRAFT_KEY = 'staff_new_booking_draft'
+
+function loadSavedDraft(): {
+  selectedCustomerId?: string | null
+  selectedVehicleId?: string | null
+  selectedServiceTypeId?: string | null
+  selectedDate?: string
+  selectedTimeIso?: string | null
+} | null {
+  try {
+    const raw = sessionStorage.getItem(STAFF_DRAFT_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function saveDraft(draft: {
+  selectedCustomerId: string | null
+  selectedVehicleId: string | null
+  selectedServiceTypeId: string | null
+  selectedDate: string
+  selectedTimeIso: string | null
+}) {
+  try {
+    sessionStorage.setItem(STAFF_DRAFT_KEY, JSON.stringify(draft))
+  } catch {
+    // Ignore sessionStorage errors (e.g. private mode)
+  }
+}
+
+function bayTypeLabel(bayType?: string): string {
+  switch (bayType) {
+    case 'QUICK_SERVICE':
+      return 'Quick service'
+    case 'STANDARD':
+      return 'Standard'
+    case 'EV':
+      return 'EV'
+    case 'WASH':
+      return 'Wash'
+    default:
+      return bayType ?? ''
+  }
+}
 
 export function NewBookingPage() {
   const navigate = useNavigate()
@@ -35,13 +82,25 @@ export function NewBookingPage() {
   const { data: dealership } = useDealership(dealershipId)
   const timeZone = dealership?.timezone ?? 'Asia/Ho_Chi_Minh'
 
+  const initialDraft = loadSavedDraft()
   const [customerSearchQuery, setCustomerSearchQuery] = useState('')
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
-  const [selectedServiceTypeId, setSelectedServiceTypeId] = useState<string | null>(null)
-  const [selectedDate, setSelectedDate] = useState('2026-11-02')
-  const [selectedTimeIso, setSelectedTimeIso] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(initialDraft?.selectedCustomerId ?? null)
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(initialDraft?.selectedVehicleId ?? null)
+  const [selectedServiceTypeId, setSelectedServiceTypeId] = useState<string | null>(initialDraft?.selectedServiceTypeId ?? null)
+  const [selectedDate, setSelectedDate] = useState(initialDraft?.selectedDate ?? '2026-11-02')
+  const [selectedTimeIso, setSelectedTimeIso] = useState<string | null>(initialDraft?.selectedTimeIso ?? null)
+  const [currentError, setCurrentError] = useState<BookingProblem | null>(null)
+  const [vehicleError, setVehicleError] = useState<string | null>(null)
+
+  useEffect(() => {
+    saveDraft({
+      selectedCustomerId,
+      selectedVehicleId,
+      selectedServiceTypeId,
+      selectedDate,
+      selectedTimeIso,
+    })
+  }, [selectedCustomerId, selectedVehicleId, selectedServiceTypeId, selectedDate, selectedTimeIso])
 
   const { data: customerSearchResult } = useCustomerSearch(customerSearchQuery)
   const { data: vehicles = [] } = useCustomerVehicles(selectedCustomerId ?? undefined)
@@ -75,16 +134,27 @@ export function NewBookingPage() {
   const createMutation = useCreateAppointment({
     onSuccess: (result) => {
       resetKey()
+      try {
+        sessionStorage.removeItem(STAFF_DRAFT_KEY)
+      } catch {
+        // Ignore
+      }
       navigate(`/staff/bookings/${result.data.id}/confirmed`, { state: result.data })
     },
     onError: (err: unknown) => {
       settle(err)
-      let detail = 'Booking failed.'
       if (axios.isAxiosError(err)) {
-        const data = err.response?.data as Record<string, unknown> | undefined
-        detail = (data?.title as string) ?? (data?.detail as string) ?? detail
+        const problem = err.response?.data as BookingProblem | undefined
+        if (problem?.code === 'VEHICLE_NOT_OWNED_BY_CUSTOMER') {
+          const customerName = selectedCustomer?.fullName ?? 'the selected customer'
+          setVehicleError(`This vehicle does not belong to ${customerName}. Choose another vehicle or change the customer.`)
+          setCurrentError(null)
+          return
+        }
+        setCurrentError(problem ?? { title: 'Booking error', detail: 'Booking failed.' })
+        return
       }
-      setErrorMessage(detail)
+      setCurrentError({ title: 'Booking error', detail: 'Booking failed.' })
     },
   })
 
@@ -93,7 +163,8 @@ export function NewBookingPage() {
       return
     }
 
-    setErrorMessage(null)
+    setCurrentError(null)
+    setVehicleError(null)
     createMutation.mutate({
       payload: {
         dealershipId,
@@ -123,11 +194,15 @@ export function NewBookingPage() {
   const formattedDate = formatInZone(`${selectedDate}T00:00:00Z`, timeZone, 'dayLong')
 
   let summaryTimeDisplay = '—'
+  let selectedStartFormatted = ''
+  let selectedEndFormatted = ''
   if (selectedTimeIso && selectedService) {
     const endIso = new Date(new Date(selectedTimeIso).getTime() + selectedService.durationMinutes * 60000).toISOString()
     const dayShort = formatInZone(selectedTimeIso, timeZone, 'dayShort')
     const range = formatInZone(selectedTimeIso, timeZone, 'range', endIso)
     summaryTimeDisplay = `${dayShort}, ${range}`
+    selectedStartFormatted = formatInZone(selectedTimeIso, timeZone, 'time')
+    selectedEndFormatted = formatInZone(endIso, timeZone, 'time')
   }
 
   const handleDateShift = (days: number) => {
@@ -151,12 +226,6 @@ export function NewBookingPage() {
         </Text>
       </Box>
 
-      {errorMessage && (
-        <Alert color="red" title="Booking error">
-          {errorMessage}
-        </Alert>
-      )}
-
       <Grid gap="xl">
         <Grid.Col span={{ base: 12, md: 8 }}>
           <Stack gap="lg">
@@ -178,6 +247,8 @@ export function NewBookingPage() {
                   onChange={(val) => {
                     setSelectedCustomerId(val)
                     setSelectedVehicleId(null)
+                    setVehicleError(null)
+                    setCurrentError(null)
                   }}
                   nothingFoundMessage={customerSearchQuery.length >= 3 ? 'No customers found' : 'Type at least 3 characters'}
                 />
@@ -188,7 +259,12 @@ export function NewBookingPage() {
                   disabled={!selectedCustomerId}
                   data={vehicleSelectData}
                   value={selectedVehicleId}
-                  onChange={setSelectedVehicleId}
+                  error={vehicleError}
+                  onChange={(val) => {
+                    setSelectedVehicleId(val)
+                    setVehicleError(null)
+                    setCurrentError(null)
+                  }}
                   nothingFoundMessage="No vehicles for this customer"
                 />
 
@@ -344,6 +420,23 @@ export function NewBookingPage() {
               </Box>
 
               <Box mt="md">
+                {currentError && (
+                  <Box mb="md">
+                    <BookingErrorCard
+                      error={currentError}
+                      context={{
+                        serviceName: selectedService?.name,
+                        durationMinutes: selectedService?.durationMinutes,
+                        start: selectedStartFormatted,
+                        end: selectedEndFormatted,
+                        bayTypeLabel: bayTypeLabel(selectedService?.requiredBayType),
+                        licencePlate: selectedVehicle?.licencePlate,
+                        customerName: selectedCustomer?.fullName,
+                      }}
+                    />
+                  </Box>
+                )}
+
                 <SubmitButton
                   fullWidth
                   pending={createMutation.isPending}

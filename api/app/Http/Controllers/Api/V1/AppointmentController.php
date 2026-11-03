@@ -28,4 +28,3 @@ class AppointmentController extends Controller
         return AppointmentResponder::created($appointment);
     }
 }
-

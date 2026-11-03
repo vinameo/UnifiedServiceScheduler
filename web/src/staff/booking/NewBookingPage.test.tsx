@@ -12,11 +12,13 @@ describe('NewBookingPage (TC-02-25)', () => {
   const serviceTypeId = '0192d444-0000-7000-8000-000000000004'
 
   beforeEach(() => {
+    sessionStorage.clear()
     apiMock.install()
     apiMock.reset()
   })
 
   afterEach(() => {
+    sessionStorage.clear()
     apiMock.restore()
   })
 
@@ -215,5 +217,279 @@ describe('NewBookingPage (TC-02-25)', () => {
     await screen.findByText('Appointment confirmed')
     expect(screen.getByText('APT-20261102-0042')).toBeInTheDocument()
     expect(screen.getByText('Monday, 2 Nov 2026, 09:00–10:00')).toBeInTheDocument()
+  })
+
+  it('TC-02-26: displays error card on OUTSIDE_OPENING_HOURS with latest start', async () => {
+    const service20kId = '0192d444-0000-7000-8000-000000000020'
+
+    apiMock.get('/me', [
+      200,
+      {
+        id: 2,
+        email: 'advisor@saigonauto.test',
+        name: 'Trần Thị Cố Vấn',
+        role: 'SERVICE_ADVISOR',
+        dealership_id: dealershipId,
+        dealership: {
+          id: dealershipId,
+          code: 'SGA-D7',
+          name: 'Saigon Auto',
+          branchName: 'District 7',
+          timezone: 'Asia/Ho_Chi_Minh',
+          phone: '028 3812 3456',
+        },
+      },
+    ])
+
+    apiMock.get(`/dealerships/${dealershipId}`, [
+      200,
+      {
+        data: {
+          id: dealershipId,
+          code: 'SGA-D7',
+          name: 'Saigon Auto',
+          branchName: 'District 7',
+          timezone: 'Asia/Ho_Chi_Minh',
+          phone: '028 3812 3456',
+          slotStepMinutes: 15,
+          openingHours: [{ weekday: 1, opensAt: '08:00', closesAt: '17:00' }],
+        },
+      },
+    ])
+
+    apiMock.get(`/dealerships/${dealershipId}/service-types`, [
+      200,
+      {
+        data: [
+          {
+            id: serviceTypeId,
+            code: 'OIL_CHANGE',
+            name: 'Oil change',
+            durationMinutes: 60,
+            requiredLevel: 1,
+            requiredBayType: 'QUICK_SERVICE',
+            active: true,
+          },
+          {
+            id: service20kId,
+            code: 'SVC_20000KM',
+            name: '20,000 km service',
+            description: 'Major maintenance service',
+            durationMinutes: 120,
+            requiredLevel: 2,
+            requiredBayType: 'STANDARD',
+            active: true,
+          },
+        ],
+      },
+    ])
+
+    apiMock.get('/customers', [
+      200,
+      {
+        data: [
+          {
+            id: customerId,
+            fullName: 'Nguyễn Văn Hùng',
+            phone: '0903123218',
+            email: 'hung@example.test',
+            vehicleCount: 1,
+          },
+        ],
+        meta: { total: 1 },
+      },
+    ])
+
+    apiMock.get(`/customers/${customerId}/vehicles`, [
+      200,
+      {
+        data: [
+          {
+            id: vehicleId,
+            customer_id: customerId,
+            make: 'Toyota',
+            model: 'Vios',
+            licencePlate: '51H-123.45',
+          },
+        ],
+      },
+    ])
+
+    apiMock.post('/appointments', () => [
+      422,
+      {
+        status: 422,
+        code: 'OUTSIDE_OPENING_HOURS',
+        title: 'Outside opening hours',
+        closesAt: '17:00',
+        latestStart: '15:00',
+      },
+    ])
+
+    const user = userEvent.setup()
+    renderRoute('/staff')
+
+    await waitFor(() => {
+      expect(screen.getByText('Book a service appointment')).toBeInTheDocument()
+    })
+
+    // 1. Search & select customer
+    const customerInput = screen.getByPlaceholderText('Search customer by name, email or phone')
+    await user.type(customerInput, 'Nguyễn')
+    const customerOption = await screen.findByText('Nguyễn Văn Hùng · 0903 *** 218')
+    await user.click(customerOption)
+
+    // 2. Select vehicle
+    const vehicleInput = await screen.findByPlaceholderText('Choose a vehicle')
+    await user.click(vehicleInput)
+    const vehicleOption = await screen.findByText('Toyota Vios · 51H-123.45')
+    await user.click(vehicleOption)
+
+    // 3. Pick 60-min service first so 16:00 is visible (16:00 + 60 = 17:00 closing)
+    const oilRadio = await screen.findByText('Oil change')
+    await user.click(oilRadio)
+
+    // 4. Select time slot 16:00
+    const timeButton = await screen.findByRole('button', { name: '16:00' })
+    await user.click(timeButton)
+
+    // 5. Switch to 20,000 km service (120 min duration would end at 18:00, after 17:00 closing)
+    const serviceRadio = await screen.findByText('20,000 km service')
+    await user.click(serviceRadio)
+
+    // 6. Confirm booking
+    const confirmButton = screen.getByRole('button', { name: 'Confirm booking' })
+    await user.click(confirmButton)
+
+    // 7. Assert error card shows up
+    expect(await screen.findByText('The service would end after closing time')).toBeInTheDocument()
+    expect(screen.getByText(/The latest start that day is 15:00/)).toBeInTheDocument()
+  })
+
+  it('displays field-level error under vehicle on VEHICLE_NOT_OWNED_BY_CUSTOMER', async () => {
+    apiMock.get('/me', [
+      200,
+      {
+        id: 2,
+        email: 'advisor@saigonauto.test',
+        name: 'Trần Thị Cố Vấn',
+        role: 'SERVICE_ADVISOR',
+        dealership_id: dealershipId,
+        dealership: {
+          id: dealershipId,
+          code: 'SGA-D7',
+          name: 'Saigon Auto',
+          branchName: 'District 7',
+          timezone: 'Asia/Ho_Chi_Minh',
+          phone: '028 3812 3456',
+        },
+      },
+    ])
+
+    apiMock.get(`/dealerships/${dealershipId}`, [
+      200,
+      {
+        data: {
+          id: dealershipId,
+          code: 'SGA-D7',
+          name: 'Saigon Auto',
+          branchName: 'District 7',
+          timezone: 'Asia/Ho_Chi_Minh',
+          phone: '028 3812 3456',
+          slotStepMinutes: 15,
+          openingHours: [{ weekday: 1, opensAt: '08:00', closesAt: '17:00' }],
+        },
+      },
+    ])
+
+    apiMock.get(`/dealerships/${dealershipId}/service-types`, [
+      200,
+      {
+        data: [
+          {
+            id: serviceTypeId,
+            code: 'OIL_CHANGE',
+            name: 'Oil change',
+            durationMinutes: 60,
+            requiredLevel: 1,
+            requiredBayType: 'QUICK_SERVICE',
+            active: true,
+          },
+        ],
+      },
+    ])
+
+    apiMock.get('/customers', [
+      200,
+      {
+        data: [
+          {
+            id: customerId,
+            fullName: 'Nguyễn Văn Hùng',
+            phone: '0903123218',
+            email: 'hung@example.test',
+            vehicleCount: 1,
+          },
+        ],
+        meta: { total: 1 },
+      },
+    ])
+
+    apiMock.get(`/customers/${customerId}/vehicles`, [
+      200,
+      {
+        data: [
+          {
+            id: vehicleId,
+            customer_id: customerId,
+            make: 'Toyota',
+            model: 'Vios',
+            licencePlate: '51H-123.45',
+          },
+        ],
+      },
+    ])
+
+    apiMock.post('/appointments', () => [
+      422,
+      {
+        status: 422,
+        code: 'VEHICLE_NOT_OWNED_BY_CUSTOMER',
+        title: 'This vehicle is not registered to the selected customer.',
+      },
+    ])
+
+    const user = userEvent.setup()
+    renderRoute('/staff')
+
+    await waitFor(() => {
+      expect(screen.getByText('Book a service appointment')).toBeInTheDocument()
+    })
+
+    const customerInput = screen.getByPlaceholderText('Search customer by name, email or phone')
+    await user.type(customerInput, 'Nguyễn')
+    const customerOption = await screen.findByText('Nguyễn Văn Hùng · 0903 *** 218')
+    await user.click(customerOption)
+
+    const vehicleInput = await screen.findByPlaceholderText('Choose a vehicle')
+    await user.click(vehicleInput)
+    const vehicleOption = await screen.findByText('Toyota Vios · 51H-123.45')
+    await user.click(vehicleOption)
+
+    const serviceRadio = await screen.findByText('Oil change')
+    await user.click(serviceRadio)
+
+    const timeButton = await screen.findByRole('button', { name: '09:00' })
+    await user.click(timeButton)
+
+    const confirmButton = screen.getByRole('button', { name: 'Confirm booking' })
+    await user.click(confirmButton)
+
+    // Assert field-level error under Vehicle
+    expect(
+      await screen.findByText(
+        'This vehicle does not belong to Nguyễn Văn Hùng. Choose another vehicle or change the customer.',
+      ),
+    ).toBeInTheDocument()
   })
 })

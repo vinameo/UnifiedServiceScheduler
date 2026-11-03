@@ -15,4 +15,3 @@ class CustomerNotFound extends ProblemException
         );
     }
 }
-

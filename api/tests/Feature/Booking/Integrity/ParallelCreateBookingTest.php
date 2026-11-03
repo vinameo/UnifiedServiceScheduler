@@ -91,4 +91,3 @@ class ParallelCreateBookingTest extends TestCase
         $this->assertNoOverlappingAllocations();
     }
 }
-

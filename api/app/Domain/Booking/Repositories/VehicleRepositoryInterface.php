@@ -8,4 +8,3 @@ interface VehicleRepositoryInterface
 {
     public function find(string $id): ?Vehicle;
 }
-

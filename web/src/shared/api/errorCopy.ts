@@ -20,3 +20,49 @@ export function errorCopy(code: string | undefined): string {
   return ERROR_MESSAGES[code] ?? ERROR_MESSAGES.INTERNAL_ERROR
 }
 
+export interface NoAvailabilityContext {
+  time?: string
+  start?: string
+  end?: string
+  bayTypeLabel?: string
+}
+
+export interface NoAvailabilityCopy {
+  heading: string
+  body: string
+}
+
+export function noAvailabilityReasonCopy(
+  reason: string | undefined,
+  context: NoAvailabilityContext = {},
+): NoAvailabilityCopy {
+  const time = context.time ?? context.start ?? ''
+  const start = context.start ?? ''
+  const end = context.end ?? ''
+  const bayType = context.bayTypeLabel ?? ''
+
+  switch (reason) {
+    case 'NO_QUALIFIED_TECHNICIAN':
+      return {
+        heading: "This service can't be booked right now",
+        body: 'No technician at this dealership can do this service right now. Call the dealership to arrange it.',
+      }
+    case 'NO_TECHNICIAN_AVAILABLE':
+      return {
+        heading: `The ${time} slot was just taken`,
+        body: `No qualified technician is free from ${start} to ${end}. Your appointment was not created.`,
+      }
+    case 'NO_BAY_AVAILABLE':
+      return {
+        heading: `The ${time} slot was just taken`,
+        body: `No ${bayType} bay is free from ${start} to ${end}. Your appointment was not created.`,
+      }
+    case 'SLOT_TAKEN':
+    default:
+      return {
+        heading: `The ${time} slot was just taken`,
+        body: 'This time was just taken by another booking. Your appointment was not created.',
+      }
+  }
+}
+

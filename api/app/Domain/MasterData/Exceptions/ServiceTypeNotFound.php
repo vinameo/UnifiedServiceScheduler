@@ -15,4 +15,3 @@ class ServiceTypeNotFound extends ProblemException
         );
     }
 }
-

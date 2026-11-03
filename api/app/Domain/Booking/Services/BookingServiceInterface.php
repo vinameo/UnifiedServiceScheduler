@@ -10,4 +10,3 @@ interface BookingServiceInterface
 {
     public function create(CreateBookingInput $input, User $actor): Appointment;
 }
-
