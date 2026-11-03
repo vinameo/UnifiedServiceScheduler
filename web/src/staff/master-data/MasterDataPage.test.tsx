@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { renderRoute } from '../../test/render'
 import { apiMock } from '../../test/apiMock'
 
 describe('MasterDataPage', () => {
+  const dealershipId = '0192d111-0000-7000-8000-000000000001'
+
   beforeEach(() => {
     apiMock.install()
     apiMock.reset()
@@ -13,9 +16,7 @@ describe('MasterDataPage', () => {
     apiMock.restore()
   })
 
-  it('TC-01-11: renders 4 tabs with counts 3/4/5, read-only badges and seed callout without holiday text', async () => {
-    const dealershipId = '0192d111-0000-7000-8000-000000000001'
-
+  function setupStandardMocks() {
     apiMock.get('/me', [
       200,
       {
@@ -100,10 +101,10 @@ describe('MasterDataPage', () => {
       200,
       {
         data: [
-          { id: 'bay-1', code: 'K1', name: 'Bay 1', bayType: 'QUICK', active: true },
-          { id: 'bay-2', code: 'K2', name: 'Bay 2', bayType: 'QUICK', active: true },
-          { id: 'bay-3', code: 'K3', name: 'Bay 3', bayType: 'STANDARD', active: true },
-          { id: 'bay-4', code: 'KEV', name: 'Bay EV', bayType: 'EV', active: true },
+          { id: 'bay-1', code: 'K1', name: 'Bay 1', bayType: 'QUICK', active: true, supportedServiceTypeIds: ['srv-1'] },
+          { id: 'bay-2', code: 'K2', name: 'Bay 2', bayType: 'QUICK', active: true, supportedServiceTypeIds: ['srv-1'] },
+          { id: 'bay-3', code: 'K3', name: 'Bay 3', bayType: 'STANDARD', active: true, supportedServiceTypeIds: ['srv-2'] },
+          { id: 'bay-4', code: 'KEV', name: 'Bay EV', bayType: 'EV', active: true, supportedServiceTypeIds: ['srv-3'] },
         ],
       },
     ])
@@ -120,6 +121,10 @@ describe('MasterDataPage', () => {
         ],
       },
     ])
+  }
+
+  it('TC-01-11: renders 4 tabs with counts 3/4/5, read-only badges and seed callout without holiday text', async () => {
+    setupStandardMocks()
 
     renderRoute('/staff/master-data')
 
@@ -184,5 +189,99 @@ describe('MasterDataPage', () => {
 
     const activeBadges = screen.getAllByText('Active')
     expect(activeBadges.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('renders Bays tab with code, name, bay type, supported services, and status badges', async () => {
+    setupStandardMocks()
+    const user = userEvent.setup()
+
+    renderRoute('/staff/master-data')
+
+    const baysTab = await screen.findByRole('tab', { name: /Bays/i })
+    await user.click(baysTab)
+
+    const baysPanel = await screen.findByRole('tabpanel')
+    const panel = within(baysPanel)
+
+    // Column headers
+    expect(panel.getByRole('columnheader', { name: 'Code' })).toBeInTheDocument()
+    expect(panel.getByRole('columnheader', { name: 'Bay name' })).toBeInTheDocument()
+    expect(panel.getByRole('columnheader', { name: 'Bay type' })).toBeInTheDocument()
+    expect(panel.getByRole('columnheader', { name: 'Supported services' })).toBeInTheDocument()
+    expect(panel.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument()
+
+    // Row contents
+    expect(panel.getByText('K1')).toBeInTheDocument()
+    expect(panel.getByText('Bay 1')).toBeInTheDocument()
+    expect(panel.getByText('K2')).toBeInTheDocument()
+    expect(panel.getByText('Bay 2')).toBeInTheDocument()
+    expect(panel.getByText('K3')).toBeInTheDocument()
+    expect(panel.getByText('Bay 3')).toBeInTheDocument()
+    expect(panel.getByText('KEV')).toBeInTheDocument()
+    expect(panel.getByText('Bay EV')).toBeInTheDocument()
+
+    // Bay types
+    const quickTypes = panel.getAllByText('Quick service')
+    expect(quickTypes).toHaveLength(2)
+    expect(panel.getByText('Standard service')).toBeInTheDocument()
+    expect(panel.getByText('EV')).toBeInTheDocument()
+
+    // Supported services
+    const oilChanges = panel.getAllByText('Oil change')
+    expect(oilChanges).toHaveLength(2)
+    expect(panel.getByText('20,000 km maintenance')).toBeInTheDocument()
+    expect(panel.getByText('EV battery health check')).toBeInTheDocument()
+
+    // Status badges
+    const activeBadges = panel.getAllByText('Active')
+    expect(activeBadges).toHaveLength(4)
+  })
+
+  it('renders Technicians tab with levels, working/not taking bookings status, and action buttons without shift or skills columns', async () => {
+    setupStandardMocks()
+    const user = userEvent.setup()
+
+    renderRoute('/staff/master-data')
+
+    const techTab = await screen.findByRole('tab', { name: /Technicians/i })
+    await user.click(techTab)
+
+    const techPanel = await screen.findByRole('tabpanel')
+    const panel = within(techPanel)
+
+    // Column headers
+    expect(panel.getByRole('columnheader', { name: 'Technician' })).toBeInTheDocument()
+    expect(panel.getByRole('columnheader', { name: 'Level' })).toBeInTheDocument()
+    expect(panel.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument()
+    expect(panel.getByRole('columnheader', { name: 'Action' })).toBeInTheDocument()
+
+    // Assert no "Shift" or "Skills" columns exist (AC-01.6, D-01.10)
+    expect(panel.queryByRole('columnheader', { name: /Shift/i })).not.toBeInTheDocument()
+    expect(panel.queryByRole('columnheader', { name: /Skills/i })).not.toBeInTheDocument()
+
+    // Technician names
+    expect(panel.getByText('Trần Minh An')).toBeInTheDocument()
+    expect(panel.getByText('Lý Hoàng Dũng')).toBeInTheDocument()
+    expect(panel.getByText('Võ Thị Chi')).toBeInTheDocument()
+    expect(panel.getByText('Ngô Bảo Em')).toBeInTheDocument()
+    expect(panel.getByText('Huỳnh Tấn Phát')).toBeInTheDocument()
+
+    // Levels
+    expect(panel.getByText('Level 2')).toBeInTheDocument()
+    expect(panel.getByText('Level 3')).toBeInTheDocument()
+    expect(panel.getByText('Level 4')).toBeInTheDocument()
+    expect(panel.getByText('Level 6')).toBeInTheDocument()
+    expect(panel.getByText('Level 1')).toBeInTheDocument()
+
+    // Status
+    const workingBadges = panel.getAllByText('Working')
+    expect(workingBadges).toHaveLength(4)
+    expect(panel.getByText('Not taking bookings')).toBeInTheDocument()
+
+    // Action buttons
+    const disableButtons = panel.getAllByRole('button', { name: 'Disable' })
+    expect(disableButtons).toHaveLength(4)
+    const enableButton = panel.getByRole('button', { name: 'Enable' })
+    expect(enableButton).toBeInTheDocument()
   })
 })

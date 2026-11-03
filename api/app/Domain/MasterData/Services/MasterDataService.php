@@ -4,7 +4,9 @@ namespace App\Domain\MasterData\Services;
 
 use App\Domain\Auth\Role;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
+use App\Models\Bay;
 use App\Models\Dealership;
+use App\Models\Technician;
 use App\Models\User;
 
 class MasterDataService implements MasterDataServiceInterface
@@ -38,5 +40,34 @@ class MasterDataService implements MasterDataServiceInterface
         }
 
         return $this->masterDataRepository->dealerships();
+    }
+
+    /**
+     * @return list<Bay>
+     */
+    public function bays(User $user, Dealership $dealership): array
+    {
+        $bays = $this->masterDataRepository->bays($dealership->id);
+        $activeServices = $this->masterDataRepository->serviceTypes($dealership->id, activeOnly: true);
+
+        foreach ($bays as $bay) {
+            $supportedIds = [];
+            foreach ($activeServices as $service) {
+                if ($service->required_bay_type === $bay->bay_type) {
+                    $supportedIds[] = (string) $service->id;
+                }
+            }
+            $bay->supportedServiceTypeIds = $supportedIds;
+        }
+
+        return $bays;
+    }
+
+    /**
+     * @return list<Technician>
+     */
+    public function technicians(User $user, Dealership $dealership): array
+    {
+        return $this->masterDataRepository->technicians($dealership->id);
     }
 }

@@ -26,6 +26,11 @@ class Bay extends Model
     protected $guarded = [];
 
     /**
+     * @var list<string>|null
+     */
+    public ?array $supportedServiceTypeIds = null;
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

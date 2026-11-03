@@ -2,6 +2,7 @@ import {
   Alert,
   Badge,
   Box,
+  Button,
   Container,
   Group,
   Skeleton,
@@ -32,11 +33,20 @@ export function MasterDataPage() {
     isLoading: isLoadingServices,
     isError: isErrorServices,
   } = useServiceTypes(dealershipId)
-  const { data: bays = [] } = useBays(dealershipId)
-  const { data: technicians = [] } = useTechnicians(dealershipId)
+  const {
+    data: bays = [],
+    isLoading: isLoadingBays,
+    isError: isErrorBays,
+  } = useBays(dealershipId)
+  const {
+    data: technicians = [],
+    isLoading: isLoadingTechnicians,
+    isError: isErrorTechnicians,
+  } = useTechnicians(dealershipId)
 
   const [activeTab, setActiveTab] = useState<string | null>('service-types')
 
+  const isAdmin = me?.role === 'ADMIN'
   const dealershipName = dealership?.name ?? me?.dealership?.name ?? 'Saigon Auto'
   const branchName = dealership?.branchName ?? me?.dealership?.branchName ?? 'District 7'
 
@@ -168,18 +178,123 @@ export function MasterDataPage() {
             )}
           </Tabs.Panel>
 
-          {/* Bays tab panel (placeholder for Ticket 07) */}
+          {/* Bays tab panel */}
           <Tabs.Panel value="bays" pt="md">
-            <Text c="dimmed" py="md">
-              {copy.tabs.bays} view will be loaded here.
-            </Text>
+            {isLoadingBays ? (
+              <Skeleton height={200} radius="md" />
+            ) : isErrorBays ? (
+              <Alert color="red" title="Error">
+                Failed to load bays.
+              </Alert>
+            ) : bays.length === 0 ? (
+              <Text c="dimmed" py="xl" ta="center">
+                {copy.empty}
+              </Text>
+            ) : (
+              <Table.ScrollContainer minWidth={600}>
+                <Table striped highlightOnHover withTableBorder withColumnBorders>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>{copy.columns.bayCode}</Table.Th>
+                      <Table.Th>{copy.columns.bayName}</Table.Th>
+                      <Table.Th>{copy.columns.bayType}</Table.Th>
+                      <Table.Th>{copy.columns.supportedServices}</Table.Th>
+                      <Table.Th>{copy.columns.status}</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {bays.map((bay) => {
+                      const supportedServiceNames = (bay.supportedServiceTypeIds ?? [])
+                        .map((id) => serviceTypes.find((s) => s.id === id)?.name)
+                        .filter((name): name is string => Boolean(name))
+                        .join(', ')
+
+                      return (
+                        <Table.Tr key={bay.id}>
+                          <Table.Td>
+                            <Text fw={600} size="sm">
+                              {bay.code}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td>{bay.name}</Table.Td>
+                          <Table.Td>{bayTypeLabel(bay.bayType)}</Table.Td>
+                          <Table.Td>{supportedServiceNames || '—'}</Table.Td>
+                          <Table.Td>
+                            <Badge
+                              color={bay.active ? 'green' : 'gray'}
+                              variant="light"
+                              size="sm"
+                            >
+                              {bay.active ? copy.status.active : copy.status.inactive}
+                            </Badge>
+                          </Table.Td>
+                        </Table.Tr>
+                      )
+                    })}
+                  </Table.Tbody>
+                </Table>
+              </Table.ScrollContainer>
+            )}
           </Tabs.Panel>
 
-          {/* Technicians tab panel (placeholder for Ticket 07 & 10) */}
+          {/* Technicians tab panel */}
           <Tabs.Panel value="technicians" pt="md">
-            <Text c="dimmed" py="md">
-              {copy.tabs.technicians} view will be loaded here.
-            </Text>
+            {isLoadingTechnicians ? (
+              <Skeleton height={200} radius="md" />
+            ) : isErrorTechnicians ? (
+              <Alert color="red" title="Error">
+                Failed to load technicians.
+              </Alert>
+            ) : technicians.length === 0 ? (
+              <Text c="dimmed" py="xl" ta="center">
+                {copy.empty}
+              </Text>
+            ) : (
+              <Table.ScrollContainer minWidth={600}>
+                <Table striped highlightOnHover withTableBorder withColumnBorders>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>{copy.columns.technician}</Table.Th>
+                      <Table.Th>{copy.columns.level}</Table.Th>
+                      <Table.Th>{copy.columns.status}</Table.Th>
+                      {isAdmin && <Table.Th>{copy.columns.action}</Table.Th>}
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {technicians.map((tech) => (
+                      <Table.Tr key={tech.id}>
+                        <Table.Td>
+                          <Text fw={600} size="sm">
+                            {tech.name}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>{levelLabel(tech.level)}</Table.Td>
+                        <Table.Td>
+                          <Badge
+                            color={tech.active ? 'green' : 'gray'}
+                            variant="light"
+                            size="sm"
+                          >
+                            {tech.active ? copy.status.working : copy.status.notTaking}
+                          </Badge>
+                        </Table.Td>
+                        {isAdmin && (
+                          <Table.Td>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color={tech.active ? 'red' : 'blue'}
+                            >
+                              {tech.active ? copy.disable : copy.enable}
+                            </Button>
+                          </Table.Td>
+                        )}
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </Table.ScrollContainer>
+            )}
           </Tabs.Panel>
 
           {/* Opening hours tab panel (placeholder for Ticket 08) */}
