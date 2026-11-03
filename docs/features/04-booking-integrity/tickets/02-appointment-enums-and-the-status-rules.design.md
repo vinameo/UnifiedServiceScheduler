@@ -1,0 +1,9 @@
+# 02: Appointment enums and the status rules — Design Notes
+
+| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| AppointmentStatus transitions (RQ D-04.8, S-04.2) | AC-04.15 | `docs/features/04-booking-integrity/1-requirement-spec.md:58`, `CONTEXT.md:46-53` | pure PHP enum logic; state changes handled by TransitionAppointment with version check in later tickets | all 8 statuses represented as enum cases; terminal states return false for all targets | `CONTEXT.md` status values table | follow |
+| AppointmentStatus holdsSlot (CONTEXT.md §Status values, S-04.2) | INV-04.1 | `CONTEXT.md:44-54` | pure PHP enum method; active allocation filter uses this invariant in SQL | non-slot-holding terminal states (COMPLETED, CANCELLED, NO_SHOW, EXPIRED) return false | `CONTEXT.md:44-54` | follow |
+| ResourceType enum (RQ S-04.2, DB §DB-04.2) | INV-04.1 | `docs/features/04-booking-integrity/3-database-spec.md:89` | pure PHP enum; database constraint CHECK resource_type IN ('TECHNICIAN','BAY','VEHICLE') enforced in migration 04 | none: enum cases define domain resource types | `CONTEXT.md:19` | follow |
+| AppointmentEventType enum (RQ S-04.2, DB §DB-04.4) | INV-04.11 | `docs/features/04-booking-integrity/3-database-spec.md:141` | pure PHP enum; history rows appended to appointment_events | none: immutable event types | `3-database-spec.md:141` | follow |
+| OutboxEventType and OutboxChannel enums (RQ S-04.2, DB §DB-04.5) | INV-04.12 | `docs/features/04-booking-integrity/3-database-spec.md:157-158` | pure PHP enums; messages appended to outbox_messages in transaction | none: outbox messages filtered by status in relay | `3-database-spec.md:157-158` | follow |

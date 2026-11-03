@@ -1,0 +1,8 @@
+# 03: Appointments table, reference sequence and version trigger — Design Notes
+
+| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| appointments table schema (DB §DB-04.1) | INV-04.3, INV-04.5 | `docs/features/04-booking-integrity/3-database-spec.md:31-64` | initial row inserted at version 1; subsequent writes guarded by appointments_version_guard trigger | FK references dealerships, customers, service_types, technicians, bays, users, vehicles; RESTRICT prevents parent row deletion | `CLAUDE.md:143-156` (Core rule 2) | follow |
+| appointment_reference_seq sequence (DB §DB-04.1) | INV-04.6 | `docs/features/04-booking-integrity/3-database-spec.md:65` | nextval atomic sequence call during reference generation | none: sequence is monotonic and persistent | `4-api-spec.md:46` (reference generation) | follow |
+| appointments_version_guard trigger (DB §DB-04.1) | AC-04.13, INV-04.3, D-04.7 | `docs/features/04-booking-integrity/3-database-spec.md:67-80` | trigger runs BEFORE UPDATE on appointments row; rejects any update where NEW.version is distinct from OLD.version + 1 with SQLSTATE P0001 | none: checks every updated row regardless of status | `CLAUDE.md:143-156` | follow |
+| vehicle_id nullability check (DB §DB-04.1, INV-04.5) | INV-04.5 | `docs/features/04-booking-integrity/3-database-spec.md:57` | CHECK constraint validates vehicle_id IS NOT NULL OR status IN ('HELD','EXPIRED','CANCELLED') at insert/update time | allows temporary holds without vehicle; confirmed bookings require vehicle | `1-requirement-spec.md:47` | follow |

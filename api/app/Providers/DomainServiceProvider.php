@@ -19,15 +19,25 @@ use App\Domain\Auth\Services\UserService;
 use App\Domain\Auth\Services\UserServiceInterface;
 use App\Domain\Booking\Repositories\AllocationSnapshotRepository;
 use App\Domain\Booking\Repositories\AllocationSnapshotRepositoryInterface;
-use App\Domain\Booking\Repositories\NoBusyIntervals;
+use App\Domain\Booking\Repositories\AppointmentRepository;
+use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
+use App\Domain\Booking\Repositories\ResourceAllocationRepository;
+use App\Domain\Booking\Repositories\ResourceAllocationRepositoryInterface;
+use App\Domain\Booking\Services\AppointmentEventRecorder;
+use App\Domain\Booking\Services\AppointmentEventRecorderInterface;
+use App\Domain\Booking\Services\AppointmentTransition;
+use App\Domain\Booking\Services\AppointmentTransitionInterface;
+use App\Domain\Booking\Services\AppointmentWriter;
+use App\Domain\Booking\Services\AppointmentWriterInterface;
 use App\Domain\MasterData\Repositories\MasterDataRepository;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\MasterData\Services\MasterDataService;
 use App\Domain\MasterData\Services\MasterDataServiceInterface;
-use App\Domain\MasterData\Services\NoUpcomingAssignments;
 use App\Domain\MasterData\Services\TechnicianService;
 use App\Domain\MasterData\Services\TechnicianServiceInterface;
 use App\Domain\MasterData\Services\UpcomingAssignmentsReader;
+use App\Domain\Notifications\Services\OutboxWriter;
+use App\Domain\Notifications\Services\OutboxWriterInterface;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -51,12 +61,22 @@ class DomainServiceProvider extends ServiceProvider
         MasterDataRepositoryInterface::class => MasterDataRepository::class,
         MasterDataServiceInterface::class => MasterDataService::class,
         TechnicianServiceInterface::class => TechnicianService::class,
-        UpcomingAssignmentsReader::class => NoUpcomingAssignments::class,
+        UpcomingAssignmentsReader::class => ResourceAllocationRepository::class,
 
         // Allocation (F03)
         AllocationStrategy::class => LowestLevelFirstStrategy::class,
         CandidateFinderInterface::class => CandidateFinder::class,
         AllocationSnapshotRepositoryInterface::class => AllocationSnapshotRepository::class,
-        BusyIntervalReader::class => NoBusyIntervals::class,
+        BusyIntervalReader::class => ResourceAllocationRepository::class,
+
+        // Booking (F04)
+        ResourceAllocationRepositoryInterface::class => ResourceAllocationRepository::class,
+        AppointmentRepositoryInterface::class => AppointmentRepository::class,
+        AppointmentWriterInterface::class => AppointmentWriter::class,
+        AppointmentEventRecorderInterface::class => AppointmentEventRecorder::class,
+        AppointmentTransitionInterface::class => AppointmentTransition::class,
+
+        // Notifications (F04, F11)
+        OutboxWriterInterface::class => OutboxWriter::class,
     ];
 }

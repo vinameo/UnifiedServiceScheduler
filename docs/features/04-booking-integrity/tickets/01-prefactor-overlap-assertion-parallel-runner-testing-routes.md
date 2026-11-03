@@ -4,7 +4,7 @@
 
 **Blocked by:** F03 [10-acceptance-and-performance](../../03-slot-allocation/tickets/10-acceptance-and-performance.md) (the whole F03 branch merged to `develop`).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/04-booking-integrity`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** none of its own; existing tests prove it changes nothing.
 
-- [ ] `Parallel` starts N PHP processes that wait for the same start time and return `{status, body, headers}` as JSON
-- [ ] No change users can see; existing tests stay green unchanged
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] `Parallel` starts N PHP processes that wait for the same start time and return `{status, body, headers}` as JSON
+- [x] No change users can see; existing tests stay green unchanged
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

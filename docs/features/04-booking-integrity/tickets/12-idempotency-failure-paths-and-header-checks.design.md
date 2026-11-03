@@ -1,0 +1,8 @@
+# 12: Idempotency failure paths and header checks — Design Notes
+
+| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| Server errors >= 500 delete idempotency key (RQ D-04.12, AC-04.17) | AC-04.17, D-04.12 | `api/app/Http/Middleware/Idempotency.php:executeAndRecord` | on response status >= 500, row deleted from idempotency_keys so retry runs cleanly | deleted row allows subsequent retry with same key to succeed | `1-requirement-spec.md:228` | follow |
+| Stale IN_PROGRESS lock takeover (RQ D-04.13, AC-04.18) | AC-04.18, D-04.13 | `api/app/Http/Middleware/Idempotency.php:handle` | atomic UPDATE SET locked_until = now+60s WHERE id = ? AND status = 'IN_PROGRESS' AND locked_until <= now | takeover preserves row id and transitions to COMPLETED on success | `1-requirement-spec.md:234` | follow |
+| Idempotency before If-Match middleware order (RQ INV-04.8, TC-04-21) | INV-04.8 | `api/routes/testing.php:10-14` | idempotent alias registered before if-match in route pipeline; replay bypasses downstream version checks | replayed responses return cached status/body without invoking controller | `4-api-spec.md:105` | follow |
+| Header adversarial validation (API §B4, TC-04-23) | D-04.15, API §B4 | `api/app/Http/ExpectedVersion.php`, `api/app/Http/Middleware/Idempotency.php` | regex /^[1-9]\d*$/ on If-Match and Str::isUuid on Idempotency-Key; non-matching return 400 VALIDATION_ERROR | invalid formats rejected before any database lookups | `4-api-spec.md:95-98` | follow |

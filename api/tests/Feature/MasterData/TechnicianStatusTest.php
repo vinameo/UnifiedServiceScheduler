@@ -2,13 +2,16 @@
 
 namespace Tests\Feature\MasterData;
 
+use App\Domain\Booking\AppointmentStatus;
+use App\Domain\Booking\ResourceType;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
-use App\Domain\MasterData\Services\UpcomingAssignmentsReader;
 use App\Models\Dealership;
 use App\Models\Technician;
 use App\Models\User;
+use App\Models\Vehicle;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\World;
@@ -321,45 +324,106 @@ class TechnicianStatusTest extends TestCase
     }
 
     /**
-     * Prove that if upcoming assignments exist, disabling is refused with 409 TECHNICIAN_HAS_BOOKINGS.
+     * TC-01-17 (AC-01.8, D-01.11; Integration):
+     * Given Chi has a CONFIRMED booking tomorrow and a COMPLETED one yesterday;
+     * When Admin disables Chi;
+     * Then 409 TECHNICIAN_HAS_BOOKINGS, count 1, appointments[0].reference = tomorrow's; Chi still active.
      */
-    public function test_disable_refused_with_409_when_technician_has_upcoming_bookings(): void
+    public function test_AC_01_8_disable_refused_with_upcoming_bookings(): void
     {
         $world = World::saigonD7();
         $dealership = $world->dealership;
         $admin = $world->admin();
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
         $chi = $world->technician('Võ Thị Chi');
+        $bay = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
 
-        // Bind mock reader reporting 2 upcoming appointments
-        $fakeReader = new class implements UpcomingAssignmentsReader
-        {
-            public function count(string $technicianId, CarbonImmutable $now): int
-            {
-                return 2;
-            }
+        $now = CarbonImmutable::parse('2026-11-20 12:00:00', 'UTC');
+        CarbonImmutable::setTestNow($now);
 
-            public function preview(string $technicianId, CarbonImmutable $now, int $limit = 20): array
-            {
-                return [
-                    [
-                        'id' => '01930000-0000-7000-8000-000000000001',
-                        'reference' => 'APT-20261104-0001',
-                        'start' => '2026-11-04T09:00:00+07:00',
-                        'end' => '2026-11-04T10:00:00+07:00',
-                        'customerName' => 'Nguyễn Văn A',
-                    ],
-                    [
-                        'id' => '01930000-0000-7000-8000-000000000002',
-                        'reference' => 'APT-20261104-0002',
-                        'start' => '2026-11-04T14:00:00+07:00',
-                        'end' => '2026-11-04T15:00:00+07:00',
-                        'customerName' => 'Trần Thị B',
-                    ],
-                ];
-            }
-        };
+        $tomorrowStart = $now->addDay()->setTime(9, 0, 0);
+        $tomorrowEnd = $tomorrowStart->addHour();
+        $yesterdayStart = $now->subDay()->setTime(9, 0, 0);
+        $yesterdayEnd = $yesterdayStart->addHour();
 
-        $this->app->instance(UpcomingAssignmentsReader::class, $fakeReader);
+        // 1. Tomorrow's CONFIRMED booking
+        $tomorrowApptId = (string) Str::uuid();
+        DB::table('appointments')->insert([
+            'id' => $tomorrowApptId,
+            'reference' => 'APT-20261121-0001',
+            'dealership_id' => $dealership->id,
+            'customer_id' => $customer->id,
+            'vehicle_id' => $vehicle->id,
+            'service_type_id' => $service->id,
+            'technician_id' => $chi->id,
+            'bay_id' => $bay->id,
+            'status' => AppointmentStatus::CONFIRMED->value,
+            'start_at' => $tomorrowStart,
+            'end_at' => $tomorrowEnd,
+            'version' => 1,
+            'source' => 'CUSTOMER',
+            'created_by_user_id' => $user->id,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        DB::statement(<<<'SQL'
+            INSERT INTO resource_allocations (
+                id, appointment_id, dealership_id, resource_type, resource_id, period, active, created_at
+            ) VALUES (
+                :id, :appointment_id, :dealership_id, :resource_type, :resource_id, tstzrange(:start, :end, '[)'), true, :created_at
+            )
+        SQL, [
+            'id' => (string) Str::uuid(),
+            'appointment_id' => $tomorrowApptId,
+            'dealership_id' => $dealership->id,
+            'resource_type' => ResourceType::TECHNICIAN->value,
+            'resource_id' => $chi->id,
+            'start' => $tomorrowStart->toIso8601String(),
+            'end' => $tomorrowEnd->toIso8601String(),
+            'created_at' => $now->toIso8601String(),
+        ]);
+
+        // 2. Yesterday's COMPLETED booking (inactive allocation)
+        $yesterdayApptId = (string) Str::uuid();
+        $otherVehicle = Vehicle::factory()->create(['customer_id' => $customer->id]);
+        DB::table('appointments')->insert([
+            'id' => $yesterdayApptId,
+            'reference' => 'APT-20261119-0001',
+            'dealership_id' => $dealership->id,
+            'customer_id' => $customer->id,
+            'vehicle_id' => $otherVehicle->id,
+            'service_type_id' => $service->id,
+            'technician_id' => $chi->id,
+            'bay_id' => $bay->id,
+            'status' => AppointmentStatus::COMPLETED->value,
+            'start_at' => $yesterdayStart,
+            'end_at' => $yesterdayEnd,
+            'version' => 2,
+            'source' => 'CUSTOMER',
+            'created_by_user_id' => $user->id,
+            'created_at' => $yesterdayStart,
+            'updated_at' => $yesterdayEnd,
+        ]);
+
+        DB::statement(<<<'SQL'
+            INSERT INTO resource_allocations (
+                id, appointment_id, dealership_id, resource_type, resource_id, period, active, created_at, deactivated_at
+            ) VALUES (
+                :id, :appointment_id, :dealership_id, :resource_type, :resource_id, tstzrange(:start, :end, '[)'), false, :created_at, :deactivated_at
+            )
+        SQL, [
+            'id' => (string) Str::uuid(),
+            'appointment_id' => $yesterdayApptId,
+            'dealership_id' => $dealership->id,
+            'resource_type' => ResourceType::TECHNICIAN->value,
+            'resource_id' => $chi->id,
+            'start' => $yesterdayStart->toIso8601String(),
+            'end' => $yesterdayEnd->toIso8601String(),
+            'created_at' => $yesterdayStart->toIso8601String(),
+            'deactivated_at' => $yesterdayEnd->toIso8601String(),
+        ]);
 
         $response = $this->actingAs($admin)
             ->putJson("/api/v1/dealerships/{$dealership->id}/technicians/{$chi->id}/status", [
@@ -368,13 +432,92 @@ class TechnicianStatusTest extends TestCase
 
         $response->assertStatus(409)
             ->assertJsonPath('code', 'TECHNICIAN_HAS_BOOKINGS')
-            ->assertJsonPath('count', 2)
-            ->assertJsonPath('appointments.0.reference', 'APT-20261104-0001')
-            ->assertJsonPath('appointments.1.customerName', 'Trần Thị B');
+            ->assertJsonPath('count', 1)
+            ->assertJsonPath('appointments.0.reference', 'APT-20261121-0001')
+            ->assertJsonPath('appointments.0.customerName', $customer->full_name);
 
         // Chi remains active
         $freshChi = $chi->fresh();
         $this->assertNotNull($freshChi);
         $this->assertTrue($freshChi->active);
+
+        CarbonImmutable::setTestNow();
+    }
+
+    /**
+     * TC-01-19 (D-01.11; Integration):
+     * Given Chi's only appointment is a HELD with expires_at in the past;
+     * When Admin disables Chi;
+     * Then 200; Chi inactive.
+     */
+    public function test_expired_hold_does_not_block_disable(): void
+    {
+        $world = World::saigonD7();
+        $dealership = $world->dealership;
+        $admin = $world->admin();
+        ['user' => $user, 'customer' => $customer] = $world->customerWithVehicle();
+        $chi = $world->technician('Võ Thị Chi');
+        $bay = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-20 12:00:00', 'UTC');
+        CarbonImmutable::setTestNow($now);
+
+        $tomorrowStart = $now->addDay()->setTime(9, 0, 0);
+        $tomorrowEnd = $tomorrowStart->addHour();
+        $expiredAt = $now->subMinutes(5);
+
+        // HELD appointment with expires_at in the past
+        $heldApptId = (string) Str::uuid();
+        DB::table('appointments')->insert([
+            'id' => $heldApptId,
+            'reference' => 'APT-20261121-0002',
+            'dealership_id' => $dealership->id,
+            'customer_id' => $customer->id,
+            'vehicle_id' => null,
+            'service_type_id' => $service->id,
+            'technician_id' => $chi->id,
+            'bay_id' => $bay->id,
+            'status' => AppointmentStatus::HELD->value,
+            'start_at' => $tomorrowStart,
+            'end_at' => $tomorrowEnd,
+            'expires_at' => $expiredAt,
+            'version' => 1,
+            'source' => 'CUSTOMER',
+            'created_by_user_id' => $user->id,
+            'created_at' => $now->subMinutes(10),
+            'updated_at' => $now->subMinutes(10),
+        ]);
+
+        DB::statement(<<<'SQL'
+            INSERT INTO resource_allocations (
+                id, appointment_id, dealership_id, resource_type, resource_id, period, active, created_at
+            ) VALUES (
+                :id, :appointment_id, :dealership_id, :resource_type, :resource_id, tstzrange(:start, :end, '[)'), true, :created_at
+            )
+        SQL, [
+            'id' => (string) Str::uuid(),
+            'appointment_id' => $heldApptId,
+            'dealership_id' => $dealership->id,
+            'resource_type' => ResourceType::TECHNICIAN->value,
+            'resource_id' => $chi->id,
+            'start' => $tomorrowStart->toIso8601String(),
+            'end' => $tomorrowEnd->toIso8601String(),
+            'created_at' => $now->subMinutes(10)->toIso8601String(),
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->putJson("/api/v1/dealerships/{$dealership->id}/technicians/{$chi->id}/status", [
+                'active' => false,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.active', false);
+
+        $freshChi = $chi->fresh();
+        $this->assertNotNull($freshChi);
+        $this->assertFalse($freshChi->active);
+
+        CarbonImmutable::setTestNow();
     }
 }

@@ -4,7 +4,7 @@
 
 **Blocked by:** [01-prefactor-overlap-assertion-parallel-runner-testing-routes](01-prefactor-overlap-assertion-parallel-runner-testing-routes.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/04-booking-integrity`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-04-15
 
-- [ ] TC-04-15 (AC-04.15, D-04.8; Unit): when `canMoveTo` for all 8×8 pairs; then Matches D-04.8; `holdsSlot` matches `CONTEXT.md`. Test: `api/tests/Unit/Booking/AppointmentStatusTest::test_AC_04_15_transition_table`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-04-15 (AC-04.15, D-04.8; Unit): when `canMoveTo` for all 8×8 pairs; then Matches D-04.8; `holdsSlot` matches `CONTEXT.md`. Test: `api/tests/Unit/Booking/AppointmentStatusTest::test_AC_04_15_transition_table`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
