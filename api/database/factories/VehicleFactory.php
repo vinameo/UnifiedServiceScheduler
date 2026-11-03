@@ -18,7 +18,7 @@ class VehicleFactory extends Factory
      */
     public function definition(): array
     {
-        $plate = '51H-'.fake()->numerify('###.##');
+        $plate = '51H-'.fake()->unique()->numerify('###.##');
 
         return [
             'customer_id' => Customer::factory(),

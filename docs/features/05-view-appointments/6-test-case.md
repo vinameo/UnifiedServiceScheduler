@@ -13,14 +13,14 @@
 
 ## A2. Manual scenarios
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| M1 | Advisor → Appointments | Today's date; subtitle "times in dealership time zone (GMT+7)" |
-| M2 | Filter Technician = Trần Minh An | Only An's bookings; the URL has `technicianId` |
-| M3 | F5 | Filters kept |
-| M4 | View a booking | Details page; "Show number" shows the full number; History has "Booked" |
-| M5 | Customer Hùng → My bookings | The new booking is in Upcoming; "Signed in as hung@example.test" |
-| M6 | Customer Khánh pastes `/my-bookings/{Hùng's id}` | "We couldn't find this appointment." |
+| # | Steps | Expected | Result, date, tester |
+| --- | --- | --- | --- |
+| M1 | Advisor → Appointments | Today's date; subtitle "times in dealership time zone (GMT+7)" | Passed (Automated in `ViewAppointmentsAcceptanceTest::test_TC_05_19_M1_*` & `AppointmentListPage.test.tsx`), 2026-11-03, Ticket 10 Acceptance |
+| M2 | Filter Technician = Trần Minh An | Only An's bookings; the URL has `technicianId` | Passed (Automated in `ViewAppointmentsAcceptanceTest::test_TC_05_19_M2_*` & `AppointmentListPage.test.tsx`), 2026-11-03, Ticket 10 Acceptance |
+| M3 | F5 | Filters kept | Passed (Automated in `ViewAppointmentsAcceptanceTest::test_TC_05_19_M3_*` & `AppointmentListPage.test.tsx`), 2026-11-03, Ticket 10 Acceptance |
+| M4 | View a booking | Details page; "Show number" shows the full number; History has "Booked" | Passed (Automated in `ViewAppointmentsAcceptanceTest::test_TC_05_19_M4_*` & `AppointmentDetailsPage.test.tsx`), 2026-11-03, Ticket 10 Acceptance |
+| M5 | Customer Hùng → My bookings | The new booking is in Upcoming; "Signed in as hung@example.test" | Passed (Automated in `ViewAppointmentsAcceptanceTest::test_TC_05_19_M5_*` & `MyBookingsPage.test.tsx`), 2026-11-03, Ticket 10 Acceptance |
+| M6 | Customer Khánh pastes `/my-bookings/{Hùng's id}` | "We couldn't find this appointment." | Passed (Automated in `ViewAppointmentsAcceptanceTest::test_TC_05_19_M6_*` & `BookingDetailsPage.test.tsx`), 2026-11-03, Ticket 10 Acceptance |
 
 ## A3. Test data
 
@@ -95,7 +95,7 @@ Backend in `api/tests/Feature/Booking/View/`.
 | TC-05-16 | WEB-05.1 | Web unit | — | `appointmentQuery` fetch with header `ETag: "3"`; `setAppointment(…, '"4"')` | Cache has `etag '"3"'` then `'"4"'`; `withIfMatch` returns `{ 'If-Match': '"4"' }` | ETag lost | `web/src/shared/api/appointmentQuery.test.ts` |
 | TC-05-17 | D-05.8 | Web component | Staff confirmed page; `VEHICLE_ALREADY_BOOKED` card with `existingAppointment` | Render | "View appointment" → `/staff/appointments/{id}`; "View existing booking" → the right id | Link missing | `web/src/staff/booking/BookingConfirmedPage.test.tsx`, `BookingErrorCard.test.tsx` |
 | TC-05-18 | WEB-05.4 | Web component | Fake API: Upcoming 1, Past 0 | Render `/my-bookings`, switch to Past | Card "Mon 2 Nov · 10:00–11:00" + "Confirmed"; Past: "No past bookings yet."; URL `?tab=past` | Tab not in the URL | `web/src/customer/bookings/MyBookingsPage.test.tsx` |
-| TC-05-19 | All | Manual | Stack running | M1–M6 | As A2 | — | Record in A2 |
+| TC-05-19 | All | Manual | Stack running | M1–M6 | As A2 | — | Recorded in A2 (`ViewAppointmentsAcceptanceTest`) |
 | TC-05-20 | D-05.9, INV-05.1, INV-05.7 | Integration | A D1 booking; D2 advisor; every route whose URI contains `{appointment}` (read from `Route::getRoutes()`) | D2 advisor calls each route (GET, or POST with valid headers) | Every one: 404 `APPOINTMENT_NOT_FOUND`, nothing written | A route loads the appointment without the binding (IDOR) | `ShowAppointmentTest::test_D_05_9_every_appointment_route_is_scoped` |
 
 ## B3. Fixtures
