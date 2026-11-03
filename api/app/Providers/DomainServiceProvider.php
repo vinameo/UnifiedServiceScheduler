@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Domain\Allocation\AllocationStrategy;
 use App\Domain\Allocation\CandidateFinder;
 use App\Domain\Allocation\CandidateFinderInterface;
+use App\Domain\Allocation\Contracts\BusyIntervalReader;
 use App\Domain\Allocation\LowestLevelFirstStrategy;
 use App\Domain\Auth\Repositories\CustomerRepository;
 use App\Domain\Auth\Repositories\CustomerRepositoryInterface;
@@ -16,6 +17,9 @@ use App\Domain\Auth\Services\SignUpService;
 use App\Domain\Auth\Services\SignUpServiceInterface;
 use App\Domain\Auth\Services\UserService;
 use App\Domain\Auth\Services\UserServiceInterface;
+use App\Domain\Booking\Repositories\AllocationSnapshotRepository;
+use App\Domain\Booking\Repositories\AllocationSnapshotRepositoryInterface;
+use App\Domain\Booking\Repositories\NoBusyIntervals;
 use App\Domain\MasterData\Repositories\MasterDataRepository;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\MasterData\Services\MasterDataService;
@@ -52,5 +56,7 @@ class DomainServiceProvider extends ServiceProvider
         // Allocation (F03)
         AllocationStrategy::class => LowestLevelFirstStrategy::class,
         CandidateFinderInterface::class => CandidateFinder::class,
+        AllocationSnapshotRepositoryInterface::class => AllocationSnapshotRepository::class,
+        BusyIntervalReader::class => NoBusyIntervals::class,
     ];
 }
