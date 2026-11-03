@@ -63,30 +63,42 @@ class ResourceAllocationRepository implements BusyIntervalReader, ResourceAlloca
      */
     public function insertFor(string $appointmentId, string $dealershipId, array $allocations, CarbonImmutable $now): void
     {
-        foreach ($allocations as $alloc) {
+        if (empty($allocations)) {
+            return;
+        }
+
+        $values = [];
+        $bindings = [
+            'appointment_id' => $appointmentId,
+            'dealership_id' => $dealershipId,
+            'created_at' => $now->toIso8601String(),
+        ];
+
+        foreach ($allocations as $idx => $alloc) {
             $id = (string) Str::uuid();
             $resourceType = $alloc['resource_type'] instanceof ResourceType ? $alloc['resource_type']->value : (string) $alloc['resource_type'];
             $resourceId = (string) $alloc['resource_id'];
             $start = $alloc['start_at'] instanceof CarbonImmutable ? $alloc['start_at']->toIso8601String() : (string) $alloc['start_at'];
             $end = $alloc['end_at'] instanceof CarbonImmutable ? $alloc['end_at']->toIso8601String() : (string) $alloc['end_at'];
 
-            DB::statement(<<<'SQL'
-                INSERT INTO resource_allocations (
-                    id, appointment_id, dealership_id, resource_type, resource_id, period, active, created_at
-                ) VALUES (
-                    :id, :appointment_id, :dealership_id, :resource_type, :resource_id, tstzrange(:start, :end, '[)'), true, :created_at
-                )
-            SQL, [
-                'id' => $id,
-                'appointment_id' => $appointmentId,
-                'dealership_id' => $dealershipId,
-                'resource_type' => $resourceType,
-                'resource_id' => $resourceId,
-                'start' => $start,
-                'end' => $end,
-                'created_at' => $now->toIso8601String(),
-            ]);
+            $idParam = "id_{$idx}";
+            $typeParam = "type_{$idx}";
+            $resIdParam = "res_id_{$idx}";
+            $startParam = "start_{$idx}";
+            $endParam = "end_{$idx}";
+
+            $values[] = "(:{$idParam}, :appointment_id, :dealership_id, :{$typeParam}, :{$resIdParam}, tstzrange(:{$startParam}, :{$endParam}, '[)'), true, :created_at)";
+
+            $bindings[$idParam] = $id;
+            $bindings[$typeParam] = $resourceType;
+            $bindings[$resIdParam] = $resourceId;
+            $bindings[$startParam] = $start;
+            $bindings[$endParam] = $end;
         }
+
+        $sql = 'INSERT INTO resource_allocations (id, appointment_id, dealership_id, resource_type, resource_id, period, active, created_at) VALUES '.implode(', ', $values);
+
+        DB::statement($sql, $bindings);
     }
 
     public function deactivateFor(string $appointmentId, CarbonImmutable $now): int

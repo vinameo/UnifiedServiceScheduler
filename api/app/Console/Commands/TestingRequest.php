@@ -7,6 +7,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Laravel\Sanctum\Sanctum;
 
 class TestingRequest extends Command
 {
@@ -67,7 +68,11 @@ class TestingRequest extends Command
             $user = User::find($userId);
             if ($user !== null) {
                 Auth::guard('sanctum')->setUser($user);
+                Auth::guard('web')->setUser($user);
                 Auth::setUser($user);
+                if (class_exists(Sanctum::class)) {
+                    Sanctum::actingAs($user);
+                }
             }
         }
 
