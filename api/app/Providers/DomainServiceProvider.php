@@ -29,7 +29,6 @@ use App\Domain\MasterData\Repositories\MasterDataRepository;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\MasterData\Services\MasterDataService;
 use App\Domain\MasterData\Services\MasterDataServiceInterface;
-use App\Domain\MasterData\Services\NoUpcomingAssignments;
 use App\Domain\MasterData\Services\TechnicianService;
 use App\Domain\MasterData\Services\TechnicianServiceInterface;
 use App\Domain\MasterData\Services\UpcomingAssignmentsReader;
@@ -56,7 +55,7 @@ class DomainServiceProvider extends ServiceProvider
         MasterDataRepositoryInterface::class => MasterDataRepository::class,
         MasterDataServiceInterface::class => MasterDataService::class,
         TechnicianServiceInterface::class => TechnicianService::class,
-        UpcomingAssignmentsReader::class => NoUpcomingAssignments::class,
+        UpcomingAssignmentsReader::class => ResourceAllocationRepository::class,
 
         // Allocation (F03)
         AllocationStrategy::class => LowestLevelFirstStrategy::class,

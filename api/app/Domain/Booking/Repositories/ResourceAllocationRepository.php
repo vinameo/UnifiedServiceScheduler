@@ -6,11 +6,12 @@ use App\Domain\Allocation\BusyInterval;
 use App\Domain\Allocation\Contracts\BusyIntervalReader;
 use App\Domain\Allocation\TimeRange;
 use App\Domain\Booking\ResourceType;
+use App\Domain\MasterData\Services\UpcomingAssignmentsReader;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class ResourceAllocationRepository implements BusyIntervalReader, ResourceAllocationRepositoryInterface
+class ResourceAllocationRepository implements BusyIntervalReader, ResourceAllocationRepositoryInterface, UpcomingAssignmentsReader
 {
     /**
      * @return list<BusyInterval>
@@ -152,5 +153,68 @@ class ResourceAllocationRepository implements BusyIntervalReader, ResourceAlloca
         ]);
 
         return $rows;
+    }
+
+    public function count(string $technicianId, CarbonImmutable $now): int
+    {
+        /** @var list<object{cnt: int}> $res */
+        $res = DB::select(<<<'SQL'
+            SELECT count(*) as cnt
+            FROM resource_allocations ra
+            JOIN appointments a ON a.id = ra.appointment_id
+            WHERE ra.resource_type = 'TECHNICIAN'
+              AND ra.resource_id = :technicianId
+              AND ra.active = true
+              AND upper(ra.period) > :now
+              AND (a.status <> 'HELD' OR a.expires_at > :now)
+        SQL, [
+            'technicianId' => $technicianId,
+            'now' => $now->toIso8601String(),
+        ]);
+
+        return (int) ($res[0]->cnt ?? 0);
+    }
+
+    /**
+     * @return list<array{id: string, reference: string, start: string, end: string, customerName: string}>
+     */
+    public function preview(string $technicianId, CarbonImmutable $now, int $limit = 20): array
+    {
+        /** @var list<object{appointment_id: string, reference: string, start_at: string, end_at: string, customer_name: string|null}> $rows */
+        $rows = DB::select(<<<'SQL'
+            SELECT
+                ra.appointment_id,
+                a.reference,
+                lower(ra.period) as start_at,
+                upper(ra.period) as end_at,
+                c.full_name as customer_name
+            FROM resource_allocations ra
+            JOIN appointments a ON a.id = ra.appointment_id
+            LEFT JOIN customers c ON c.id = a.customer_id
+            WHERE ra.resource_type = 'TECHNICIAN'
+              AND ra.resource_id = :technicianId
+              AND ra.active = true
+              AND upper(ra.period) > :now
+              AND (a.status <> 'HELD' OR a.expires_at > :now)
+            ORDER BY lower(ra.period) ASC
+            LIMIT :limit
+        SQL, [
+            'technicianId' => $technicianId,
+            'now' => $now->toIso8601String(),
+            'limit' => $limit,
+        ]);
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[] = [
+                'id' => (string) $row->appointment_id,
+                'reference' => (string) $row->reference,
+                'start' => CarbonImmutable::parse($row->start_at)->toIso8601String(),
+                'end' => CarbonImmutable::parse($row->end_at)->toIso8601String(),
+                'customerName' => (string) ($row->customer_name ?? ''),
+            ];
+        }
+
+        return $result;
     }
 }

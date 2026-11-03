@@ -488,4 +488,58 @@ class AppointmentWriterTest extends TestCase
                 && $event->resourceId === $techAn->id;
         });
     }
+
+    public function test_INV_04_15_disabled_technician_is_never_allocated(): void
+    {
+        $world = World::saigonD7();
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $techAn = $world->technician('An');
+        $techDung = $world->technician('Dũng');
+        $bayK1 = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-19 08:00:00', 'UTC');
+        $t0900 = CarbonImmutable::parse('2026-11-19 09:00:00', 'UTC');
+        $t1000 = CarbonImmutable::parse('2026-11-19 10:00:00', 'UTC');
+
+        // Pairs from snapshot: (An, K1), (Dung, K1)
+        $pairs = [
+            new CandidatePair(
+                new TechnicianState($techAn->id, $techAn->name, Level::from($techAn->level)),
+                new BayState($bayK1->id, $bayK1->code, $bayK1->bay_type),
+            ),
+            new CandidatePair(
+                new TechnicianState($techDung->id, $techDung->name, Level::from($techDung->level)),
+                new BayState($bayK1->id, $bayK1->code, $bayK1->bay_type),
+            ),
+        ];
+
+        // An is disabled after the snapshot was taken
+        DB::table('technicians')->where('id', $techAn->id)->update(['active' => false]);
+
+        $writer = new AppointmentWriter(new AppointmentRepository, new ResourceAllocationRepository);
+
+        $appointment = $writer->create(
+            new NewAppointment(
+                dealershipId: $world->dealership->id,
+                customerId: $customer->id,
+                vehicleId: $vehicle->id,
+                serviceTypeId: $service->id,
+                range: TimeRange::of($t0900, $t1000),
+                createdByUserId: $user->id,
+            ),
+            $pairs,
+            $now,
+        );
+
+        // Appointment allocated to Dung
+        $this->assertSame($techDung->id, $appointment->technician_id);
+
+        // An must have 0 allocations in resource_allocations
+        $anAllocationsCount = DB::table('resource_allocations')
+            ->where('resource_type', 'TECHNICIAN')
+            ->where('resource_id', $techAn->id)
+            ->count();
+        $this->assertSame(0, $anAllocationsCount, 'Disabled technician must never receive allocations');
+    }
 }
