@@ -246,3 +246,4 @@ export function SignUpPage() {
     </Box>
   )
 }
+

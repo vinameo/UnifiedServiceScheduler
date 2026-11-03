@@ -36,7 +36,7 @@ class ParallelSignInTest extends TestCase
             $body = escapeshellarg($payload);
 
             return "DB_DATABASE=scheduler_testing CACHE_STORE=database php {$artisan} testing:request /api/v1/auth/customer/sign-in --method=POST --body={$body} --wait-until={$targetStartTime}";
-        }, delaySeconds: 0.8);
+        }, delaySeconds: 1.5);
 
         $this->assertCount(10, $results);
 

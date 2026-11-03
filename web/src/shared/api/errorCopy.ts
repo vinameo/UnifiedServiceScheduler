@@ -17,3 +17,4 @@ export function errorCopy(code: string | undefined): string {
   }
   return ERROR_MESSAGES[code] ?? ERROR_MESSAGES.INTERNAL_ERROR
 }
+

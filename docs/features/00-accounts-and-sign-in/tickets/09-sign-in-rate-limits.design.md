@@ -8,3 +8,4 @@
 | IP rate limiter auth-ip limits 30 requests per minute per IP (API §B1, B5) | TC-00-19, D-00.6 | `api/routes/api.php:10` RateLimiter::for auth-ip | Evaluated at middleware level per IP before hitting controller | Unauthenticated IP throttle | API §B1 Endpoint table; D-00.6 | follow |
 | Shared cache store defaults to database in .env.example (RQ §B1, ADR-00.2) | TC-00-33, R-00.1 | `api/.env.example:43` CACHE_STORE setting | Environment config read at application boot | Cache table persists across FPM workers | RQ §B1 ADR-00.2; CLAUDE.md §Env vars | follow |
 | Web customer sign-in displays human-friendly retry minutes on 429 (WEB §B3) | TC-00-29, WEB §B3 | `web/src/customer/auth/SignInPage.tsx:1` error handling | Client computes minutes = ceil(retryAfter / 60) from Retry-After header | Read from response headers | WEB §B3 Sign-in screen spec; errorCopy | follow |
+

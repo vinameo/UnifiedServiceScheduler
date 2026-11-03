@@ -12,3 +12,4 @@ export function homePathFor(role: string | null | undefined): string {
       return '/staff'
   }
 }
+

@@ -108,3 +108,4 @@ Spec: `docs/features/00-accounts-and-sign-in/`
 - **PHPStan Analysis:** Level 8, 71 files analysed, 0 errors.
 - **Frontend Vitest:** 13 test files passed, 45 tests passed.
 - **Frontend ESLint & TypeScript Check:** 0 lint errors, 0 type errors.
+

@@ -15,3 +15,4 @@ describe('errorCopy', () => {
     expect(errorCopy(undefined)).toBe('Something went wrong. Please try again.')
   })
 })
+

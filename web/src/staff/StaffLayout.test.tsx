@@ -83,3 +83,4 @@ describe('StaffLayout', () => {
     expect(screen.queryByRole('link', { name: 'New booking' })).not.toBeInTheDocument()
   })
 })
+

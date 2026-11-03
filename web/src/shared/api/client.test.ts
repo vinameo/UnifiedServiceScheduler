@@ -60,3 +60,4 @@ describe('api client 401 interceptor (WEB-00.3)', () => {
     expect(unauthenticatedHandler).not.toHaveBeenCalled()
   })
 })
+

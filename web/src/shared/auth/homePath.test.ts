@@ -10,3 +10,4 @@ describe('homePathFor', () => {
     expect(homePathFor(undefined)).toBe('/staff')
   })
 })
+

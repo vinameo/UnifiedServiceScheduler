@@ -4,3 +4,4 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | RequireRole component route guard redirecting unauthenticated users with returnTo (WEB §B1, WEB §B2) | AC-00.12, WEB-00.2 | `web/src/shared/auth/useMe.ts:28` useMe hook providing current session state | Read-only UI routing decision; session state verified via cached me query | Unauthenticated request redirects to signInPath; authenticated user with wrong role displays Forbidden screen | SDD §7.2 Portal route protection; WEB §B1 route matrix; WEB §B2 WEB-00.2 | follow |
 | safeReturnTo rejects open redirects like //evil.com and /\\evil.com (WEB §B2 WEB-00.4, TC-00-24) | WEB-00.4, TC-00.24 | `web/src/shared/auth/returnTo.ts:1` safeReturnTo function | Pure validation of returnTo URL parameter during redirect and sign-in completion | Invalid or external URL targets fall back to safe default role home path | OWASP Top 10 A01 Broken Access Control (open redirect prevention); CLAUDE.md §Frontend conventions | follow |
+

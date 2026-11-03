@@ -15,3 +15,4 @@ describe('safeReturnTo', () => {
     expect(safeReturnTo(undefined, '/custom-fallback')).toBe('/custom-fallback')
   })
 })
+

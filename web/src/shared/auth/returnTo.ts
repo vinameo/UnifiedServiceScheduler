@@ -5,3 +5,4 @@ export function safeReturnTo(value: string | null | undefined, fallback: string 
   }
   return fallback
 }
+
