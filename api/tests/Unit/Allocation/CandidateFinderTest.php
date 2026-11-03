@@ -6,6 +6,7 @@ use App\Domain\Allocation\AllocationFailure;
 use App\Domain\Allocation\CandidateFinder;
 use App\Domain\Allocation\TimeRange;
 use App\Domain\MasterData\BayType;
+use App\Domain\MasterData\Level;
 use Closure;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -166,6 +167,81 @@ class CandidateFinderTest extends TestCase
     }
 
     /**
+     * TC-03-06: AC-03.6, D-03.10
+     * Given An (2), Dũng (3), Em (6), all free;
+     * when Search MAINT_20K (level 3);
+     * then Candidates Dũng and Em; An never in a pair.
+     */
+    public function test_D_03_10_level_at_or_above_qualifies(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('An', level: 2)
+            ->technician('Dũng', level: 3)
+            ->technician('Em', level: 6)
+            ->bay('S1', BayType::STANDARD)
+            ->build();
+
+        $request = SnapshotBuilder::request('MAINT_20K', '09:00-10:00');
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertTrue($result->found());
+        $technicianNames = array_map(fn ($pair) => $pair->technician->name, $result->pairs);
+        $this->assertContains('Dũng', $technicianNames);
+        $this->assertContains('Em', $technicianNames);
+        $this->assertNotContains('An', $technicianNames);
+    }
+
+    /**
+     * TC-03-08: AC-03.8
+     * Given An (2), Dũng (3), Chi (4), all free; KEV free;
+     * when Search EV_BATTERY (level 5);
+     * then NO_QUALIFIED_TECHNICIAN.
+     */
+    public function test_AC_03_8_no_high_enough_level_gives_no_qualified_technician(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('An', level: 2)
+            ->technician('Dũng', level: 3)
+            ->technician('Chi', level: 4)
+            ->bay('KEV', BayType::EV)
+            ->build();
+
+        $request = SnapshotBuilder::request('EV_BATTERY', '09:00-10:00');
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertFalse($result->found());
+        $this->assertSame([], $result->pairs);
+        $this->assertSame(AllocationFailure::NO_QUALIFIED_TECHNICIAN, $result->failure);
+    }
+
+    /**
+     * TC-03-12: AC-03.10
+     * Given Em (level 6, the only one ≥ 5) active=false; KEV free;
+     * when Search EV_BATTERY;
+     * then NO_QUALIFIED_TECHNICIAN.
+     */
+    public function test_AC_03_10_inactive_technician_is_not_qualified(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('Em', level: 6, active: false)
+            ->bay('KEV', BayType::EV)
+            ->build();
+
+        $request = SnapshotBuilder::request('EV_BATTERY', '09:00-10:00');
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertFalse($result->found());
+        $this->assertSame([], $result->pairs);
+        $this->assertSame(AllocationFailure::NO_QUALIFIED_TECHNICIAN, $result->failure);
+    }
+
+    /**
      * TC-03-13: AC-03.11
      * Given KEV active=false; Em free;
      * when Search EV_BATTERY;
@@ -186,6 +262,29 @@ class CandidateFinderTest extends TestCase
         $this->assertFalse($result->found());
         $this->assertSame([], $result->pairs);
         $this->assertSame(AllocationFailure::NO_BAY_AVAILABLE, $result->failure);
+    }
+
+    /**
+     * TC-03-14: D-03.10
+     * Given Only Chi (level 4), free;
+     * when Search a level-4 service;
+     * then Chi is a candidate.
+     */
+    public function test_D_03_10_equal_level_qualifies(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('Chi', level: 4)
+            ->bay('S1', BayType::STANDARD)
+            ->build();
+
+        $request = SnapshotBuilder::request(Level::from(4), '09:00-10:00', BayType::STANDARD);
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertTrue($result->found());
+        $this->assertNotEmpty($result->pairs);
+        $this->assertSame('Chi', $result->pairs[0]->technician->name);
     }
 
     /**
