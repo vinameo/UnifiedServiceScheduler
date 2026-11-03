@@ -70,11 +70,11 @@ Must: schema, seed, read API, route binding. Should: Master data screen. Could: 
 
 ## B2. Metrics
 
-| ID | Metric | SQL | Threshold |
-| --- | --- | --- | --- |
-| M-01.1 | Services with no active qualified technician | `SELECT st.code FROM service_types st WHERE st.active AND NOT EXISTS (SELECT 1 FROM technicians t WHERE t.dealership_id = st.dealership_id AND t.active AND t.level >= st.required_level);` | 0 rows |
-| M-01.2 | Services with no active matching bay | `SELECT st.code FROM service_types st WHERE st.active AND NOT EXISTS (SELECT 1 FROM bays b WHERE b.dealership_id = st.dealership_id AND b.active AND b.bay_type = st.required_bay_type);` | 0 rows |
-| M-01.3 | Disable attempts refused because of upcoming appointments (per week) | `SELECT count(*) FROM api_events WHERE code = 'TECHNICIAN_HAS_BOOKINGS' AND occurred_at > now() - interval '7 days';` (F08) | Watch; many → consider FC-01.4 (same-time swap) |
+| ID | Metric | SQL | Threshold | Measured (2026-11-03) |
+| --- | --- | --- | --- | --- |
+| M-01.1 | Services with no active qualified technician | `SELECT st.code FROM service_types st WHERE st.active AND NOT EXISTS (SELECT 1 FROM technicians t WHERE t.dealership_id = st.dealership_id AND t.active AND t.level >= st.required_level);` | 0 rows | 0 rows |
+| M-01.2 | Services with no active matching bay | `SELECT st.code FROM service_types st WHERE st.active AND NOT EXISTS (SELECT 1 FROM bays b WHERE b.dealership_id = st.dealership_id AND b.active AND b.bay_type = st.required_bay_type);` | 0 rows | 0 rows |
+| M-01.3 | Disable attempts refused because of upcoming appointments (per week) | `SELECT count(*) FROM api_events WHERE code = 'TECHNICIAN_HAS_BOOKINGS' AND occurred_at > now() - interval '7 days';` (F08) | Watch; many → consider FC-01.4 (same-time swap) | N/A until F08 |
 
 ## B3. Future constraints
 
