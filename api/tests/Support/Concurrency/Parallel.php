@@ -3,23 +3,64 @@
 namespace Tests\Support\Concurrency;
 
 use Closure;
+use Illuminate\Process\Pool;
 use Illuminate\Support\Facades\Process;
 
 class Parallel
 {
     /**
-     * Runs N parallel commands that all wait for the exact same target start time.
+     * Run $n parallel requests using Process::pool.
      *
-     * @param  Closure(int $index, float $targetStartTime): string  $commandBuilder
+     * @param  int  $count  Number of processes
+     * @param  Closure(int, float): (string|array{method?: string, uri?: string, user?: mixed, headers?: array<string, string>, body?: mixed, json?: mixed})  $requestFor
      * @return array<int, array{status: int, body: array<string, mixed>, headers: array<string, array<int, string>>, raw: string}>
      */
-    public static function run(int $count, Closure $commandBuilder, float $delaySeconds = 0.5): array
+    public static function run(int $count, Closure $requestFor, float $delaySeconds = 0.5): array
     {
         $targetStartTime = microtime(true) + $delaySeconds;
 
-        $pool = Process::pool(function ($pool) use ($count, $commandBuilder, $targetStartTime) {
+        $pool = Process::pool(function (Pool $pool) use ($count, $requestFor, $targetStartTime): void {
             for ($i = 0; $i < $count; $i++) {
-                $cmd = $commandBuilder($i, $targetStartTime);
+                $item = $requestFor($i, $targetStartTime);
+
+                if (is_string($item)) {
+                    $pool->command($item);
+
+                    continue;
+                }
+
+                $method = $item['method'] ?? 'GET';
+                $uri = $item['uri'] ?? '/';
+                $userId = '';
+                if (isset($item['user'])) {
+                    $userId = is_object($item['user']) && isset($item['user']->id)
+                        ? (string) $item['user']->id
+                        : (string) $item['user'];
+                }
+
+                $encodedHeaders = json_encode($item['headers'] ?? []);
+                $bodyData = $item['body'] ?? ($item['json'] ?? null);
+                $encodedBody = is_array($bodyData)
+                    ? json_encode($bodyData)
+                    : (string) ($bodyData ?? '');
+                $body = is_string($encodedBody) ? $encodedBody : '';
+
+                $artisan = base_path('artisan');
+                $cmd = "APP_ENV=testing DB_DATABASE=scheduler_testing php {$artisan} testing:request "
+                    .escapeshellarg($uri)
+                    ." --method={$method}"
+                    ." --start-at={$targetStartTime}";
+
+                if ($userId !== '') {
+                    $cmd .= ' --user='.escapeshellarg($userId);
+                }
+                if (is_string($encodedHeaders) && $encodedHeaders !== '[]') {
+                    $cmd .= ' --headers='.escapeshellarg($encodedHeaders);
+                }
+                if ($body !== '') {
+                    $cmd .= ' --body='.escapeshellarg($body);
+                }
+
                 $pool->command($cmd);
             }
         });
@@ -38,6 +79,13 @@ class Parallel
                     'status' => (int) ($decoded['status'] ?? 0),
                     'body' => (array) ($decoded['body'] ?? []),
                     'headers' => (array) ($decoded['headers'] ?? []),
+                    'raw' => $raw,
+                ];
+            } else {
+                $output[] = [
+                    'status' => 500,
+                    'body' => ['raw' => $raw, 'error' => $result->errorOutput()],
+                    'headers' => [],
                     'raw' => $raw,
                 ];
             }
