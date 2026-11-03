@@ -123,4 +123,6 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'idempotency_ttl_hours' => (int) env('IDEMPOTENCY_TTL_HOURS', 24),
+
 ];
