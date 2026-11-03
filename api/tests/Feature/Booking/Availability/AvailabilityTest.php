@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Booking\Availability;
 
+use App\Domain\Booking\Services\AvailabilityServiceInterface;
 use App\Models\Dealership;
 use App\Models\ServiceType;
 use App\Models\User;
@@ -384,6 +385,51 @@ class AvailabilityTest extends TestCase
                 '10:00 must immediately show as unavailable on subsequent read.'
             );
             $this->assertSame('NO_TECHNICIAN_AVAILABLE', $slotsByTime2['10:00']['reason']);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_availability_service_near_integration(): void
+    {
+        $world = World::saigonD7();
+        $dealership = $world->dealership;
+        $oilService = $world->serviceType('OIL_CHANGE');
+
+        $world->onlyTechnicians(['An']);
+        $techAn = $world->technician('An');
+        $bay = $world->bay('K1');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            // Block An from 09:00 to 10:00 on 2026-11-03
+            AppointmentFactory::create(
+                dealership: $dealership,
+                technician: $techAn,
+                bay: $bay,
+                start: CarbonImmutable::parse('2026-11-03 09:00:00', 'Asia/Ho_Chi_Minh'),
+                end: CarbonImmutable::parse('2026-11-03 10:00:00', 'Asia/Ho_Chi_Minh'),
+            );
+
+            /** @var AvailabilityServiceInterface $service */
+            $service = app(AvailabilityServiceInterface::class);
+
+            $wanted = CarbonImmutable::parse('2026-11-03 09:00:00', 'Asia/Ho_Chi_Minh');
+            $alternatives = $service->near(
+                dealershipId: $dealership->id,
+                type: $oilService,
+                wanted: $wanted,
+                now: $now,
+                limit: 3,
+            );
+
+            $this->assertNotEmpty($alternatives);
+            // 08:00 is free and 10:00 is free (both 1 hr from 09:00). 08:00 must come before 10:00 (AC-06.9).
+            $tz = $dealership->timezone;
+            $this->assertSame('08:00', $alternatives[0]->start->setTimezone($tz)->format('H:i'));
+            $this->assertSame('10:00', $alternatives[1]->start->setTimezone($tz)->format('H:i'));
         } finally {
             CarbonImmutable::setTestNow();
         }

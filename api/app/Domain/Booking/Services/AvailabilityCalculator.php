@@ -17,7 +17,7 @@ use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Models\ServiceType;
 use Carbon\CarbonImmutable;
 
-final readonly class AvailabilityCalculator
+final readonly class AvailabilityCalculator implements AvailabilityCalculatorInterface
 {
     public function __construct(
         private MasterDataRepositoryInterface $masterDataRepository,

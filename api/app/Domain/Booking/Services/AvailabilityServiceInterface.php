@@ -2,6 +2,7 @@
 
 namespace App\Domain\Booking\Services;
 
+use App\Domain\Allocation\TimeRange;
 use App\Domain\Booking\DayAvailability;
 use App\Models\ServiceType;
 use App\Models\User;
@@ -22,4 +23,19 @@ interface AvailabilityServiceInterface
         ?string $excludeAppointmentId = null,
         ?User $actor = null,
     ): DayAvailability;
+
+    /**
+     * Find up to $limit free slots near the wanted time (INV-06.5, D-06.4).
+     *
+     * @return list<TimeRange>
+     */
+    public function near(
+        string $dealershipId,
+        ServiceType|string $type,
+        CarbonImmutable $wanted,
+        CarbonImmutable $now,
+        ?string $excludeAppointmentId = null,
+        int $limit = 3,
+        ?User $actor = null,
+    ): array;
 }
