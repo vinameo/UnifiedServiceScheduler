@@ -1,8 +1,7 @@
 import { AppShell, Avatar, Box, Button, Group, NavLink, Stack, Text, ThemeIcon, Title } from '@mantine/core'
 import { NavLink as RouterNavLink, Outlet, useNavigate } from 'react-router'
-import { useQueryClient } from '@tanstack/react-query'
 import { useMe } from '../shared/auth/useMe'
-import { api } from '../shared/api/client'
+import { useAuthActions } from '../shared/auth/useAuthActions'
 
 const ROLE_LABELS: Record<string, string> = {
   CUSTOMER: 'Customer',
@@ -20,18 +19,12 @@ function getInitials(name: string | undefined): string {
 
 export function StaffLayout() {
   const { data: me } = useMe()
-  const queryClient = useQueryClient()
+  const { signOut } = useAuthActions()
   const navigate = useNavigate()
 
   const handleSignOut = async () => {
-    try {
-      await api.post('/auth/sign-out')
-    } catch {
-      // Ignore errors on sign out
-    } finally {
-      queryClient.clear()
-      navigate('/staff/sign-in')
-    }
+    await signOut()
+    navigate('/staff/sign-in')
   }
 
   const role = me?.role

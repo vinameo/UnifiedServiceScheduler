@@ -21,5 +21,6 @@ Route::post('/auth/staff/sign-in', [AuthController::class, 'staffSignIn'])
     ->middleware('throttle:auth-ip');
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/auth/sign-out', [AuthController::class, 'signOut']);
     Route::get('/me', [MeController::class, 'me']);
 });

@@ -10,6 +10,9 @@ use App\Http\Requests\Auth\CustomerSignUpRequest;
 use App\Http\Requests\Auth\SignInRequest;
 use App\Http\Resources\MeResource;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
@@ -50,5 +53,18 @@ class AuthController extends Controller
         );
 
         return (new MeResource($user))->response()->setStatusCode(201);
+    }
+
+    public function signOut(Request $request): Response
+    {
+        Auth::guard('web')->logout();
+
+        $session = $request->hasSession() ? $request->session() : session();
+        $session->invalidate();
+        $session->regenerateToken();
+
+        Auth::forgetGuards();
+
+        return response()->noContent();
     }
 }

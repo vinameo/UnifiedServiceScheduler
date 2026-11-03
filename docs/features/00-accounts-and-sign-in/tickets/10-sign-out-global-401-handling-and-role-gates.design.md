@@ -1,0 +1,7 @@
+# Design notes · 10: Sign-out, global 401 handling and role gates
+
+| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| Sign-out invalidates session and regenerates CSRF token (API §B1, B7) | AC-00.9, INV-00.8 | `api/app/Http/Controllers/Api/V1/AuthController.php:58` signOut implementation | Destroys current session in storage; subsequent request rejected as 401 | Active or inactive session invalidated immediately from session store | RQ §B3 INV-00.8; API §B7 | follow |
+| Global 401 interceptor clears query cache and redirects to area sign-in with returnTo (WEB §B2) | WEB-00.3 | `web/src/shared/api/client.ts:33` response interceptor | Detects unauthenticated API responses outside /me and /auth/* routes | Cleared regardless of user active state; unauthenticated response carries no user data | WEB-00.3; 5-web-spec §B2 | follow |
+| Route authorization gates enforce role separation (staff vs customer) via can middleware (RQ §B3) | AC-00.7, INV-00.10 | `api/app/Providers/AppServiceProvider.php:28` Gate definitions | Evaluated by can:staff and can:customer middleware prior to controller invocation | Role checked against authenticated user model; non-existent user returns 401 unauthenticated | RQ §B3 INV-00.10; API §B3 | follow |
