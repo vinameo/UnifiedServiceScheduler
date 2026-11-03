@@ -10,6 +10,7 @@ use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
+use Illuminate\Testing\PendingCommand;
 use Tests\Support\AssertsNoOverlap;
 use Tests\Support\World;
 use Tests\TestCase;
@@ -391,7 +392,12 @@ class IdempotencyTest extends TestCase
         $this->assertSame(1, DB::table('idempotency_keys')->where('key', $key)->count());
 
         // 2. Run artisan idempotency:prune
-        $this->artisan('idempotency:prune')->assertSuccessful();
+        $command = $this->artisan('idempotency:prune');
+        if ($command instanceof PendingCommand) {
+            $command->assertSuccessful();
+        } else {
+            $this->assertSame(0, $command);
+        }
 
         // Row is deleted
         $this->assertSame(0, DB::table('idempotency_keys')->where('key', $key)->count());
