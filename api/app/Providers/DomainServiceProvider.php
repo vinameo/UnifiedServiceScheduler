@@ -29,6 +29,8 @@ use App\Domain\Booking\Repositories\VehicleRepository;
 use App\Domain\Booking\Repositories\VehicleRepositoryInterface;
 use App\Domain\Booking\Services\AppointmentEventRecorder;
 use App\Domain\Booking\Services\AppointmentEventRecorderInterface;
+use App\Domain\Booking\Services\AppointmentQueryService;
+use App\Domain\Booking\Services\AppointmentQueryServiceInterface;
 use App\Domain\Booking\Services\AppointmentTransition;
 use App\Domain\Booking\Services\AppointmentTransitionInterface;
 use App\Domain\Booking\Services\AppointmentWriter;
@@ -84,6 +86,7 @@ class DomainServiceProvider extends ServiceProvider
         AppointmentEventRecorderInterface::class => AppointmentEventRecorder::class,
         AppointmentTransitionInterface::class => AppointmentTransition::class,
         BookingServiceInterface::class => BookingService::class,
+        AppointmentQueryServiceInterface::class => AppointmentQueryService::class,
 
         // Notifications (F04, F11)
         OutboxWriterInterface::class => OutboxWriter::class,

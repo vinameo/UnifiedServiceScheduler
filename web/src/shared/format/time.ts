@@ -75,3 +75,19 @@ export function formatAppointmentSlot(startIso: string, endIso: string, timeZone
   const range = formatInZone(startIso, timeZone, 'range', endIso)
   return `${day} · ${range}`
 }
+
+export function formatDateTime(iso: string, timeZone: string): string {
+  const date = new Date(iso)
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date)
+
+  const find = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${find('day')}/${find('month')}/${find('year')} ${find('hour')}:${find('minute')}`
+}

@@ -1,0 +1,25 @@
+export const appointmentCopy = {
+  breadcrumb: 'Appointments',
+  closedBanner:
+    'This appointment is closed and can no longer be changed. Its bay and technician have been released for this time slot.',
+  infoTitle: 'Appointment info',
+  customerVehicleTitle: 'Customer and vehicle',
+  fields: {
+    time: 'Time',
+    service: 'Service',
+    technician: 'Technician',
+    bay: 'Bay',
+    dealership: 'Dealership',
+    createdBy: 'Created by',
+    customer: 'Customer',
+    phone: 'Phone',
+    vehicle: 'Vehicle',
+    vin: 'VIN',
+  },
+  showNumber: 'Show number',
+  history: 'History',
+  system: 'System',
+  notFound: "We couldn't find this appointment.",
+  backToList: 'Back to appointments',
+  viewAppointment: 'View appointment',
+}

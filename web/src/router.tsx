@@ -13,6 +13,7 @@ import { StaffSignInPage } from './staff/auth/StaffSignInPage'
 import { MasterDataPage } from './staff/master-data/MasterDataPage'
 import { NewBookingPage } from './staff/booking/NewBookingPage'
 import { BookingConfirmedPage } from './staff/booking/BookingConfirmedPage'
+import { AppointmentDetailsPage } from './staff/appointments/AppointmentDetailsPage'
 import { RequireRole } from './shared/auth/RequireRole'
 
 export const routes = [
@@ -56,6 +57,7 @@ export const routes = [
       { index: true, element: <NewBookingPage /> },
       { path: 'bookings/:id/confirmed', element: <BookingConfirmedPage /> },
       { path: 'appointments', element: <StaffHomePage /> },
+      { path: 'appointments/:id', element: <AppointmentDetailsPage /> },
       {
         path: 'master-data',
         element: (

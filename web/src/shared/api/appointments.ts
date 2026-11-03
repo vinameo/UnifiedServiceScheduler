@@ -53,6 +53,18 @@ export interface AppointmentVehicle {
   vin?: string
 }
 
+export interface AppointmentCreatedBy {
+  name: string
+  role: string
+}
+
+export interface AppointmentCancellation {
+  reason?: string | null
+  note?: string | null
+  at: string
+  byRole: string
+}
+
 export interface Appointment {
   id: string
   reference: string
@@ -70,6 +82,9 @@ export interface Appointment {
   reminderOptIn: boolean
   source: string
   createdAt: string
+  createdBy?: AppointmentCreatedBy | null
+  cancellation?: AppointmentCancellation | null
+  contactRequiredReason?: string | null
 }
 
 export async function createAppointment(
