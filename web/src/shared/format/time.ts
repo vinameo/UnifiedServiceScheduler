@@ -106,3 +106,16 @@ export function formatShortDateTime(iso: string, timeZone: string): string {
   const find = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
   return `${find('day')}/${find('month')} ${find('hour')}:${find('minute')}`
 }
+
+export function getTimezoneOffsetLabel(timeZone: string, date: Date = new Date()): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(date)
+    return parts.find((p) => p.type === 'timeZoneName')?.value ?? timeZone
+  } catch {
+    return timeZone
+  }
+}
+

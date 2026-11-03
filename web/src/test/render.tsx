@@ -5,9 +5,12 @@ import { routes } from '../router'
 
 export function renderRoute(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] })
-  return render(
-    <AppProviders>
-      <RouterProvider router={router} />
-    </AppProviders>,
-  )
+  return {
+    ...render(
+      <AppProviders>
+        <RouterProvider router={router} />
+      </AppProviders>,
+    ),
+    router,
+  }
 }

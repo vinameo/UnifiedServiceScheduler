@@ -23,6 +23,33 @@ export const appointmentCopy = {
   backToList: 'Back to appointments',
   viewAppointment: 'View appointment',
   noHistory: 'No history available.',
+  list: {
+    title: 'Appointments',
+    subtitle: (dayLong: string, offset: string) =>
+      `${dayLong} · times in dealership time zone (${offset})`,
+    filters: {
+      date: 'Date',
+      technician: 'Technician',
+      bay: 'Bay',
+      status: 'Status',
+      all: 'All',
+    },
+    columns: {
+      time: 'Time',
+      customerAndVehicle: 'Customer · Vehicle',
+      service: 'Service',
+      technician: 'Technician',
+      bay: 'Bay',
+      status: 'Status',
+      actions: 'Actions',
+    },
+    view: 'View',
+    footer: (n: number, total: number) =>
+      `Showing ${n} of ${total} appointments, sorted by start time`,
+    loadMore: 'Load more',
+    empty: 'No appointments on this day.',
+    newBooking: 'New booking',
+  },
 }
 
 export const historyTypeLabels: Record<string, string> = {
