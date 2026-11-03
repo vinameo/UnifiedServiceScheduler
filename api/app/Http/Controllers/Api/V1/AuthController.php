@@ -29,6 +29,17 @@ class AuthController extends Controller
         return new MeResource($user);
     }
 
+    public function customerSignIn(SignInRequest $request): MeResource
+    {
+        $user = $this->signInService->signIn(
+            $request->validated('email'),
+            $request->validated('password'),
+            Portal::CUSTOMER
+        );
+
+        return new MeResource($user);
+    }
+
     public function customerSignUp(CustomerSignUpRequest $request): JsonResponse
     {
         $user = $this->signUpService->signUp(

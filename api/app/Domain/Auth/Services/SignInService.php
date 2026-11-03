@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 class SignInService implements SignInServiceInterface
 {
-    private const DUMMY_HASH = '$2y$10$dummyhashplaceholderforconstanttimetimingattackprevention..';
+    private const DUMMY_HASH = '$2y$12$IZEIBAzXHcWMZk8oJKpqAe4z9/QU5UH0P.sNtXLKyHWG79Ov0.HIy';
 
     public function signIn(string $email, string $password, Portal $portal): User
     {

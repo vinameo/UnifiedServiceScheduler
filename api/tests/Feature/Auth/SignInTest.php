@@ -6,6 +6,7 @@ use App\Models\Dealership;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class SignInTest extends TestCase
@@ -86,5 +87,68 @@ class SignInTest extends TestCase
         $this->assertNotEmpty($sessionBefore);
         $this->assertNotEmpty($sessionAfter);
         $this->assertNotSame($sessionBefore, $sessionAfter);
+    }
+
+    public function test_AC_00_4_wrong_password_is_401(): void
+    {
+        User::factory()->customer()->create([
+            'email' => 'customer@mail.com',
+            'password' => 'secret12',
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/customer/sign-in', [
+            'email' => 'customer@mail.com',
+            'password' => 'wrong123',
+        ]);
+
+        $response->assertStatus(401)
+            ->assertJson([
+                'status' => 401,
+                'code' => 'INVALID_CREDENTIALS',
+                'title' => 'Email or password is incorrect.',
+            ]);
+    }
+
+    #[DataProvider('wrongPortalProvider')]
+    public function test_AC_00_6_wrong_portal_is_401(string $role, string $endpoint): void
+    {
+        $dealership = Dealership::factory()->create();
+
+        if ($role === 'SERVICE_ADVISOR') {
+            User::factory()->advisor($dealership)->create([
+                'email' => 'staff.portal@saigonauto.test',
+                'password' => 'password123',
+            ]);
+            $email = 'staff.portal@saigonauto.test';
+        } else {
+            User::factory()->customer()->create([
+                'email' => 'customer.portal@saigonauto.test',
+                'password' => 'password123',
+            ]);
+            $email = 'customer.portal@saigonauto.test';
+        }
+
+        $response = $this->postJson($endpoint, [
+            'email' => $email,
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(401)
+            ->assertJson([
+                'status' => 401,
+                'code' => 'INVALID_CREDENTIALS',
+                'title' => 'Email or password is incorrect.',
+            ]);
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function wrongPortalProvider(): array
+    {
+        return [
+            'advisor on customer portal' => ['SERVICE_ADVISOR', '/api/v1/auth/customer/sign-in'],
+            'customer on staff portal' => ['CUSTOMER', '/api/v1/auth/staff/sign-in'],
+        ];
     }
 }

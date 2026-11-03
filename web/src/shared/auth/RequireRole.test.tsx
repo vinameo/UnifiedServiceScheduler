@@ -23,6 +23,16 @@ describe('RequireRole', () => {
     })
   })
 
+  it('TC-00-23: redirects unauthenticated users to customer sign-in with returnTo when accessing customer route', async () => {
+    apiMock.get('/me', apiMock.replyProblem(401, 'UNAUTHENTICATED', 'Please sign in.'))
+
+    renderRoute('/my-bookings')
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    })
+  })
+
   it('renders children when authenticated with authorized role', async () => {
     apiMock.get('/me', [
       200,

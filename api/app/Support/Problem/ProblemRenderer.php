@@ -30,7 +30,10 @@ final class ProblemRenderer
             $e instanceof AccessDeniedHttpException => new Problem(403, 'FORBIDDEN', 'You may not do this.'),
             $e instanceof ModelNotFoundException,
             $e instanceof NotFoundHttpException => new Problem(404, 'NOT_FOUND', 'Not found.'),
-            $e instanceof TokenMismatchException => new Problem(419, 'CSRF_TOKEN_MISMATCH', 'The page has expired. Reload and try again.'),
+            $e instanceof TokenMismatchException,
+            ($e instanceof HttpExceptionInterface && $e->getStatusCode() === 419) => new Problem(
+                419, 'CSRF_TOKEN_MISMATCH', 'The page has expired. Reload and try again.',
+            ),
             $e instanceof ThrottleRequestsException => new Problem(
                 429, 'TOO_MANY_ATTEMPTS', 'Too many attempts. Try again later.', headers: self::headers($e),
             ),

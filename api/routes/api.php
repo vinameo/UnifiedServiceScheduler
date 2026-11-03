@@ -14,6 +14,9 @@ RateLimiter::for('auth-ip', function (Request $request) {
 Route::post('/auth/customer/sign-up', [AuthController::class, 'customerSignUp'])
     ->middleware('throttle:auth-ip');
 
+Route::post('/auth/customer/sign-in', [AuthController::class, 'customerSignIn'])
+    ->middleware('throttle:auth-ip');
+
 Route::post('/auth/staff/sign-in', [AuthController::class, 'staffSignIn'])
     ->middleware('throttle:auth-ip');
 
