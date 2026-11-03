@@ -4,7 +4,9 @@ namespace App\Domain\Booking\Repositories;
 
 use App\Models\Appointment;
 use App\Models\AppointmentEvent;
+use App\Models\Dealership;
 use App\Models\User;
+use App\Support\Pagination\CursorPage;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -18,6 +20,20 @@ interface AppointmentRepositoryInterface
     public function find(string $id): ?Appointment;
 
     public function findVisibleTo(User $user, string $id): Appointment;
+
+    /**
+     * @param  list<string>|null  $statuses
+     * @return CursorPage<Appointment>
+     */
+    public function listForDealershipDay(
+        Dealership $dealership,
+        string $date,
+        ?string $technicianId = null,
+        ?string $bayId = null,
+        ?array $statuses = null,
+        int $limit = 50,
+        ?string $cursor = null,
+    ): CursorPage;
 
     /**
      * @return Collection<int, AppointmentEvent>

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AppointmentController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BayController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\DealershipAppointmentController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ServiceTypeController;
@@ -47,6 +48,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:view,appointment');
     Route::get('/appointments/{appointment}/history', [AppointmentController::class, 'history'])
         ->middleware(['can:staff', 'can:view,appointment']);
+    Route::get('/dealerships/{dealership}/appointments', [DealershipAppointmentController::class, 'index'])
+        ->middleware('can:staff');
 
     // Customers (F02)
     Route::get('/customers', [CustomerController::class, 'index'])

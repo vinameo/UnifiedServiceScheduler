@@ -3,13 +3,18 @@
 namespace App\Domain\Booking\Repositories;
 
 use App\Domain\Auth\Role;
+use App\Domain\Booking\AppointmentStatus;
 use App\Domain\Booking\Events\AppointmentModifiedDetected;
 use App\Domain\Booking\Exceptions\AppointmentModified;
 use App\Domain\Booking\Exceptions\AppointmentNotFound;
 use App\Models\Appointment;
 use App\Models\AppointmentEvent;
+use App\Models\Dealership;
 use App\Models\User;
+use App\Support\Pagination\CursorPage;
+use App\Support\Pagination\CursorPaginator;
 use Carbon\CarbonImmutable;
+use DateTimeZone;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -79,6 +84,104 @@ class AppointmentRepository implements AppointmentRepositoryInterface
         }
 
         return $appointment;
+    }
+
+    /**
+     * @param  list<string>|null  $statuses
+     * @return CursorPage<Appointment>
+     */
+    public function listForDealershipDay(
+        Dealership $dealership,
+        string $date,
+        ?string $technicianId = null,
+        ?string $bayId = null,
+        ?array $statuses = null,
+        int $limit = 50,
+        ?string $cursor = null,
+    ): CursorPage {
+        $tzName = $dealership->timezone ?? 'UTC';
+        $tz = new DateTimeZone($tzName);
+
+        $fromLocal = CarbonImmutable::parse($date.' 00:00:00', $tz);
+        $toLocal = $fromLocal->addDay();
+        $fromUtc = $fromLocal->utc();
+        $toUtc = $toLocal->utc();
+
+        $defaultStatuses = [
+            AppointmentStatus::HELD->value,
+            AppointmentStatus::CONFIRMED->value,
+            AppointmentStatus::CHECKED_IN->value,
+            AppointmentStatus::IN_PROGRESS->value,
+            AppointmentStatus::COMPLETED->value,
+            AppointmentStatus::CANCELLED->value,
+            AppointmentStatus::NO_SHOW->value,
+        ];
+        $effectiveStatuses = ! empty($statuses) ? $statuses : $defaultStatuses;
+
+        $baseQuery = Appointment::query()
+            ->where('dealership_id', $dealership->id)
+            ->where('start_at', '>=', $fromUtc)
+            ->where('start_at', '<', $toUtc)
+            ->whereIn('status', $effectiveStatuses);
+
+        if ($technicianId !== null && $technicianId !== '') {
+            $baseQuery->where('technician_id', $technicianId);
+        }
+
+        if ($bayId !== null && $bayId !== '') {
+            $baseQuery->where('bay_id', $bayId);
+        }
+
+        $total = (clone $baseQuery)->count();
+
+        $dataQuery = (clone $baseQuery);
+
+        if ($cursor !== null && $cursor !== '') {
+            $decoded = CursorPaginator::decode($cursor, ['start_at', 'id']);
+            $cursorStart = (string) $decoded['start_at'];
+            $cursorId = (string) $decoded['id'];
+
+            $dataQuery->where(function ($q) use ($cursorStart, $cursorId) {
+                $q->where('start_at', '>', $cursorStart)
+                    ->orWhere(function ($sub) use ($cursorStart, $cursorId) {
+                        $sub->where('start_at', '=', $cursorStart)
+                            ->where('id', '>', $cursorId);
+                    });
+            });
+        }
+
+        $items = $dataQuery
+            ->orderBy('start_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->limit($limit + 1)
+            ->with([
+                'dealership',
+                'customer',
+                'vehicle',
+                'serviceType',
+                'technician',
+                'bay',
+            ])
+            ->get();
+
+        if ($items->count() > $limit) {
+            $pageItems = $items->slice(0, $limit);
+            $lastItem = $pageItems->last();
+            $nextCursor = $lastItem !== null ? CursorPaginator::encode([
+                'start_at' => $lastItem->start_at,
+                'id' => $lastItem->id,
+            ]) : null;
+        } else {
+            $pageItems = $items;
+            $nextCursor = null;
+        }
+
+        return new CursorPage(
+            items: $pageItems->values(),
+            nextCursor: $nextCursor,
+            limit: $limit,
+            total: $total,
+        );
     }
 
     /**
