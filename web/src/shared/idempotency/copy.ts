@@ -9,6 +9,7 @@ export const IDEMPOTENCY_COPY = {
     `It is safe to retry. The request reuses key ${key}, so if the first attempt succeeded the system returns that same appointment instead of creating a second one.`,
   retryBodyCustomer: "No response yet. It's safe to try again: you won't be booked twice.",
   retryButton: 'Retry',
+  checkList: 'Check appointment list',
   inProgressBody: 'Your request is still being processed. Wait a moment, then check again.',
   submittingConfirm: 'Confirming…',
   doubleSubmitNote: (key: string) =>

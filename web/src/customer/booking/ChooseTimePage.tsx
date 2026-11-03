@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useDealership, useServiceTypes } from '../../shared/api/masterData'
 import { BookingErrorCard } from '../../shared/booking/BookingErrorCard'
-import { formatInZone, todayInZone } from '../../shared/format/time'
+import { formatInZone, getTimezoneOffsetLabel, todayInZone } from '../../shared/format/time'
 import { localSlotsForDay, type DayOpeningHours } from '../../shared/format/slots'
 import { useBookingDraft } from './BookingDraftContext'
 
@@ -91,17 +91,7 @@ export function ChooseTimePage() {
   }
 
   // Get timezone offset label, e.g. "GMT+7"
-  const tzOffsetLabel = (() => {
-    try {
-      const parts = new Intl.DateTimeFormat('en-GB', {
-        timeZone,
-        timeZoneName: 'shortOffset',
-      }).formatToParts(new Date())
-      return parts.find((p) => p.type === 'timeZoneName')?.value ?? timeZone
-    } catch {
-      return timeZone
-    }
-  })()
+  const tzOffsetLabel = getTimezoneOffsetLabel(timeZone)
 
   // Selected summary text
   let choiceSummary = ''
@@ -136,6 +126,7 @@ export function ChooseTimePage() {
         {availabilityError && (
           <BookingErrorCard
             error={availabilityError}
+            variant="customer"
             context={{
               time: draft.start ? formatInZone(draft.start, timeZone, 'time') : '',
               start: draft.start ? formatInZone(draft.start, timeZone, 'time') : '',

@@ -7,12 +7,15 @@ import { ChooseTimePage } from './customer/booking/ChooseTimePage'
 import { ContactDetailsPage } from './customer/booking/ContactDetailsPage'
 import { CustomerBookingConfirmedPage } from './customer/booking/CustomerBookingConfirmedPage'
 import { CustomerBookingLayout } from './customer/booking/CustomerBookingLayout'
-import { StaffHomePage } from './staff/StaffHomePage'
+import { MyBookingsPage } from './customer/bookings/MyBookingsPage'
+import { BookingDetailsPage } from './customer/bookings/BookingDetailsPage'
 import { StaffLayout } from './staff/StaffLayout'
 import { StaffSignInPage } from './staff/auth/StaffSignInPage'
 import { MasterDataPage } from './staff/master-data/MasterDataPage'
 import { NewBookingPage } from './staff/booking/NewBookingPage'
 import { BookingConfirmedPage } from './staff/booking/BookingConfirmedPage'
+import { AppointmentListPage } from './staff/appointments/AppointmentListPage'
+import { AppointmentDetailsPage } from './staff/appointments/AppointmentDetailsPage'
 import { RequireRole } from './shared/auth/RequireRole'
 
 export const routes = [
@@ -37,7 +40,15 @@ export const routes = [
     path: '/my-bookings',
     element: (
       <RequireRole roles={['CUSTOMER']} signInPath="/sign-in">
-        <div>My bookings</div>
+        <MyBookingsPage />
+      </RequireRole>
+    ),
+  },
+  {
+    path: '/my-bookings/:id',
+    element: (
+      <RequireRole roles={['CUSTOMER']} signInPath="/sign-in">
+        <BookingDetailsPage />
       </RequireRole>
     ),
   },
@@ -55,7 +66,8 @@ export const routes = [
     children: [
       { index: true, element: <NewBookingPage /> },
       { path: 'bookings/:id/confirmed', element: <BookingConfirmedPage /> },
-      { path: 'appointments', element: <StaffHomePage /> },
+      { path: 'appointments', element: <AppointmentListPage /> },
+      { path: 'appointments/:id', element: <AppointmentDetailsPage /> },
       {
         path: 'master-data',
         element: (

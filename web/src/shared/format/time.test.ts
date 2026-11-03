@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatAppointmentSlot, formatInZone } from './time'
+import { formatAppointmentSlot, formatDateTime, formatInZone, formatShortDateTime } from './time'
 
 describe('time formatting', () => {
   const timeZone = 'Asia/Ho_Chi_Minh'
@@ -25,5 +25,13 @@ describe('time formatting', () => {
 
   it('formats appointment slot {dayShort} · {range}', () => {
     expect(formatAppointmentSlot(start, end, timeZone)).toBe('Tue 3 Nov · 09:00–10:00')
+  })
+
+  it('formats dateTime {dd/MM/yyyy HH:mm}', () => {
+    expect(formatDateTime(start, timeZone)).toBe('03/11/2026 09:00')
+  })
+
+  it('formats shortDateTime {dd/MM HH:mm}', () => {
+    expect(formatShortDateTime(start, timeZone)).toBe('03/11 09:00')
   })
 })

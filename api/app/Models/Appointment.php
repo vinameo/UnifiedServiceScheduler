@@ -4,9 +4,11 @@ namespace App\Models;
 
 use App\Domain\Booking\AppointmentStatus;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property string $id
@@ -43,6 +45,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property-read Bay|null $bay
  * @property-read User|null $createdByUser
  * @property-read User|null $cancelledByUser
+ * @property-read Collection<int, AppointmentEvent> $events
  */
 class Appointment extends Model
 {
@@ -162,5 +165,15 @@ class Appointment extends Model
     public function cancelledByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by_user_id');
+    }
+
+    /**
+     * @return HasMany<AppointmentEvent, $this>
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(AppointmentEvent::class, 'appointment_id')
+            ->orderBy('occurred_at', 'asc')
+            ->orderBy('id', 'asc');
     }
 }

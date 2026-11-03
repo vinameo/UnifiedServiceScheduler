@@ -80,9 +80,14 @@ export function BookingConfirmedPage() {
           A confirmation SMS has been queued for {phone}.
         </Text>
 
-        <Button fullWidth onClick={() => navigate('/staff')}>
-          Book another
-        </Button>
+        <Group mt="lg" grow>
+          <Button variant="outline" onClick={() => navigate(`/staff/appointments/${appointment.id}`)}>
+            View appointment
+          </Button>
+          <Button onClick={() => navigate('/staff')}>
+            Book another
+          </Button>
+        </Group>
       </Card>
     </Box>
   )

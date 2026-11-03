@@ -3,11 +3,15 @@
 namespace App\Providers;
 
 use App\Domain\Auth\Role;
+use App\Domain\Booking\Exceptions\AppointmentNotFound;
+use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
 use App\Domain\MasterData\DealershipAccess;
 use App\Domain\MasterData\Exceptions\TechnicianNotFound;
+use App\Models\Appointment;
 use App\Models\Dealership;
 use App\Models\Technician;
 use App\Models\User;
+use App\Policies\AppointmentPolicy;
 use App\Support\Cache\DatabaseRateLimiter;
 use Illuminate\Cache\RateLimiter;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -74,11 +78,23 @@ class AppServiceProvider extends ServiceProvider
             return $role === Role::SERVICE_ADVISOR;
         });
 
+        Gate::policy(Appointment::class, AppointmentPolicy::class);
+
         Route::bind('dealership', function (string $value): Dealership {
             /** @var User|null $user */
             $user = request()->user();
 
             return app(DealershipAccess::class)->resolveFor($user, $value);
+        });
+
+        Route::bind('appointment', function (string $value): Appointment {
+            /** @var User|null $user */
+            $user = request()->user() ?? auth()->user();
+            if (! $user instanceof User) {
+                throw new AppointmentNotFound;
+            }
+
+            return app(AppointmentRepositoryInterface::class)->findVisibleTo($user, $value);
         });
 
         Route::bind('technician', function (string $value, RoutingRoute $route): Technician {

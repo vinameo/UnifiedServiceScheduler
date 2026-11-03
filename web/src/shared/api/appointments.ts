@@ -1,5 +1,6 @@
-import { useMutation } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
 import { api } from './client'
+import { useMe } from '../auth/useMe'
 
 export interface CreateAppointmentPayload {
   dealershipId?: string
@@ -53,6 +54,18 @@ export interface AppointmentVehicle {
   vin?: string
 }
 
+export interface AppointmentCreatedBy {
+  name: string
+  role: string
+}
+
+export interface AppointmentCancellation {
+  reason?: string | null
+  note?: string | null
+  at: string
+  byRole: string
+}
+
 export interface Appointment {
   id: string
   reference: string
@@ -70,6 +83,9 @@ export interface Appointment {
   reminderOptIn: boolean
   source: string
   createdAt: string
+  createdBy?: AppointmentCreatedBy | null
+  cancellation?: AppointmentCancellation | null
+  contactRequiredReason?: string | null
 }
 
 export async function createAppointment(
@@ -104,4 +120,179 @@ export function useCreateAppointment(options?: {
     onError: options?.onError,
   })
 }
+
+export interface AppointmentEventActor {
+  name: string
+  role: string
+}
+
+export interface AppointmentEvent {
+  id: string
+  type: string
+  fromStatus: string | null
+  toStatus: string | null
+  version: number
+  actor: AppointmentEventActor | null
+  data: Record<string, unknown>
+  occurredAt: string
+}
+
+export async function getAppointmentHistory(appointmentId: string): Promise<AppointmentEvent[]> {
+  const response = await api.get<AppointmentEvent[]>(`/appointments/${appointmentId}/history`)
+  return response.data
+}
+
+export function useAppointmentHistory(appointmentId: string) {
+  return useQuery({
+    queryKey: ['appointmentHistory', appointmentId],
+    queryFn: () => getAppointmentHistory(appointmentId),
+    enabled: Boolean(appointmentId),
+  })
+}
+
+export interface AppointmentListItemCustomer {
+  id: string
+  fullName: string
+}
+
+export interface AppointmentListItemVehicle {
+  make: string
+  model: string
+  licencePlate: string
+}
+
+export interface AppointmentListItemServiceType {
+  id: string
+  name: string
+  durationMinutes: number
+}
+
+export interface AppointmentListItemTechnician {
+  id: string
+  name: string
+}
+
+export interface AppointmentListItemBay {
+  id: string
+  code: string
+  name: string
+}
+
+export interface AppointmentListItemDealership {
+  id: string
+  name: string
+  branchName?: string | null
+  timezone: string
+}
+
+export interface AppointmentListItem {
+  id: string
+  reference: string
+  status: string
+  start: string
+  end: string
+  customer: AppointmentListItemCustomer
+  vehicle: AppointmentListItemVehicle | null
+  serviceType: AppointmentListItemServiceType
+  technician: AppointmentListItemTechnician | null
+  bay: AppointmentListItemBay | null
+  dealership: AppointmentListItemDealership
+  contactRequiredReason?: string | null
+}
+
+export interface PaginatedAppointments {
+  data: AppointmentListItem[]
+  meta: {
+    nextCursor: string | null
+    limit: number
+    total: number
+  }
+}
+
+export interface DealershipAppointmentFilters {
+  dealershipId?: string
+  date: string
+  technicianId?: string
+  bayId?: string
+  status?: string
+  limit?: number
+}
+
+export async function getDealershipAppointments(
+  dealershipId: string,
+  filters: Omit<DealershipAppointmentFilters, 'dealershipId'>,
+  cursor?: string | null,
+): Promise<PaginatedAppointments> {
+  const params: Record<string, unknown> = {
+    date: filters.date,
+  }
+  if (filters.technicianId) {
+    params.technicianId = filters.technicianId
+  }
+  if (filters.bayId) {
+    params.bayId = filters.bayId
+  }
+  if (filters.status) {
+    params.status = filters.status
+  }
+  if (filters.limit) {
+    params.limit = filters.limit
+  }
+  if (cursor) {
+    params.cursor = cursor
+  }
+
+  const response = await api.get<PaginatedAppointments>(
+    `/dealerships/${dealershipId}/appointments`,
+    { params },
+  )
+  return response.data
+}
+
+export function useDealershipAppointments(filters: DealershipAppointmentFilters) {
+  const { data: me } = useMe()
+  const dealershipId = filters.dealershipId || me?.dealership?.id
+
+  return useInfiniteQuery({
+    queryKey: ['dealershipAppointments', dealershipId, filters],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      getDealershipAppointments(dealershipId!, filters, pageParam),
+    getNextPageParam: (lastPage) => lastPage.meta.nextCursor ?? undefined,
+    refetchInterval: 60 * 1000,
+    enabled: Boolean(dealershipId && filters.date),
+  })
+}
+
+export type AppointmentScope = 'upcoming' | 'past'
+
+export async function getMyAppointments(
+  scope: AppointmentScope,
+  cursor?: string | null,
+  limit?: number,
+): Promise<PaginatedAppointments> {
+  const params: Record<string, unknown> = {
+    scope,
+  }
+  if (cursor) {
+    params.cursor = cursor
+  }
+  if (limit) {
+    params.limit = limit
+  }
+
+  const response = await api.get<PaginatedAppointments>('/me/appointments', { params })
+  return response.data
+}
+
+export function useMyAppointments(scope: AppointmentScope) {
+  return useInfiniteQuery({
+    queryKey: ['myAppointments', scope],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => getMyAppointments(scope, pageParam),
+    getNextPageParam: (lastPage) => lastPage.meta.nextCursor ?? undefined,
+  })
+}
+
+
 

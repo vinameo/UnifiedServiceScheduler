@@ -1,0 +1,26 @@
+export const customerBookingsCopy = {
+  notFound: "We couldn't find this appointment.",
+  backToBookings: 'Back to my bookings',
+  my: {
+    title: 'My bookings',
+    signedInAs: (email: string) => `Signed in as ${email}`,
+    upcoming: 'Upcoming',
+    past: 'Past',
+    viewDetails: 'View details',
+    emptyUpcoming: 'You have no upcoming bookings.',
+    emptyPast: 'No past bookings yet.',
+    newBooking: 'New booking',
+    loadMore: 'Load more',
+    signOut: 'Sign out',
+  },
+  details: {
+    title: 'Appointment details',
+    about: (service: string, duration: number) => `${service} · about ${duration} min`,
+    bookedBy: (name: string) => `Booked by ${name}`,
+    reminder: 'Reminder SMS 1 day before',
+    location: 'Location',
+    vehicle: 'Vehicle',
+    newBooking: 'New booking',
+    back: 'Back',
+  },
+}

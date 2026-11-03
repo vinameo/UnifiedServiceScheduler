@@ -4,7 +4,7 @@
 
 **Blocked by:** [08-links-between-screens](08-links-between-screens.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/05-view-appointments`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** TC-05-11, TC-05-20
 
-- [ ] TC-05-11 (D-05.6, API §B4; Integration): when Each row of the adversarial input table; then As the table. Test: `AppointmentListAdversarialInputTest` (data provider).
-- [ ] TC-05-20 (D-05.9, INV-05.1, INV-05.7; Integration): given A D1 booking; D2 advisor; every route whose URI contains `{appointment}` (read from `Route::getRoutes()`); when D2 advisor calls each route (GET, or POST with valid headers); then Every one: 404 `APPOINTMENT_NOT_FOUND`, nothing written. Test: `ShowAppointmentTest::test_D_05_9_every_appointment_route_is_scoped`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-05-11 (D-05.6, API §B4; Integration): when Each row of the adversarial input table; then As the table. Test: `AppointmentListAdversarialInputTest` (data provider).
+- [x] TC-05-20 (D-05.9, INV-05.1, INV-05.7; Integration): given A D1 booking; D2 advisor; every route whose URI contains `{appointment}` (read from `Route::getRoutes()`); when D2 advisor calls each route (GET, or POST with valid headers); then Every one: 404 `APPOINTMENT_NOT_FOUND`, nothing written. Test: `ShowAppointmentTest::test_D_05_9_every_appointment_route_is_scoped`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

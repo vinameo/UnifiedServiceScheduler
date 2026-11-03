@@ -4,8 +4,10 @@ use App\Http\Controllers\Api\V1\AppointmentController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BayController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\DealershipAppointmentController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\MyAppointmentController;
 use App\Http\Controllers\Api\V1\ServiceTypeController;
 use App\Http\Controllers\Api\V1\TechnicianController;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -31,6 +33,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [MeController::class, 'me']);
     Route::get('/me/vehicles', [MeController::class, 'vehicles'])->middleware('can:customer');
     Route::post('/me/vehicles', [MeController::class, 'addVehicle'])->middleware(['can:customer', 'idempotent']);
+    Route::get('/me/appointments', [MyAppointmentController::class, 'index'])->middleware('can:customer');
 
     // Master data (F01)
     Route::get('/dealerships', [DealershipController::class, 'index']);
@@ -40,9 +43,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dealerships/{dealership}/technicians', [TechnicianController::class, 'index'])->middleware('can:staff');
     Route::put('/dealerships/{dealership}/technicians/{technician}/status', [TechnicianController::class, 'updateStatus'])->middleware('can:admin');
 
-    // Booking (F02)
+    // Booking (F02, F05)
     Route::post('/appointments', [AppointmentController::class, 'store'])
         ->middleware(['can:create-appointment', 'idempotent']);
+    Route::get('/appointments/{appointment}', [AppointmentController::class, 'show'])
+        ->middleware('can:view,appointment');
+    Route::get('/appointments/{appointment}/history', [AppointmentController::class, 'history'])
+        ->middleware(['can:staff', 'can:view,appointment']);
+    Route::get('/dealerships/{dealership}/appointments', [DealershipAppointmentController::class, 'index'])
+        ->middleware('can:staff');
 
     // Customers (F02)
     Route::get('/customers', [CustomerController::class, 'index'])

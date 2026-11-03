@@ -4,7 +4,7 @@
 
 **Blocked by:** [04-staff-day-list-api](04-staff-day-list-api.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/05-view-appointments`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-05-14
 
-- [ ] TC-05-14 (AC-05.9; Web component): given Fake API with 2 pages; when Render `/staff/appointments`, pick a Technician, click "Load more"; then URL has `technicianId`; the request has `technicianId`; page 2 appended; footer "Showing 60 of 75 appointments…" (`meta.total` 75). Test: `web/src/staff/appointments/AppointmentListPage.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-05-14 (AC-05.9; Web component): given Fake API with 2 pages; when Render `/staff/appointments`, pick a Technician, click "Load more"; then URL has `technicianId`; the request has `technicianId`; page 2 appended; footer "Showing 60 of 75 appointments…" (`meta.total` 75). Test: `web/src/staff/appointments/AppointmentListPage.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
