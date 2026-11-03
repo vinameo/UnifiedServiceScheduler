@@ -3,12 +3,29 @@
 namespace App\Domain\MasterData\Repositories;
 
 use App\Models\Bay;
+use App\Models\Dealership;
 use App\Models\DealershipOpeningHour;
 use App\Models\ServiceType;
 use App\Models\Technician;
 
 class MasterDataRepository implements MasterDataRepositoryInterface
 {
+    /**
+     * @return list<Dealership>
+     */
+    public function dealerships(?string $scopedDealershipId = null): array
+    {
+        $query = Dealership::query()
+            ->with(['openingHours' => fn ($q) => $q->orderBy('weekday')])
+            ->orderBy('name');
+
+        if ($scopedDealershipId !== null) {
+            $query->where('id', $scopedDealershipId);
+        }
+
+        return array_values($query->get()->all());
+    }
+
     /**
      * @return list<ServiceType>
      */

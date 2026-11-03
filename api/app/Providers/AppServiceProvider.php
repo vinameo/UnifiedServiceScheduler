@@ -3,11 +3,14 @@
 namespace App\Providers;
 
 use App\Domain\Auth\Role;
+use App\Domain\MasterData\DealershipAccess;
+use App\Models\Dealership;
 use App\Models\User;
 use App\Support\Cache\DatabaseRateLimiter;
 use Illuminate\Cache\RateLimiter;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -47,6 +50,19 @@ class AppServiceProvider extends ServiceProvider
             $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
 
             return $role?->isStaff() ?? false;
+        });
+
+        Gate::define('admin', function (User $user): bool {
+            $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
+
+            return $role === Role::ADMIN;
+        });
+
+        Route::bind('dealership', function (string $value): Dealership {
+            /** @var User|null $user */
+            $user = request()->user();
+
+            return (new DealershipAccess)->resolveFor($user, $value);
         });
     }
 }

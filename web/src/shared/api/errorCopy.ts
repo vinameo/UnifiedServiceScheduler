@@ -4,6 +4,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   UNAUTHENTICATED: 'Please sign in to continue.',
   INVALID_CREDENTIALS: 'Email or password is incorrect.',
   FORBIDDEN: "You don't have permission to view this page.",
+  DEALERSHIP_NOT_FOUND: 'Dealership not found.',
+  TECHNICIAN_NOT_FOUND: 'Technician not found.',
   CSRF_TOKEN_MISMATCH: 'The page has expired. Please reload and try again.',
   EMAIL_ALREADY_USED: 'An account with this email already exists. Sign in instead.',
   WEAK_PASSWORD: 'Password must be at least 8 characters, with a letter and a number.',

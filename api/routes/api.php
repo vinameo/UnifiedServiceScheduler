@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\ServiceTypeController;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -23,4 +25,8 @@ Route::post('/auth/staff/sign-in', [AuthController::class, 'staffSignIn'])
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/sign-out', [AuthController::class, 'signOut']);
     Route::get('/me', [MeController::class, 'me']);
+
+    // Master data (F01)
+    Route::get('/dealerships', [DealershipController::class, 'index']);
+    Route::get('/dealerships/{dealership}/service-types', [ServiceTypeController::class, 'index']);
 });

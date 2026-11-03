@@ -3,12 +3,18 @@
 namespace App\Domain\MasterData\Repositories;
 
 use App\Models\Bay;
+use App\Models\Dealership;
 use App\Models\DealershipOpeningHour;
 use App\Models\ServiceType;
 use App\Models\Technician;
 
 interface MasterDataRepositoryInterface
 {
+    /**
+     * @return list<Dealership>
+     */
+    public function dealerships(?string $scopedDealershipId = null): array;
+
     /**
      * @return list<ServiceType>
      */

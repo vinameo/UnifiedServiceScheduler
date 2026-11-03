@@ -14,6 +14,8 @@ use App\Domain\Auth\Services\UserService;
 use App\Domain\Auth\Services\UserServiceInterface;
 use App\Domain\MasterData\Repositories\MasterDataRepository;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
+use App\Domain\MasterData\Services\MasterDataService;
+use App\Domain\MasterData\Services\MasterDataServiceInterface;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -35,5 +37,6 @@ class DomainServiceProvider extends ServiceProvider
 
         // MasterData (F01)
         MasterDataRepositoryInterface::class => MasterDataRepository::class,
+        MasterDataServiceInterface::class => MasterDataService::class,
     ];
 }
