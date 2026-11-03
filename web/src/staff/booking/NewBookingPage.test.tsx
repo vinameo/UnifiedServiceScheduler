@@ -17,6 +17,41 @@ describe('NewBookingPage (TC-02-25)', () => {
     sessionStorage.clear()
     apiMock.install()
     apiMock.reset()
+    apiMock.get(new RegExp(`/dealerships/${dealershipId}/availability`), (config) => {
+      const url = new URL(config.url ?? '', 'http://localhost')
+      const date = url.searchParams.get('date') ?? '2026-11-02'
+      const slots: { start: string; end: string; available: boolean; reason: string | null }[] = []
+      for (let h = 8; h <= 16; h++) {
+        for (const m of [0, 15, 30, 45]) {
+          if (h === 16 && m > 0) continue
+          const hh = String(h).padStart(2, '0')
+          const mm = String(m).padStart(2, '0')
+          const endH = String(h + 1).padStart(2, '0')
+          slots.push({
+            start: `${date}T${hh}:${mm}:00+07:00`,
+            end: `${date}T${endH}:${mm}:00+07:00`,
+            available: true,
+            reason: null,
+          })
+        }
+      }
+      return [
+        200,
+        {
+          data: {
+            date,
+            timezone: 'Asia/Ho_Chi_Minh',
+            closed: false,
+            opensAt: '08:00',
+            closesAt: '17:00',
+            stepMinutes: 15,
+            durationMinutes: 60,
+            freeCount: slots.length,
+            slots,
+          },
+        },
+      ]
+    })
   })
 
   afterEach(() => {

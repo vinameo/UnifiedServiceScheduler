@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AppointmentController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\AvailabilityController;
 use App\Http\Controllers\Api\V1\BayController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DealershipAppointmentController;
@@ -58,4 +59,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware(['can:search-customers', 'throttle:60,1']);
     Route::get('/customers/{customer}/vehicles', [CustomerController::class, 'vehicles'])
         ->middleware('can:search-customers');
+
+    // Availability (F06)
+    Route::get('/dealerships/{dealership}/availability', [AvailabilityController::class, 'availability'])
+        ->middleware('throttle:120,1');
 });

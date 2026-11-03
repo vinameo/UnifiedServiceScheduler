@@ -19,9 +19,11 @@ import { useCustomerSearch } from '../../shared/api/customers'
 import { useCustomerVehicles } from '../../shared/api/vehicles'
 import { useDealership, useServiceTypes } from '../../shared/api/masterData'
 import { useCreateAppointment } from '../../shared/api/appointments'
+import { useAvailability, invalidateAvailability } from '../../shared/api/availability'
+import { useQueryClient } from '@tanstack/react-query'
 import { useIdempotencyKey } from '../../shared/idempotency/useIdempotencyKey'
 import { SubmitButton } from '../../shared/idempotency/SubmitButton'
-import { TimeGrid } from '../../shared/booking/TimeGrid'
+import { SlotGrid } from '../../shared/booking/SlotGrid'
 import { BookingErrorCard, type BookingProblem } from '../../shared/booking/BookingErrorCard'
 import { formatInZone, todayInZone } from '../../shared/format/time'
 import { localSlotsForDay } from '../../shared/format/slots'
@@ -76,6 +78,7 @@ function bayTypeLabel(bayType?: string): string {
 
 export function NewBookingPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { data: me } = useMe()
   const dealershipId = me?.dealership?.id
 
@@ -105,15 +108,31 @@ export function NewBookingPage() {
 
   const effectiveSelectedDate = selectedDate < minDate ? minDate : selectedDate
 
+  const {
+    data: availability,
+    isLoading: isAvailabilityLoading,
+    isError: isAvailabilityError,
+    refetch: refetchAvailability,
+  } = useAvailability({
+    dealershipId,
+    serviceTypeId: selectedServiceTypeId,
+    date: effectiveSelectedDate,
+  })
+
+  const isTimeStillAvailable = !selectedTimeIso || !availability?.slots
+    ? true
+    : availability.slots.some((s) => s.start === selectedTimeIso && s.available)
+  const effectiveTimeIso = isTimeStillAvailable ? selectedTimeIso : null
+
   useEffect(() => {
     saveDraft({
       selectedCustomerId,
       selectedVehicleId,
       selectedServiceTypeId,
       selectedDate: effectiveSelectedDate,
-      selectedTimeIso,
+      selectedTimeIso: effectiveTimeIso,
     })
-  }, [selectedCustomerId, selectedVehicleId, selectedServiceTypeId, effectiveSelectedDate, selectedTimeIso])
+  }, [selectedCustomerId, selectedVehicleId, selectedServiceTypeId, effectiveSelectedDate, effectiveTimeIso])
 
   const { data: customerSearchResult } = useCustomerSearch(customerSearchQuery)
   const { data: vehicles = [] } = useCustomerVehicles(selectedCustomerId ?? undefined)
@@ -145,12 +164,13 @@ export function NewBookingPage() {
     customerId: selectedCustomerId,
     vehicleId: selectedVehicleId,
     serviceTypeId: selectedServiceTypeId,
-    desiredStart: selectedTimeIso,
+    desiredStart: effectiveTimeIso,
   }
   const { key: idempotencyKey, reset: resetKey, settle } = useIdempotencyKey(actionInput)
 
   const createMutation = useCreateAppointment({
     onSuccess: (result) => {
+      invalidateAvailability(queryClient)
       resetKey()
       try {
         sessionStorage.removeItem(STAFF_DRAFT_KEY)
@@ -160,6 +180,7 @@ export function NewBookingPage() {
       navigate(`/staff/bookings/${result.data.id}/confirmed`, { state: result.data })
     },
     onError: (err: unknown) => {
+      invalidateAvailability(queryClient)
       settle(err)
       if (axios.isAxiosError(err)) {
         const problem = err.response?.data as BookingProblem | undefined
@@ -177,7 +198,7 @@ export function NewBookingPage() {
   })
 
   const handleConfirm = () => {
-    if (!selectedCustomerId || !selectedVehicleId || !selectedServiceTypeId || !selectedTimeIso) {
+    if (!selectedCustomerId || !selectedVehicleId || !selectedServiceTypeId || !effectiveTimeIso) {
       return
     }
 
@@ -189,7 +210,7 @@ export function NewBookingPage() {
         customerId: selectedCustomerId,
         vehicleId: selectedVehicleId,
         serviceTypeId: selectedServiceTypeId,
-        desiredStart: selectedTimeIso,
+        desiredStart: effectiveTimeIso,
       },
       idempotencyKey,
     })
@@ -215,7 +236,7 @@ export function NewBookingPage() {
   }))
 
   const isComplete = Boolean(
-    selectedCustomerId && selectedVehicleId && selectedServiceTypeId && selectedTimeIso,
+    selectedCustomerId && selectedVehicleId && selectedServiceTypeId && effectiveTimeIso,
   )
 
   const formattedDate = formatInZone(`${effectiveSelectedDate}T00:00:00Z`, timeZone, 'dayLong')
@@ -223,12 +244,12 @@ export function NewBookingPage() {
   let summaryTimeDisplay = '—'
   let selectedStartFormatted = ''
   let selectedEndFormatted = ''
-  if (selectedTimeIso && selectedService) {
-    const endIso = new Date(new Date(selectedTimeIso).getTime() + selectedService.durationMinutes * 60000).toISOString()
-    const dayShort = formatInZone(selectedTimeIso, timeZone, 'dayShort')
-    const range = formatInZone(selectedTimeIso, timeZone, 'range', endIso)
+  if (effectiveTimeIso && selectedService) {
+    const endIso = new Date(new Date(effectiveTimeIso).getTime() + selectedService.durationMinutes * 60000).toISOString()
+    const dayShort = formatInZone(effectiveTimeIso, timeZone, 'dayShort')
+    const range = formatInZone(effectiveTimeIso, timeZone, 'range', endIso)
     summaryTimeDisplay = `${dayShort}, ${range}`
-    selectedStartFormatted = formatInZone(selectedTimeIso, timeZone, 'time')
+    selectedStartFormatted = formatInZone(effectiveTimeIso, timeZone, 'time')
     selectedEndFormatted = formatInZone(endIso, timeZone, 'time')
   }
 
@@ -386,14 +407,31 @@ export function NewBookingPage() {
                   />
                 </Group>
 
-                {isClosedDay ? (
+                {!selectedServiceTypeId ? (
                   <Text size="sm" c="dimmed">
-                    The dealership is closed on this day.
+                    Choose a service first to view available times.
                   </Text>
                 ) : (
-                  <TimeGrid
-                    slots={slots}
-                    value={selectedTimeIso}
+                  <SlotGrid
+                    slots={
+                      availability?.slots ??
+                      (isAvailabilityLoading
+                        ? []
+                        : slots.map((s) => ({
+                            start: s.iso,
+                            time: s.time,
+                            available: true,
+                            reason: null,
+                          })))
+                    }
+                    freeCount={availability?.freeCount}
+                    closed={availability ? availability.closed : isClosedDay}
+                    loading={isAvailabilityLoading}
+                    error={isAvailabilityError}
+                    onRetry={() => refetchAvailability()}
+                    variant="staff"
+                    timeZone={timeZone}
+                    value={effectiveTimeIso}
                     onChange={setSelectedTimeIso}
                   />
                 )}
