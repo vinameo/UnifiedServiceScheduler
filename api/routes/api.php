@@ -61,6 +61,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:search-customers');
 
     // Availability (F06)
+    Route::get('/dealerships/{dealership}/availability/next', [AvailabilityController::class, 'next'])
+        ->middleware('throttle:120,1');
     Route::get('/dealerships/{dealership}/availability', [AvailabilityController::class, 'availability'])
         ->middleware('throttle:120,1');
 });

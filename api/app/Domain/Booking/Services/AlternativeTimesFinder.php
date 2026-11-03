@@ -137,4 +137,72 @@ final readonly class AlternativeTimesFinder
 
         return $results;
     }
+
+    /**
+     * Find the first free slot strictly after $after within 7 days and within the 90-day booking horizon (AC-06.12, D-06.7, INV-06.5).
+     */
+    public function next(
+        string $dealershipId,
+        ServiceType $type,
+        CarbonImmutable $after,
+        CarbonImmutable $now,
+    ): ?TimeRange {
+        $dealership = $this->masterDataRepository?->findDealership($dealershipId);
+        $timezone = $dealership !== null ? $dealership->timezone : $after->getTimezone()->getName();
+
+        $afterInTz = $after->setTimezone($timezone);
+        $afterDate = $afterInTz->toDateString();
+        $nowInTz = $now->setTimezone($timezone);
+        $maxDateInTz = $nowInTz->addDays(BookingTimeRules::MAX_DAYS_AHEAD)->toDateString();
+
+        if ($afterDate > $maxDateInTz) {
+            return null;
+        }
+
+        $maxAfter = $after->addDays(7);
+        $maxHorizon = $nowInTz->addDays(BookingTimeRules::MAX_DAYS_AHEAD)->endOfDay();
+        $searchLimit = $maxAfter->lessThan($maxHorizon) ? $maxAfter : $maxHorizon;
+
+        for ($dayOffset = 0; $dayOffset <= 7; $dayOffset++) {
+            $currentDateInTz = $afterInTz->addDays($dayOffset);
+            $currentLocalDate = $currentDateInTz->toDateString();
+
+            if ($currentLocalDate > $maxDateInTz) {
+                break;
+            }
+
+            $dayAvailability = $this->calculator->forDay(
+                dealershipId: $dealershipId,
+                type: $type,
+                localDate: $currentLocalDate,
+                now: $now,
+            );
+
+            if ($dayAvailability->closed) {
+                continue;
+            }
+
+            foreach ($dayAvailability->slots as $slot) {
+                if (! $slot->available) {
+                    continue;
+                }
+
+                if ($slot->start->lessThanOrEqualTo($now)) {
+                    continue;
+                }
+
+                if ($slot->start->lessThanOrEqualTo($after)) {
+                    continue;
+                }
+
+                if ($slot->start->greaterThan($searchLimit)) {
+                    break 2;
+                }
+
+                return TimeRange::of($slot->start, $slot->end);
+            }
+        }
+
+        return null;
+    }
 }

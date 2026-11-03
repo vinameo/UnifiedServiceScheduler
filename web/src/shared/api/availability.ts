@@ -80,3 +80,49 @@ export function useAvailability(params: {
     staleTime: 15_000,
   })
 }
+
+export interface NextAvailableSlot {
+  start: string
+  end: string
+}
+
+export interface NextAvailableData {
+  nextAvailable: NextAvailableSlot | null
+}
+
+export async function getNextAvailable(params: {
+  dealershipId: string
+  serviceTypeId: string
+  after: string
+}): Promise<NextAvailableData> {
+  const searchParams = new URLSearchParams()
+  searchParams.set('serviceTypeId', params.serviceTypeId)
+  searchParams.set('after', params.after)
+
+  const response = await api.get<{ data: NextAvailableData }>(
+    `/dealerships/${params.dealershipId}/availability/next?${searchParams.toString()}`,
+  )
+  return response.data.data
+}
+
+export function useNextAvailable(params: {
+  dealershipId?: string | null
+  serviceTypeId?: string | null
+  after?: string | null
+  enabled?: boolean
+}) {
+  const { dealershipId, serviceTypeId, after, enabled = true } = params
+
+  return useQuery({
+    queryKey: ['availability', 'next', dealershipId, serviceTypeId, after],
+    queryFn: () =>
+      getNextAvailable({
+        dealershipId: dealershipId!,
+        serviceTypeId: serviceTypeId!,
+        after: after!,
+      }),
+    enabled: Boolean(dealershipId && serviceTypeId && after && enabled),
+    staleTime: 15_000,
+  })
+}
+

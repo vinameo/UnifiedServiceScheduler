@@ -259,4 +259,72 @@ class AlternativesOnConflictTest extends TestCase
 
         $this->assertSame($originalAlternatives, $response2->json('alternatives'));
     }
+
+    /**
+     * TC-06-21 (INV-06.5, D-06.4, D-06.7; Integration):
+     * given Clock 2026-11-02; day 2027-01-29 (88 days ahead) full; 2027-02-01 free;
+     * when POST for 2027-01-29 09:00; availability/next?after=2027-01-29T09:00+07:00;
+     * then alternatives hold nothing after 2027-01-31; next is null or <= 2027-01-31.
+     */
+    public function test_INV_06_5_suggestions_stay_within_the_horizon(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        $dealership = $world->dealership;
+        $oilService = $world->serviceType('OIL_CHANGE');
+
+        $world->onlyTechnicians(['An']);
+        $techAn = $world->technician('An');
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        // 2027-01-29 is 88 days ahead (Friday). Mark it full.
+        AppointmentFactory::busyAllDay($techAn, '2027-01-29');
+
+        // 2027-01-30 is 89 days ahead (Saturday). Mark it full as well.
+        AppointmentFactory::busyAllDay($techAn, '2027-01-30');
+
+        // 2027-01-31 is 90 days ahead (Sunday) - dealership is closed on Sundays.
+        // 2027-02-01 is 91 days ahead (Monday) - completely free, but beyond the 90-day booking horizon.
+
+        // 1. POST for 2027-01-29 09:00 -> 409 NO_AVAILABILITY
+        $postResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+            'customerId' => $customer->id,
+            'vehicleId' => $vehicle->id,
+            'serviceTypeId' => $oilService->id,
+            'desiredStart' => '2027-01-29T09:00:00+07:00',
+        ], [
+            'Idempotency-Key' => (string) Str::uuid(),
+            'Accept' => 'application/json',
+        ]);
+
+        $postResponse->assertStatus(409)
+            ->assertJsonPath('code', 'NO_AVAILABILITY');
+
+        /** @var list<array{start: string, end: string}> $alternatives */
+        $alternatives = $postResponse->json('alternatives');
+        foreach ($alternatives as $alt) {
+            $altDate = substr($alt['start'], 0, 10);
+            $this->assertLessThanOrEqual(
+                '2027-01-31',
+                $altDate,
+                "Alternative slot {$alt['start']} exceeds the 90-day horizon (2027-01-31)."
+            );
+        }
+
+        // 2. GET availability/next?after=2027-01-29T09:00+07:00
+        $nextResponse = $this->actingAs($advisor)->getJson(
+            "/api/v1/dealerships/{$dealership->id}/availability/next?serviceTypeId={$oilService->id}&after=2027-01-29T09:00:00%2B07:00"
+        );
+
+        $nextResponse->assertOk();
+        $nextAvailable = $nextResponse->json('data.nextAvailable');
+
+        $this->assertTrue(
+            $nextAvailable === null || substr((string) $nextAvailable['start'], 0, 10) <= '2027-01-31',
+            'nextAvailable must be null or within the 90-day horizon (<= 2027-01-31).',
+        );
+    }
 }

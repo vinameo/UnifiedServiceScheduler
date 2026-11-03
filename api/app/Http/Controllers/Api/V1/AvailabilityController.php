@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Booking\Services\AvailabilityServiceInterface;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AvailabilityRequest;
+use App\Http\Requests\NextAvailableRequest;
 use App\Http\Resources\AvailabilityResource;
 use App\Models\Dealership;
 use App\Models\User;
@@ -33,6 +34,29 @@ class AvailabilityController extends Controller
 
         return response()->json([
             'data' => new AvailabilityResource($availability),
+        ]);
+    }
+
+    public function next(Dealership $dealership, NextAvailableRequest $request): JsonResponse
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+
+        $nextAvailable = $this->availabilityService->next(
+            dealershipId: $dealership->id,
+            type: $request->serviceTypeId(),
+            after: $request->afterDateTime(),
+            now: CarbonImmutable::now(),
+            actor: $user,
+        );
+
+        return response()->json([
+            'data' => [
+                'nextAvailable' => $nextAvailable !== null ? [
+                    'start' => $nextAvailable->start->setTimezone($dealership->timezone)->toIso8601String(),
+                    'end' => $nextAvailable->end->setTimezone($dealership->timezone)->toIso8601String(),
+                ] : null,
+            ],
         ]);
     }
 }

@@ -38,4 +38,15 @@ interface AvailabilityServiceInterface
         int $limit = 3,
         ?User $actor = null,
     ): array;
+
+    /**
+     * Find the first free slot strictly after $after within 7 days and within the 90-day booking horizon (AC-06.12, D-06.7, INV-06.5).
+     */
+    public function next(
+        string $dealershipId,
+        ServiceType|string $type,
+        CarbonImmutable $after,
+        CarbonImmutable $now,
+        ?User $actor = null,
+    ): ?TimeRange;
 }

@@ -71,6 +71,23 @@ final readonly class AvailabilityService implements AvailabilityServiceInterface
         );
     }
 
+    public function next(
+        string $dealershipId,
+        ServiceType|string $type,
+        CarbonImmutable $after,
+        CarbonImmutable $now,
+        ?User $actor = null,
+    ): ?TimeRange {
+        $serviceType = $this->resolveServiceType($dealershipId, $type);
+
+        return $this->alternativeTimesFinder->next(
+            dealershipId: $dealershipId,
+            type: $serviceType,
+            after: $after,
+            now: $now,
+        );
+    }
+
     private function resolveServiceType(string $dealershipId, ServiceType|string $type): ServiceType
     {
         if (is_string($type)) {
