@@ -168,4 +168,52 @@ class CreateBookingTest extends TestCase
             CarbonImmutable::setTestNow();
         }
     }
+
+    public function test_AC_04_3_replay_through_the_real_endpoint(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $key = (string) Str::uuid();
+            $payload = [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:00:00+07:00',
+            ];
+
+            // 1. Initial request with K
+            $response1 = $this->actingAs($advisor)->postJson('/api/v1/appointments', $payload, [
+                'Idempotency-Key' => $key,
+            ]);
+
+            $response1->assertStatus(201)
+                ->assertHeaderMissing('Idempotent-Replayed');
+
+            $appointmentId = $response1->json('id');
+
+            // 2. Resend identical request with same key K
+            $response2 = $this->actingAs($advisor)->postJson('/api/v1/appointments', $payload, [
+                'Idempotency-Key' => $key,
+            ]);
+
+            $response2->assertStatus(201)
+                ->assertHeader('Idempotent-Replayed', 'true')
+                ->assertJsonPath('id', $appointmentId);
+
+            // Assert exactly 1 appointment and 3 outbox rows (1 event)
+            $this->assertSame(1, DB::table('appointments')->count());
+            $this->assertSame(3, DB::table('outbox_messages')->count());
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
 }
