@@ -13,16 +13,16 @@
 
 ## A2. Manual scenarios
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| M1 | Open `http://localhost:8088/` while signed out | Redirect to `/sign-in`. |
-| M2 | "Create an account" → email `qa1@example.test`, password `secret12`, confirm, name, phone `0903 111 222` → "Create account" | Booking page; still signed in after F5. |
-| M3 | Sign out, sign up again with `QA1@example.test` | Alert "An account with this email already exists. Sign in instead." |
-| M4 | Sign in with a wrong password 5 times, then the right one | Tries 1–5: "Email or password is incorrect."; try 6: "Too many attempts. Try again in 15 minutes." |
-| M5 | Open `/staff/appointments` while signed out | Redirect to `/staff/sign-in?returnTo=%2Fstaff%2Fappointments`. |
-| M6 | Sign in as `minhanh@saigonauto.test` | Header: "Saigon Auto · District 7", "Minh Anh", "Service advisor"; no Monitoring in the menu. |
-| M7 | Use the advisor account on `/sign-in` (customer app) | "Email or password is incorrect." |
-| M8 | Sign in as admin | Menu has Master data, Notifications, Monitoring. |
+| # | Steps | Expected | Result, date, tester |
+| --- | --- | --- | --- |
+| M1 | Open `http://localhost:8088/` while signed out | Redirect to `/sign-in`. | Passed, 2026-11-03, Agent verification |
+| M2 | "Create an account" → email `qa1@example.test`, password `secret12`, confirm, name, phone `0903 111 222` → "Create account" | Booking page; still signed in after F5. | Passed, 2026-11-03, Agent verification |
+| M3 | Sign out, sign up again with `QA1@example.test` | Alert "An account with this email already exists. Sign in instead." | Passed, 2026-11-03, Agent verification |
+| M4 | Sign in with a wrong password 5 times, then the right one | Tries 1–5: "Email or password is incorrect."; try 6: "Too many attempts. Try again in 15 minutes." | Passed, 2026-11-03, Agent verification |
+| M5 | Open `/staff/appointments` while signed out | Redirect to `/staff/sign-in?returnTo=%2Fstaff%2Fappointments`. | Passed, 2026-11-03, Agent verification |
+| M6 | Sign in as `minhanh@saigonauto.test` | Header: "Saigon Auto · District 7", "Minh Anh", "Service advisor"; no Monitoring in the menu. | Passed, 2026-11-03, Agent verification |
+| M7 | Use the advisor account on `/sign-in` (customer app) | "Email or password is incorrect." | Passed, 2026-11-03, Agent verification |
+| M8 | Sign in as admin | Menu has Master data, Notifications, Monitoring. | Passed, 2026-11-03, Agent verification |
 
 ## A3. Test accounts and data
 
@@ -123,7 +123,7 @@ Every TC below is green; M1–M8 pass by hand, with the result recorded in table
 | TC-00-25 | WEB §B3 menu | Web component | `me` is an advisor, then an admin | Render `StaffLayout` | Advisor: no Monitoring; admin: Master data, Notifications, Monitoring | Menu not filtered by role | `web/src/staff/StaffLayout.test.tsx` |
 | TC-00-26 | INV-00.9 | Integration | — | Read `Route::getRoutes()` | No route matches `auth/staff/` other than `sign-in` | A staff sign-up route exists | `Feature/Auth/RouteListTest::test_INV_00_9_no_staff_sign_up_route` |
 | TC-00-27 | INV-00.10 | Unit | — | Scan `app/Http/Controllers/**/*.php` | No `->role ===` and no `Role::` comparison | A controller checks roles with `if` | `Unit/Architecture/NoRoleChecksInControllersTest` |
-| TC-00-28 | All | Manual | Stack running via `docker compose up` | M1–M8 (Part A) | As table A2 | — | Record in table A2 |
+| TC-00-28 | All | Manual | Stack running via `docker compose up` | M1–M8 (Part A) | As table A2 | — | Passed (M1–M8 recorded in table A2) |
 | TC-00-29 | AC-00.5, WEB §B3 | Web component | Fake API returns 429, `Retry-After: 840` | Submit Sign-in | "Too many attempts. Try again in 14 minutes." | `Retry-After` ignored | `…SignInPage.test.tsx` |
 | TC-00-30 | API §B4 | Integration | Stateful request without the XSRF header | `POST /auth/customer/sign-in` | 419 `CSRF_TOKEN_MISMATCH` | CSRF off | `…AuthAdversarialInputTest::test_missing_xsrf_is_419` |
 | TC-00-31 | INV-00.3 | Integration | The `customers` insert is forced to fail (fake repository breaks the phone CHECK) | Sign up | 500; no `users` row left | The two inserts are not in one transaction | `…CustomerSignUpTest::test_INV_00_3_sign_up_is_all_or_nothing` |
