@@ -15,3 +15,4 @@ class VehicleNotOwnedByCustomer extends ProblemException
         );
     }
 }
+

@@ -43,3 +43,4 @@ export function AppointmentStatusBadge({ status, size = 'sm' }: AppointmentStatu
     </Badge>
   )
 }
+

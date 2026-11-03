@@ -16,3 +16,4 @@ final readonly class CreateBookingInput
         public string $mode = 'CONFIRM',
     ) {}
 }
+

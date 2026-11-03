@@ -104,3 +104,4 @@ export function useCreateAppointment(options?: {
     onError: options?.onError,
   })
 }
+

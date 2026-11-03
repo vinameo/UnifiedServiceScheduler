@@ -52,3 +52,4 @@ describe('AppointmentStatusBadge', () => {
     expect(screen.getByText('Expired')).toBeInTheDocument()
   })
 })
+

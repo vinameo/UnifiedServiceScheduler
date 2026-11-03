@@ -25,3 +25,4 @@ class OutsideOpeningHours extends ProblemException
         );
     }
 }
+

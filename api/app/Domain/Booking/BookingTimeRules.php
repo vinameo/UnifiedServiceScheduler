@@ -68,3 +68,4 @@ final readonly class BookingTimeRules
         return $range;
     }
 }
+

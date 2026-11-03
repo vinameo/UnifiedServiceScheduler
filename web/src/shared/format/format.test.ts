@@ -49,3 +49,4 @@ describe('TC-02-29: Web unit formatting and slot helpers', () => {
     expect(maskPhone('12345')).toBe('12345')
   })
 })
+

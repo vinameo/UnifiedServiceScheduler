@@ -11,3 +11,4 @@ final class VehicleRepository implements VehicleRepositoryInterface
         return Vehicle::query()->where('id', $id)->first();
     }
 }
+

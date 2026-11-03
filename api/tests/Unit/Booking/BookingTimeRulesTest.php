@@ -88,3 +88,4 @@ class BookingTimeRulesTest extends TestCase
         }
     }
 }
+

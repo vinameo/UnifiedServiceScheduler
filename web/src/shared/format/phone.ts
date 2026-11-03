@@ -17,3 +17,4 @@ export function maskPhone(phone: string | null | undefined): string {
   const suffix = trimmed.slice(-3)
   return `${prefix} *** ${suffix}`
 }
+

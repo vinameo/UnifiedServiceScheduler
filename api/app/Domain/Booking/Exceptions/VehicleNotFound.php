@@ -15,3 +15,4 @@ class VehicleNotFound extends ProblemException
         );
     }
 }
+

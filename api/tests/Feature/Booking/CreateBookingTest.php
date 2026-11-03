@@ -459,4 +459,211 @@ class CreateBookingTest extends TestCase
             CarbonImmutable::setTestNow();
         }
     }
+
+    public function test_AC_02_4_vehicle_of_another_customer(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $c1] = $world->customerWithVehicle();
+        ['customer' => $c2, 'vehicle' => $v2] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $response = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $c1->id,
+                'vehicleId' => $v2->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+
+            $response->assertStatus(422)
+                ->assertJsonPath('code', 'VEHICLE_NOT_OWNED_BY_CUSTOMER');
+
+            $this->assertDatabaseCount('appointments', 0);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_02_6_unknown_service_type(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $unknownServiceId = (string) Str::uuid();
+            $response = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $unknownServiceId,
+                'desiredStart' => '2026-11-02T09:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+
+            $response->assertStatus(404)
+                ->assertJsonPath('code', 'SERVICE_TYPE_NOT_FOUND');
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_02_7_vehicle_already_booked(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            // First booking: 09:00 - 10:00
+            $res1 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+            $res1->assertStatus(201);
+            $firstApptId = $res1->json('id');
+
+            // Second booking for the same vehicle at 09:30 (overlaps 09:00 - 10:00)
+            $res2 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:30:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+
+            $res2->assertStatus(409)
+                ->assertJsonPath('code', 'VEHICLE_ALREADY_BOOKED')
+                ->assertJsonPath('existingAppointment.id', $firstApptId);
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_unknown_vehicle_is_404(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['user' => $customerUser, 'customer' => $customer] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+        $unknownVehicleId = (string) Str::uuid();
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            // Advisor booking unknown vehicle -> 404 VEHICLE_NOT_FOUND
+            $resAdvisor = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $unknownVehicleId,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+
+            $resAdvisor->assertStatus(404)
+                ->assertJsonPath('code', 'VEHICLE_NOT_FOUND');
+
+            // Customer booking unknown vehicle -> 404 VEHICLE_NOT_FOUND
+            $resCustomer = $this->actingAs($customerUser)->postJson('/api/v1/appointments', [
+                'dealershipId' => $world->dealership->id,
+                'vehicleId' => $unknownVehicleId,
+                'serviceTypeId' => $service->id,
+                'desiredStart' => '2026-11-02T09:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+
+            $resCustomer->assertStatus(404)
+                ->assertJsonPath('code', 'VEHICLE_NOT_FOUND');
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_inactive_or_foreign_service_type(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+
+        // 1. Inactive service type in same dealership
+        $inactiveServiceId = (string) Str::uuid();
+        DB::table('service_types')->insert([
+            'id' => $inactiveServiceId,
+            'dealership_id' => $world->dealership->id,
+            'code' => 'INACTIVE_SVC',
+            'name' => 'Inactive Service',
+            'duration_minutes' => 60,
+            'required_level' => 1,
+            'required_bay_type' => 'STANDARD',
+            'active' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // 2. Foreign dealership service type
+        $foreignDealershipId = (string) Str::uuid();
+        DB::table('dealerships')->insert([
+            'id' => $foreignDealershipId,
+            'code' => 'D2',
+            'name' => 'Foreign Dealership',
+            'phone' => '0281234567',
+            'timezone' => 'Asia/Ho_Chi_Minh',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $foreignServiceId = (string) Str::uuid();
+        DB::table('service_types')->insert([
+            'id' => $foreignServiceId,
+            'dealership_id' => $foreignDealershipId,
+            'code' => 'FOREIGN_SVC',
+            'name' => 'Foreign Service',
+            'duration_minutes' => 60,
+            'required_level' => 1,
+            'required_bay_type' => 'STANDARD',
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            // Book inactive service -> 404 SERVICE_TYPE_NOT_FOUND
+            $resInactive = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $inactiveServiceId,
+                'desiredStart' => '2026-11-02T09:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+
+            $resInactive->assertStatus(404)
+                ->assertJsonPath('code', 'SERVICE_TYPE_NOT_FOUND');
+
+            // Book foreign service -> 404 SERVICE_TYPE_NOT_FOUND
+            $resForeign = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $foreignServiceId,
+                'desiredStart' => '2026-11-02T09:00:00+07:00',
+            ], ['Idempotency-Key' => (string) Str::uuid()]);
+
+            $resForeign->assertStatus(404)
+                ->assertJsonPath('code', 'SERVICE_TYPE_NOT_FOUND');
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
 }

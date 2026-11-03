@@ -56,3 +56,4 @@ export function localSlotsForDay(
 
   return slots
 }
+
