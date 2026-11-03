@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import {
   Alert,
   Anchor,
@@ -52,7 +53,30 @@ export function SignInPage() {
     } catch (err) {
       const problem = toProblem(err)
       setPassword('')
-      setErrorMessage(errorCopy(problem?.code))
+
+      if (problem?.code === 'TOO_MANY_ATTEMPTS') {
+        let seconds: number | undefined
+        if (isAxiosError(err)) {
+          const rawHeader =
+            err.response?.headers?.['retry-after'] ??
+            (typeof err.response?.headers?.get === 'function' ? err.response.headers.get('retry-after') : undefined)
+          if (rawHeader) {
+            seconds = Number(rawHeader)
+          }
+        }
+        if (!seconds && typeof problem.retryAfterSeconds === 'number') {
+          seconds = problem.retryAfterSeconds
+        }
+
+        if (seconds && Number.isFinite(seconds) && seconds > 0) {
+          const minutes = Math.ceil(seconds / 60)
+          setErrorMessage(`Too many attempts. Try again in ${minutes} minutes.`)
+        } else {
+          setErrorMessage(errorCopy('TOO_MANY_ATTEMPTS'))
+        }
+      } else {
+        setErrorMessage(errorCopy(problem?.code))
+      }
     } finally {
       setLoading(false)
     }

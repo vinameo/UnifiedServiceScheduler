@@ -12,6 +12,7 @@ class ProblemException extends RuntimeException
 {
     /**
      * @param  array<string, mixed>  $extra
+     * @param  array<string, string>  $headers
      */
     public function __construct(
         public readonly int $status,
@@ -19,12 +20,20 @@ class ProblemException extends RuntimeException
         string $title,
         public readonly ?string $detail = null,
         public readonly array $extra = [],
+        public readonly array $headers = [],
     ) {
         parent::__construct($title);
     }
 
     public function toProblem(): Problem
     {
-        return new Problem($this->status, $this->problemCode, $this->getMessage(), $this->detail, $this->extra);
+        return new Problem(
+            $this->status,
+            $this->problemCode,
+            $this->getMessage(),
+            $this->detail,
+            $this->extra,
+            $this->headers,
+        );
     }
 }

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { renderRoute } from '../../test/render'
 import { apiMock } from '../../test/apiMock'
 
-describe('SignInPage (TC-00-21)', () => {
+describe('SignInPage (TC-00-21, TC-00-29)', () => {
   beforeEach(() => {
     apiMock.install()
     apiMock.reset()
@@ -50,5 +50,34 @@ describe('SignInPage (TC-00-21)', () => {
 
     expect(emailInput).toHaveValue('hung@mail.com')
     expect(passwordInput).toHaveValue('')
+  })
+
+  it('shows retry minutes alert on 429 TOO_MANY_ATTEMPTS (TC-00-29)', async () => {
+    const user = userEvent.setup()
+    apiMock.post(
+      '/auth/customer/sign-in',
+      apiMock.replyProblem(
+        429,
+        'TOO_MANY_ATTEMPTS',
+        'Too many attempts. Try again later.',
+        { retryAfterSeconds: 840 },
+        { 'retry-after': '840' }
+      )
+    )
+
+    renderRoute('/sign-in')
+
+    const emailInput = screen.getByPlaceholderText('hung@mail.com')
+    const passwordInput = screen.getByPlaceholderText(/your password/i)
+    const submitBtn = screen.getByRole('button', { name: 'Sign in' })
+
+    await user.type(emailInput, 'hung@mail.com')
+    await user.type(passwordInput, 'wrongpassword')
+    await user.click(submitBtn)
+
+    await waitFor(() => {
+      const alert = screen.getByRole('alert')
+      expect(alert).toHaveTextContent('Too many attempts. Try again in 14 minutes.')
+    })
   })
 })

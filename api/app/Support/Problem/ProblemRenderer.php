@@ -35,7 +35,11 @@ final class ProblemRenderer
                 419, 'CSRF_TOKEN_MISMATCH', 'The page has expired. Reload and try again.',
             ),
             $e instanceof ThrottleRequestsException => new Problem(
-                429, 'TOO_MANY_ATTEMPTS', 'Too many attempts. Try again later.', headers: self::headers($e),
+                429,
+                'TOO_MANY_ATTEMPTS',
+                'Too many attempts. Try again later.',
+                extra: array_filter(['retryAfterSeconds' => isset($e->getHeaders()['Retry-After']) ? (int) $e->getHeaders()['Retry-After'] : null]),
+                headers: self::headers($e),
             ),
             $e instanceof HttpExceptionInterface => new Problem(
                 $e->getStatusCode(), 'HTTP_'.$e->getStatusCode(), $e->getMessage() ?: 'Request failed.', headers: self::headers($e),
