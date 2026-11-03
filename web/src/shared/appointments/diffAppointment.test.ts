@@ -80,3 +80,4 @@ describe('diffAppointment (WEB-04.6, TC-04-38)', () => {
     expect(formatStatus('NO_SHOW')).toBe('No show')
   })
 })
+

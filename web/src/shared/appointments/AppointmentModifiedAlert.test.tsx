@@ -224,3 +224,4 @@ describe('AppointmentModifiedAlert (TC-04-38, TC-04-40, WEB-04.5)', () => {
     expect(key2).not.toBe(key1)
   })
 })
+

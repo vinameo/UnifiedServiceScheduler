@@ -48,3 +48,4 @@ describe('SubmitButton (TC-04-37, WEB-04.3)', () => {
     expect(screen.getByRole('button')).toBeDisabled()
   })
 })
+

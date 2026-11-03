@@ -133,3 +133,4 @@ Spec: `docs/features/04-booking-integrity/`
 - **PHPStan:** Level 8 static analysis passing with 0 errors.
 - **Frontend Vitest:** 21 test files passing (77 unit & component tests).
 - **Frontend ESLint & TypeScript:** Passing with 0 errors.
+
