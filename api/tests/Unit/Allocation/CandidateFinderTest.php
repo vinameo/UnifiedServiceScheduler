@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Allocation;
 
+use App\Domain\Allocation\AllocationFailure;
 use App\Domain\Allocation\CandidateFinder;
 use App\Domain\Allocation\TimeRange;
 use App\Domain\MasterData\BayType;
@@ -110,6 +111,81 @@ class CandidateFinderTest extends TestCase
         $resultOnlyAn = $finder->find($request, $snapshotOnlyAn);
         $this->assertFalse($resultOnlyAn->found());
         $this->assertEmpty($resultOnlyAn->pairs);
+    }
+
+    /**
+     * TC-03-04: AC-03.4
+     * Given An (level 2), Dũng (level 3), the only technicians, both busy 09–10; K1 free;
+     * when Search 09:00–10:00;
+     * then pairs = [], failure = NO_TECHNICIAN_AVAILABLE.
+     */
+    public function test_AC_03_4_all_qualified_busy_gives_no_technician_available(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('An', level: 2)
+            ->technician('Dũng', level: 3)
+            ->busy('An', '09:00-10:00')
+            ->busy('Dũng', '09:00-10:00')
+            ->bay('K1', BayType::QUICK)
+            ->build();
+
+        $request = SnapshotBuilder::request('OIL', '09:00-10:00');
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertFalse($result->found());
+        $this->assertSame([], $result->pairs);
+        $this->assertSame(AllocationFailure::NO_TECHNICIAN_AVAILABLE, $result->failure);
+    }
+
+    /**
+     * TC-03-05: AC-03.5
+     * Given An free; K1, K2 busy 09–10;
+     * when Search OIL 09:00–10:00;
+     * then NO_BAY_AVAILABLE.
+     */
+    public function test_AC_03_5_all_bays_busy_gives_no_bay_available(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('An', level: 2)
+            ->bay('K1', BayType::QUICK)
+            ->bay('K2', BayType::QUICK)
+            ->busy('K1', '09:00-10:00')
+            ->busy('K2', '09:00-10:00')
+            ->build();
+
+        $request = SnapshotBuilder::request('OIL', '09:00-10:00');
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertFalse($result->found());
+        $this->assertSame([], $result->pairs);
+        $this->assertSame(AllocationFailure::NO_BAY_AVAILABLE, $result->failure);
+    }
+
+    /**
+     * TC-03-13: AC-03.11
+     * Given KEV active=false; Em free;
+     * when Search EV_BATTERY;
+     * then NO_BAY_AVAILABLE.
+     */
+    public function test_AC_03_11_inactive_bay_is_not_available(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('Em', level: 6)
+            ->bay('KEV', BayType::EV, active: false)
+            ->build();
+
+        $request = SnapshotBuilder::request('EV_BATTERY', '09:00-10:00');
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertFalse($result->found());
+        $this->assertSame([], $result->pairs);
+        $this->assertSame(AllocationFailure::NO_BAY_AVAILABLE, $result->failure);
     }
 
     /**
