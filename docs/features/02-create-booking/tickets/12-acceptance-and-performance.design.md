@@ -1,0 +1,7 @@
+# 12: Acceptance and performance — Design Notes
+
+| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| `NFR-02 POST /appointments p95 < 300 ms (RQ §A2, TC-02-30)` | NFR-02, M-02.1, TC-02-30 | `api/tests/Feature/Booking/CreateBookingPerformanceTest.php:30-220` | Sequential execution measures end-to-end latency including allocation reads and writes. | All 200 seed allocations remain active and are scanned during candidate search. | M-03.1 in `api/tests/Unit/Allocation/CandidateFinderPerformanceTest.php:15-100` for in-memory algorithm latency. | follow |
+| `Automated test coverage for all test cases in 6-test-case.md (TC-02-01 to TC-02-37)` | AC-02.1 to AC-02.21, TC-02-33 | `docs/features/02-create-booking/6-test-case.md:100-135` | All automated tests run in parallel or isolated transactions; results recorded in test matrix. | Verified inactive service types and foreign dealerships properly return 404. | Feature 00 and 01 test case verification suites. | follow |
+| `Business analytics metrics measurement M-02.1 to M-02.4 (BA §B2)` | M-02.1, M-02.2, M-02.3, M-02.4 | `docs/features/02-create-booking/2-business-analytics-spec.md:70-76` | Metric queries verified against PostgreSQL schema and test appointment data. | Deactivated allocations excluded from active metrics. | F08 `api_events` table and metrics collection. | follow |

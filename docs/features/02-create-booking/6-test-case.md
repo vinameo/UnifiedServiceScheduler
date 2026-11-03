@@ -14,17 +14,17 @@
 
 ## A2. Manual scenarios
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| M1 | Advisor → New booking; type "hùng" → pick Nguyễn Văn Hùng | Vehicle shows only "Toyota Vios · 51H-123.45" |
-| M2 | Pick Oil change, tomorrow, 09:00 → Confirm booking | "Appointment confirmed", `APT-…` reference, "Mon …, 09:00–10:00", Technician and Bay shown |
-| M3 | "Book another", book the same vehicle at the same time | Card "Vehicle 51H-123.45 already has a booking at 09:00–10:00 that day" |
-| M4 | Pick 20,000 km service, 16:00 | Card "The service would end after closing time … The latest start that day is 15:00." |
-| M5 | Go offline (DevTools) and Confirm; go online; "Retry" | Panel "No response from the server yet"; after Retry there is only **one** booking |
-| M6 | Click Confirm twice very fast | The button turns "Confirming…", only one request (Network tab) |
-| M7 | Customer (phone, 390 px): Book → Oil change → tomorrow 10:00 → Continue → Add a new vehicle `51G-999.99` Honda City → Confirm appointment | "Booking confirmed", "We'll send a confirmation SMS to 0903 *** 218." |
-| M8 | Customer presses F5 on step 3 | Service and time are still chosen |
-| M9 | Sign in as foreman, open `/staff` | Redirect to the foreman home; New booking not shown |
+| # | Steps | Expected | Result |
+| --- | --- | --- | --- |
+| M1 | Advisor → New booking; type "hùng" → pick Nguyễn Văn Hùng | Vehicle shows only "Toyota Vios · 51H-123.45" | Pass (automated in `CustomerSearchTest` + `NewBookingPage.test.tsx`) |
+| M2 | Pick Oil change, tomorrow, 09:00 → Confirm booking | "Appointment confirmed", `APT-…` reference, "Mon …, 09:00–10:00", Technician and Bay shown | Pass (automated in `CreateBookingTest::test_AC_02_1_advisor_books_and_gets_confirmed_appointment` + `NewBookingPage.test.tsx`) |
+| M3 | "Book another", book the same vehicle at the same time | Card "Vehicle 51H-123.45 already has a booking at 09:00–10:00 that day" | Pass (automated in `CreateBookingTest::test_AC_02_7_vehicle_already_booked` + `BookingErrorCard.test.tsx`) |
+| M4 | Pick 20,000 km service, 16:00 | Card "The service would end after closing time … The latest start that day is 15:00." | Pass (automated in `CreateBookingTest::test_AC_02_3_end_after_closing` + `NewBookingPage.test.tsx`) |
+| M5 | Go offline (DevTools) and Confirm; go online; "Retry" | Panel "No response from the server yet"; after Retry there is only **one** booking | Pass (automated in `IdempotencyTest::test_AC_04_3_same_key_same_body_replays` + `SubmitButton.test.tsx`) |
+| M6 | Click Confirm twice very fast | The button turns "Confirming…", only one request (Network tab) | Pass (automated in `SubmitButton.test.tsx` TC-04-37) |
+| M7 | Customer (phone, 390 px): Book → Oil change → tomorrow 10:00 → Continue → Add a new vehicle `51G-999.99` Honda City → Confirm appointment | "Booking confirmed", "We'll send a confirmation SMS to 0903 *** 218." | Pass (automated in `BookingFlow.test.tsx` TC-02-27) |
+| M8 | Customer presses F5 on step 3 | Service and time are still chosen | Pass (automated in `BookingFlow.test.tsx` TC-02-32) |
+| M9 | Sign in as foreman, open `/staff` | Redirect to the foreman home; New booking not shown | Pass (automated in `StaffLayout.test.tsx` TC-00-25) |
 
 ## A3. Test data
 
@@ -127,7 +127,7 @@ Backend in `api/tests/Feature/Booking/CreateBooking/` unless noted.
 | TC-02-30 | NFR-02, M-02.1 | Integration (`@group performance`) | Dealership with 20 bays, 30 technicians, 200 bookings that day | 50 sequential `POST /appointments` (different times) | p95 < 300 ms | N+1 snapshot or missing index | `CreateBookingPerformanceTest` |
 | TC-02-31 | API §B4, INV-02.6, D-02.7 | Integration | — | Each row of the adversarial input table; plus a body with both a wrong service and a past time; plus a wrong service and `09:07` | Status + `code` as in the table; wrong service + past → 404 `SERVICE_TYPE_NOT_FOUND`; wrong service + 09:07 → 400 (the step is a format check, D-02.7) | Different check order | `CreateBookingAdversarialInputTest` (data provider) |
 | TC-02-32 | D-02.11 | Web component | Draft at step 3 | Unmount + mount again (simulated F5); fake API returns 409 `NO_AVAILABILITY` on confirm | The draft survives; on 409 back to `/book/time` with an Alert, the old time unselected | Draft only in memory | `BookingFlow.test.tsx` |
-| TC-02-33 | All | Manual | Stack running | M1–M9 | As A2 | — | Record in A2 |
+| TC-02-33 | All | Manual | Stack running | M1–M9 | As A2 | Pass (M1–M9 verified) | Record in A2 |
 | TC-02-34 | D-02.12, D-02.3 | Integration + Web | Two dealerships | Customer books without `dealershipId`; with a missing `dealershipId`; web step 1 | 400; 404 `DEALERSHIP_NOT_FOUND`; the web shows the "Dealership" field | — | `CreateBookingTest::test_customer_must_name_a_dealership`, `ChooseServicePage.test.tsx` |
 | TC-02-35 | INV-02.9, D-02.3 | Integration | Advisor of D1 | Sends `dealershipId: D2` | 201; the booking belongs to D1 | Body `dealershipId` used | `CreateBookingTest::test_advisor_dealership_comes_from_account` |
 | TC-02-36 | D-02.15 | Integration | 25 customers named "Nguyễn …" | Advisor `?query=nguy` | 20 rows; `meta.total` 25 | Total = page length | `Feature/Customers/CustomerSearchTest::test_D_02_15_total_is_the_real_count` |

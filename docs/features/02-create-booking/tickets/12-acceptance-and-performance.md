@@ -4,7 +4,7 @@
 
 **Blocked by:** [11-customer-booking-screens](11-customer-booking-screens.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/02-create-booking`
 
@@ -12,9 +12,9 @@
 
 **Test cases:** TC-02-30, TC-02-33
 
-- [ ] TC-02-30 (NFR-02, M-02.1; Integration (`@group performance`)): given Dealership with 20 bays, 30 technicians, 200 bookings that day; when 50 sequential `POST /appointments` (different times); then p95 < 300 ms. Test: `CreateBookingPerformanceTest`.
-- [ ] TC-02-33 (All; Manual): given Stack running; when M1–M9; then As A2. Test: `Record in A2`.
-- [ ] Every `TC-` row of `6-test-case.md` is automated and green, or run by hand with the result recorded in `6-test-case.md`
-- [ ] BA metrics (`2-business-analytics-spec.md` §B2) measured and recorded
-- [ ] Whole-branch self-review written to `.claude/reviews/feature__02-create-booking.md` (the merge hook requires it)
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-02-30 (NFR-02, M-02.1; Integration (`@group performance`)): given Dealership with 20 bays, 30 technicians, 200 bookings that day; when 50 sequential `POST /appointments` (different times); then p95 < 300 ms. Test: `CreateBookingPerformanceTest`.
+- [x] TC-02-33 (All; Manual): given Stack running; when M1–M9; then As A2. Test: `Record in A2`.
+- [x] Every `TC-` row of `6-test-case.md` is automated and green, or run by hand with the result recorded in `6-test-case.md`
+- [x] BA metrics (`2-business-analytics-spec.md` §B2) measured and recorded
+- [x] Whole-branch self-review written to `.claude/reviews/feature__02-create-booking.md` (the merge hook requires it)
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
