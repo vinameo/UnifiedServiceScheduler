@@ -30,6 +30,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Master data (F01)
     Route::get('/dealerships', [DealershipController::class, 'index']);
+    Route::get('/dealerships/{dealership}', [DealershipController::class, 'show']);
     Route::get('/dealerships/{dealership}/service-types', [ServiceTypeController::class, 'index']);
     Route::get('/dealerships/{dealership}/bays', [BayController::class, 'index'])->middleware('can:staff');
     Route::get('/dealerships/{dealership}/technicians', [TechnicianController::class, 'index'])->middleware('can:staff');

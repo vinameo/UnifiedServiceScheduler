@@ -23,6 +23,8 @@ export const masterDataCopy = {
     technician: 'Technician',
     level: 'Level',
     action: 'Action',
+    date: 'Date',
+    openingHours: 'Opening hours',
   },
   disable: 'Disable',
   enable: 'Enable',

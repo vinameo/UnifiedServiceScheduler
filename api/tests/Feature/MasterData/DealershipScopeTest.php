@@ -5,6 +5,7 @@ namespace Tests\Feature\MasterData;
 use App\Models\Dealership;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\World;
 use Tests\TestCase;
 
@@ -165,6 +166,97 @@ class DealershipScopeTest extends TestCase
     public function test_unauthenticated_request_to_list_dealerships_is_401(): void
     {
         $response = $this->getJson('/api/v1/dealerships');
+        $response->assertStatus(401)
+            ->assertJsonPath('code', 'UNAUTHENTICATED');
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function scopedRoutesProvider(): array
+    {
+        return [
+            'dealership details' => ['/api/v1/dealerships/{d}'],
+            'service types' => ['/api/v1/dealerships/{d}/service-types'],
+            'bays' => ['/api/v1/dealerships/{d}/bays'],
+            'technicians' => ['/api/v1/dealerships/{d}/technicians'],
+        ];
+    }
+
+    #[DataProvider('scopedRoutesProvider')]
+    public function test_AC_01_2_other_dealership_is_404(string $routeTemplate): void
+    {
+        $world1 = World::saigonD7();
+        $admin = $world1->admin();
+
+        $dealership2 = Dealership::factory()->create([
+            'code' => 'SGA-BTH',
+            'name' => 'Saigon Auto Binh Thanh',
+        ]);
+        World::forDealership($dealership2);
+
+        $url = str_replace('{d}', $dealership2->id, $routeTemplate);
+
+        $response = $this->actingAs($admin)->getJson($url);
+
+        $response->assertStatus(404)
+            ->assertJsonPath('code', 'DEALERSHIP_NOT_FOUND')
+            ->assertJsonPath('status', 404);
+    }
+
+    public function test_admin_reads_own_dealership_details_with_opening_hours(): void
+    {
+        $world = World::saigonD7();
+        $admin = $world->admin();
+        $dealership = $world->dealership;
+
+        $response = $this->actingAs($admin)->getJson("/api/v1/dealerships/{$dealership->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('data.id', $dealership->id)
+            ->assertJsonPath('data.code', 'SGA-D7')
+            ->assertJsonPath('data.name', 'Saigon Auto')
+            ->assertJsonPath('data.branchName', 'District 7')
+            ->assertJsonPath('data.timezone', 'Asia/Ho_Chi_Minh')
+            ->assertJsonPath('data.phone', '028 3812 3456')
+            ->assertJsonPath('data.slotStepMinutes', 15)
+            ->assertJsonStructure([
+                'data' => [
+                    'id',
+                    'code',
+                    'name',
+                    'branchName',
+                    'timezone',
+                    'phone',
+                    'slotStepMinutes',
+                    'openingHours' => [
+                        '*' => ['weekday', 'opensAt', 'closesAt'],
+                    ],
+                ],
+            ]);
+
+        $this->assertCount(6, $response->json('data.openingHours'));
+    }
+
+    public function test_customer_reads_dealership_details_with_opening_hours(): void
+    {
+        $world = World::saigonD7();
+        $customerUser = $world->customerWithVehicle()['user'];
+        $dealership = $world->dealership;
+
+        $response = $this->actingAs($customerUser)->getJson("/api/v1/dealerships/{$dealership->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('data.id', $dealership->id)
+            ->assertJsonPath('data.code', 'SGA-D7');
+    }
+
+    public function test_unauthenticated_request_to_dealership_details_is_401(): void
+    {
+        $world = World::saigonD7();
+        $dealership = $world->dealership;
+
+        $response = $this->getJson("/api/v1/dealerships/{$dealership->id}");
         $response->assertStatus(401)
             ->assertJsonPath('code', 'UNAUTHENTICATED');
     }

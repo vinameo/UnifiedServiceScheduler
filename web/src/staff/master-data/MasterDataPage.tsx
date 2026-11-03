@@ -12,7 +12,7 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMe } from '../../shared/auth/useMe'
 import {
   useBays,
@@ -21,13 +21,18 @@ import {
   useTechnicians,
 } from '../../shared/api/masterData'
 import { bayTypeLabel, levelLabel } from '../../shared/copy/enums'
+import { formatTimezoneOffset, groupWeekdays } from '../../shared/format/weekdays'
 import { masterDataCopy as copy } from './copy'
 
 export function MasterDataPage() {
   const { data: me } = useMe()
   const dealershipId = me?.dealership?.id
 
-  const { data: dealership } = useDealership(dealershipId)
+  const {
+    data: dealership,
+    isLoading: isLoadingDealership,
+    isError: isErrorDealership,
+  } = useDealership(dealershipId)
   const {
     data: serviceTypes = [],
     isLoading: isLoadingServices,
@@ -45,6 +50,12 @@ export function MasterDataPage() {
   } = useTechnicians(dealershipId)
 
   const [activeTab, setActiveTab] = useState<string | null>('service-types')
+
+  const openingHours = dealership?.openingHours
+  const openingHoursGroups = useMemo(() => {
+    if (!openingHours) return []
+    return groupWeekdays(openingHours, { format: 'long', includeClosed: true })
+  }, [openingHours])
 
   const isAdmin = me?.role === 'ADMIN'
   const dealershipName = dealership?.name ?? me?.dealership?.name ?? 'Saigon Auto'
@@ -297,11 +308,89 @@ export function MasterDataPage() {
             )}
           </Tabs.Panel>
 
-          {/* Opening hours tab panel (placeholder for Ticket 08) */}
+          {/* Opening hours tab panel */}
           <Tabs.Panel value="opening-hours" pt="md">
-            <Text c="dimmed" py="md">
-              {copy.tabs.openingHours} view will be loaded here.
-            </Text>
+            {isLoadingDealership ? (
+              <Skeleton height={200} radius="md" />
+            ) : isErrorDealership ? (
+              <Alert color="red" title="Error">
+                Failed to load opening hours.
+              </Alert>
+            ) : openingHoursGroups.length === 0 ? (
+              <Text c="dimmed" py="xl" ta="center">
+                {copy.empty}
+              </Text>
+            ) : (
+              <Group align="flex-start" gap="xl" wrap="wrap">
+                <Box style={{ flex: '1 1 360px', minWidth: 320 }}>
+                  <Table.ScrollContainer minWidth={320}>
+                    <Table striped highlightOnHover withTableBorder withColumnBorders>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>{copy.columns.date}</Table.Th>
+                          <Table.Th>{copy.columns.openingHours}</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {openingHoursGroups.map((group) => (
+                          <Table.Tr key={group.days} aria-label={`${group.days} · ${group.hours}`}>
+                            <Table.Td>
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  width: 1,
+                                  height: 1,
+                                  padding: 0,
+                                  margin: -1,
+                                  overflow: 'hidden',
+                                  clip: 'rect(0, 0, 0, 0)',
+                                  whiteSpace: 'nowrap',
+                                  border: 0,
+                                }}
+                              >
+                                {group.days} · {group.hours}
+                              </span>
+                              <Text size="sm">{group.days}</Text>
+                            </Table.Td>
+                            <Table.Td>
+                              {group.isClosed ? (
+                                <Badge color="gray" variant="light" size="sm">
+                                  {copy.closed}
+                                </Badge>
+                              ) : (
+                                <Text size="sm">{group.hours}</Text>
+                              )}
+                            </Table.Td>
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </Table.ScrollContainer>
+                </Box>
+                <Stack style={{ flex: '1 1 280px', minWidth: 260 }} gap="md">
+                  <Box>
+                    <Text size="xs" c="dimmed">
+                      {copy.timezone}
+                    </Text>
+                    <Text size="sm" fw={600}>
+                      {dealership?.timezone ?? 'Asia/Ho_Chi_Minh'} (
+                      {formatTimezoneOffset(dealership?.timezone ?? 'Asia/Ho_Chi_Minh')})
+                    </Text>
+                  </Box>
+                  <Box>
+                    <Text size="xs" c="dimmed">
+                      {copy.slotStep}
+                    </Text>
+                    <Text size="sm" fw={600}>
+                      {dealership?.slotStepMinutes ?? 15} min
+                    </Text>
+                  </Box>
+                  <Text size="xs" c="dimmed">
+                    {copy.fitRule}
+                  </Text>
+                </Stack>
+              </Group>
+            )}
           </Tabs.Panel>
         </Tabs>
       </Stack>

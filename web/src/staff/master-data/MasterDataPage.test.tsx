@@ -284,4 +284,63 @@ describe('MasterDataPage', () => {
     const enableButton = panel.getByRole('button', { name: 'Enable' })
     expect(enableButton).toBeInTheDocument()
   })
+
+  it('TC-01-12: verifies Technicians and Opening hours tab formatting per AC-01.6', async () => {
+    setupStandardMocks()
+    const user = userEvent.setup()
+
+    renderRoute('/staff/master-data')
+
+    // 1. Open Technicians tab
+    const techTab = await screen.findByRole('tab', { name: /Technicians/i })
+    await user.click(techTab)
+
+    const techPanel = await screen.findByRole('tabpanel')
+    const panelTech = within(techPanel)
+
+    // Assert Level 6, Not taking bookings, no Shift or Skills column
+    expect(panelTech.getByText('Level 6')).toBeInTheDocument()
+    expect(panelTech.getByText('Not taking bookings')).toBeInTheDocument()
+    expect(panelTech.queryByRole('columnheader', { name: /Shift/i })).not.toBeInTheDocument()
+    expect(panelTech.queryByRole('columnheader', { name: /Skills/i })).not.toBeInTheDocument()
+
+    // 2. Open Opening hours tab
+    const openingTab = await screen.findByRole('tab', { name: /Opening hours/i })
+    await user.click(openingTab)
+
+    const openingPanel = await screen.findByRole('tabpanel')
+    const panelHrs = within(openingPanel)
+
+    // Column headers
+    expect(panelHrs.getByRole('columnheader', { name: 'Date' })).toBeInTheDocument()
+    expect(panelHrs.getByRole('columnheader', { name: 'Opening hours' })).toBeInTheDocument()
+
+    // Opening hours merged rows
+    expect(panelHrs.getByText('Monday to Friday')).toBeInTheDocument()
+    expect(panelHrs.getByText('08:00–17:00')).toBeInTheDocument()
+    expect(panelHrs.getByText('Monday to Friday · 08:00–17:00')).toBeInTheDocument()
+
+    expect(panelHrs.getByText('Saturday')).toBeInTheDocument()
+    expect(panelHrs.getByText('08:00–12:00')).toBeInTheDocument()
+    expect(panelHrs.getByText('Saturday · 08:00–12:00')).toBeInTheDocument()
+
+    expect(panelHrs.getByText('Sunday')).toBeInTheDocument()
+    expect(panelHrs.getByText('Closed')).toBeInTheDocument()
+    expect(panelHrs.getByText('Sunday · Closed')).toBeInTheDocument()
+
+    // Time zone UTC+7, slot step 15 min, fit rule
+    expect(panelHrs.getByText('Time zone')).toBeInTheDocument()
+    expect(panelHrs.getByText('Asia/Ho_Chi_Minh (UTC+7)')).toBeInTheDocument()
+    expect(panelHrs.getByText(/UTC\+7/)).toBeInTheDocument()
+    expect(panelHrs.getByText('Slot step')).toBeInTheDocument()
+    expect(panelHrs.getByText('15 min')).toBeInTheDocument()
+    expect(
+      panelHrs.getByText(
+        'Appointments must fit entirely within opening hours: the end time cannot pass closing time.',
+      ),
+    ).toBeInTheDocument()
+
+    // No next holiday box
+    expect(panelHrs.queryByText(/holiday/i)).not.toBeInTheDocument()
+  })
 })
