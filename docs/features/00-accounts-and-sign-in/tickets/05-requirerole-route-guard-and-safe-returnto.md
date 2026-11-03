@@ -4,7 +4,7 @@
 
 **Blocked by:** [04-staff-sign-in-get-me-and-the-staff-sign-in-screen](04-staff-sign-in-get-me-and-the-staff-sign-in-screen.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/00-accounts-and-sign-in`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-00-24
 
-- [ ] TC-00-24 (AC-00.12, WEB-00.4; Web component): given `GET /me` → 401; when Render `/staff/appointments`; then sign in with `returnTo=//evil.com`; then At `/staff/sign-in?returnTo=…`; after sign-in lands on the role home, never `//evil.com`. Test: `…RequireRole.test.tsx`, `web/src/shared/auth/returnTo.test.ts`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-00-24 (AC-00.12, WEB-00.4; Web component): given `GET /me` → 401; when Render `/staff/appointments`; then sign in with `returnTo=//evil.com`; then At `/staff/sign-in?returnTo=…`; after sign-in lands on the role home, never `//evil.com`. Test: `…RequireRole.test.tsx`, `web/src/shared/auth/returnTo.test.ts`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

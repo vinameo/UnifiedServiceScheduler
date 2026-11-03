@@ -4,7 +4,7 @@
 
 **Blocked by:** [02-accounts-schema-dealerships-users-role-and-dealership](02-accounts-schema-dealerships-users-role-and-dealership.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/00-accounts-and-sign-in`
 
@@ -12,7 +12,7 @@
 
 **Test cases:** TC-00-15, TC-00-16
 
-- [ ] TC-00-15 (AC-00.11; Integration): given All 4 password variables set; when `db:seed` twice; then 1 dealership, 3 staff, 2 customers; second run leaves the `password` hash unchanged. Test: `Feature/Auth/AccountSeederTest::test_AC_00_11_seeder_is_safe_to_run_twice`.
-- [ ] TC-00-16 (AC-00.11, D-00.8; Integration): given `SEED_ADMIN_PASSWORD` empty; when `db:seed`; then No admin; the other accounts exist. Test: `…AccountSeederTest::test_AC_00_11_empty_password_env_skips_the_account`.
-- [ ] `SEED_CUSTOMER_PASSWORD` is added to `.env.example` (S-00.7)
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-00-15 (AC-00.11; Integration): given All 4 password variables set; when `db:seed` twice; then 1 dealership, 3 staff, 2 customers; second run leaves the `password` hash unchanged. Test: `Feature/Auth/AccountSeederTest::test_AC_00_11_seeder_is_safe_to_run_twice`.
+- [x] TC-00-16 (AC-00.11, D-00.8; Integration): given `SEED_ADMIN_PASSWORD` empty; when `db:seed`; then No admin; the other accounts exist. Test: `…AccountSeederTest::test_AC_00_11_empty_password_env_skips_the_account`.
+- [x] `SEED_CUSTOMER_PASSWORD` is added to `.env.example` (S-00.7)
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

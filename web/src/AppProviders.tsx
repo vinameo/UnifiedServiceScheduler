@@ -1,8 +1,9 @@
 import { MantineProvider } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { theme } from './shared/theme'
+import { setQueryCacheClearer } from './shared/api/client'
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -15,6 +16,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
         },
       }),
   )
+
+  useEffect(() => {
+    setQueryCacheClearer(() => queryClient.clear())
+  }, [queryClient])
 
   return (
     <MantineProvider theme={theme}>

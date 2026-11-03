@@ -10,5 +10,47 @@ export const api = axios.create({
 
 // Call before sign-in and sign-up so Laravel sets the XSRF-TOKEN cookie.
 export function ensureCsrfCookie() {
-  return axios.get('/sanctum/csrf-cookie', { withCredentials: true })
+  return api.get('/sanctum/csrf-cookie', { baseURL: '' })
 }
+
+export type UnauthenticatedHandler = (targetUrl: string) => void
+
+let onUnauthenticated: UnauthenticatedHandler = (targetUrl: string) => {
+  if (typeof window !== 'undefined' && window.location) {
+    window.location.assign(targetUrl)
+  }
+}
+
+export function setUnauthenticatedHandler(handler: UnauthenticatedHandler) {
+  onUnauthenticated = handler
+}
+
+let queryCacheClearer: (() => void) | null = null
+
+export function setQueryCacheClearer(clearer: () => void) {
+  queryCacheClearer = clearer
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      const url = error.config?.url ?? ''
+      // A 401 UNAUTHENTICATED from any route other than /me and /auth/* (WEB-00.3)
+      const isMeOrAuth = url.includes('/me') || url.includes('/auth/')
+      if (!isMeOrAuth) {
+        queryCacheClearer?.()
+
+        const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
+        const search = typeof window !== 'undefined' ? window.location.search : ''
+        const currentPath = pathname + search
+        const isStaffArea = pathname.startsWith('/staff')
+        const signInPath = isStaffArea ? '/staff/sign-in' : '/sign-in'
+        const redirectUrl = `${signInPath}?returnTo=${encodeURIComponent(currentPath)}`
+
+        onUnauthenticated(redirectUrl)
+      }
+    }
+    return Promise.reject(error)
+  },
+)

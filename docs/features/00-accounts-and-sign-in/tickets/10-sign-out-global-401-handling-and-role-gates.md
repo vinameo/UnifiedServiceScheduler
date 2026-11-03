@@ -4,7 +4,7 @@
 
 **Blocked by:** [09-sign-in-rate-limits](09-sign-in-rate-limits.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/00-accounts-and-sign-in`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** TC-00-12, TC-00-13
 
-- [ ] TC-00-12 (AC-00.9, INV-00.8; Integration): given Signed-in customer; when Sign out, then `GET /me` with the old cookie; then 204; then 401 `UNAUTHENTICATED`. Test: `Feature/Auth/SignOutTest::test_AC_00_9_old_session_is_rejected_after_sign_out`.
-- [ ] TC-00-13 (AC-00.7, INV-00.10; Integration): given The test registers temporary routes `GET /api/v1/_test/staff-only` (`can:staff`) and `…/customer-only` (`can:customer`); when Customer calls staff-only; advisor calls customer-only; no session calls both; then 403 `FORBIDDEN`, 403, 401. Test: `Feature/Auth/GatesTest::test_AC_00_7_customer_cannot_use_staff_routes`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-00-12 (AC-00.9, INV-00.8; Integration): given Signed-in customer; when Sign out, then `GET /me` with the old cookie; then 204; then 401 `UNAUTHENTICATED`. Test: `Feature/Auth/SignOutTest::test_AC_00_9_old_session_is_rejected_after_sign_out`.
+- [x] TC-00-13 (AC-00.7, INV-00.10; Integration): given The test registers temporary routes `GET /api/v1/_test/staff-only` (`can:staff`) and `…/customer-only` (`can:customer`); when Customer calls staff-only; advisor calls customer-only; no session calls both; then 403 `FORBIDDEN`, 403, 401. Test: `Feature/Auth/GatesTest::test_AC_00_7_customer_cannot_use_staff_routes`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Domain\Auth\Role;
+use App\Models\User;
+use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +23,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        JsonResource::withoutWrapping();
+
+        Gate::define('customer', function (User $user): bool {
+            $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
+
+            return $role === Role::CUSTOMER;
+        });
+
+        Gate::define('staff', function (User $user): bool {
+            $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
+
+            return $role?->isStaff() ?? false;
+        });
     }
 }
