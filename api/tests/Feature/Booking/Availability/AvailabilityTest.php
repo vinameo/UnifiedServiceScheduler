@@ -3,6 +3,7 @@
 namespace Tests\Feature\Booking\Availability;
 
 use App\Domain\Booking\Services\AvailabilityServiceInterface;
+use App\Models\Customer;
 use App\Models\Dealership;
 use App\Models\ServiceType;
 use App\Models\User;
@@ -430,6 +431,75 @@ class AvailabilityTest extends TestCase
             $tz = $dealership->timezone;
             $this->assertSame('08:00', $alternatives[0]->start->setTimezone($tz)->format('H:i'));
             $this->assertSame('10:00', $alternatives[1]->start->setTimezone($tz)->format('H:i'));
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_06_11_exclude_own_appointment_only(): void
+    {
+        $world = World::saigonD7();
+        $dealership = $world->dealership;
+        $oilService = $world->serviceType('OIL_CHANGE');
+
+        $world->onlyTechnicians(['An']);
+        $techAn = $world->technician('An');
+        $bay = $world->bay('K1');
+
+        ['user' => $customerUserA, 'customer' => $customerA, 'vehicle' => $vehicleA] = $world->customerWithVehicle();
+        $customerB = Customer::factory()->create();
+        $customerUserB = $customerB->user;
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $appointmentX = AppointmentFactory::create(
+                dealership: $dealership,
+                technician: $techAn,
+                bay: $bay,
+                start: CarbonImmutable::parse('2026-11-03 10:00:00', 'Asia/Ho_Chi_Minh'),
+                end: CarbonImmutable::parse('2026-11-03 11:00:00', 'Asia/Ho_Chi_Minh'),
+                serviceType: $oilService,
+                customer: $customerA,
+                vehicle: $vehicleA,
+            );
+
+            // Baseline without excludeAppointmentId: 10:00 is taken (NO_TECHNICIAN_AVAILABLE)
+            $baseline = $this->actingAs($customerUserA)->getJson(
+                "/api/v1/dealerships/{$dealership->id}/availability?serviceTypeId={$oilService->id}&date=2026-11-03"
+            );
+            $baseline->assertOk();
+            $slots = $baseline->json('data.slots');
+            $slotsByTime = [];
+            foreach ($slots as $slot) {
+                $slotsByTime[substr((string) $slot['start'], 11, 5)] = $slot;
+            }
+            $this->assertFalse($slotsByTime['10:00']['available']);
+            $this->assertSame('NO_TECHNICIAN_AVAILABLE', $slotsByTime['10:00']['reason']);
+
+            // Customer A asks with excludeAppointmentId=X: 10:00 is available: true (INV-06.7, AC-06.11)
+            $responseA = $this->actingAs($customerUserA)->getJson(
+                "/api/v1/dealerships/{$dealership->id}/availability?serviceTypeId={$oilService->id}&date=2026-11-03&excludeAppointmentId={$appointmentX->id}"
+            );
+            $responseA->assertOk();
+            $slotsA = $responseA->json('data.slots');
+            $slotsByTimeA = [];
+            foreach ($slotsA as $slot) {
+                $slotsByTimeA[substr((string) $slot['start'], 11, 5)] = $slot;
+            }
+            $this->assertTrue(
+                $slotsByTimeA['10:00']['available'],
+                'Slot 10:00 must evaluate as available when its own booking is excluded.'
+            );
+            $this->assertNull($slotsByTimeA['10:00']['reason']);
+
+            // Customer B asks with excludeAppointmentId=X: 404 APPOINTMENT_NOT_FOUND (INV-06.7)
+            $responseB = $this->actingAs($customerUserB)->getJson(
+                "/api/v1/dealerships/{$dealership->id}/availability?serviceTypeId={$oilService->id}&date=2026-11-03&excludeAppointmentId={$appointmentX->id}"
+            );
+            $responseB->assertStatus(404)
+                ->assertJsonPath('code', 'APPOINTMENT_NOT_FOUND');
         } finally {
             CarbonImmutable::setTestNow();
         }

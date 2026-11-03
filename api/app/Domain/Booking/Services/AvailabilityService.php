@@ -4,6 +4,7 @@ namespace App\Domain\Booking\Services;
 
 use App\Domain\Allocation\TimeRange;
 use App\Domain\Booking\DayAvailability;
+use App\Domain\Booking\Exceptions\AppointmentNotFound;
 use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
 use App\Domain\MasterData\Exceptions\ServiceTypeNotFound;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
@@ -30,7 +31,10 @@ final readonly class AvailabilityService implements AvailabilityServiceInterface
     ): DayAvailability {
         $serviceType = $this->resolveServiceType($dealershipId, $type);
 
-        if ($excludeAppointmentId !== null && $actor !== null) {
+        if ($excludeAppointmentId !== null) {
+            if ($actor === null) {
+                throw new AppointmentNotFound($excludeAppointmentId);
+            }
             $this->appointmentRepository->findVisibleTo($actor, $excludeAppointmentId);
         }
 
@@ -57,7 +61,10 @@ final readonly class AvailabilityService implements AvailabilityServiceInterface
     ): array {
         $serviceType = $this->resolveServiceType($dealershipId, $type);
 
-        if ($excludeAppointmentId !== null && $actor !== null) {
+        if ($excludeAppointmentId !== null) {
+            if ($actor === null) {
+                throw new AppointmentNotFound($excludeAppointmentId);
+            }
             $this->appointmentRepository->findVisibleTo($actor, $excludeAppointmentId);
         }
 
