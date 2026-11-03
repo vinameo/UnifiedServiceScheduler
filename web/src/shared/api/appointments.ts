@@ -264,4 +264,35 @@ export function useDealershipAppointments(filters: DealershipAppointmentFilters)
   })
 }
 
+export type AppointmentScope = 'upcoming' | 'past'
+
+export async function getMyAppointments(
+  scope: AppointmentScope,
+  cursor?: string | null,
+  limit?: number,
+): Promise<PaginatedAppointments> {
+  const params: Record<string, unknown> = {
+    scope,
+  }
+  if (cursor) {
+    params.cursor = cursor
+  }
+  if (limit) {
+    params.limit = limit
+  }
+
+  const response = await api.get<PaginatedAppointments>('/me/appointments', { params })
+  return response.data
+}
+
+export function useMyAppointments(scope: AppointmentScope) {
+  return useInfiniteQuery({
+    queryKey: ['myAppointments', scope],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => getMyAppointments(scope, pageParam),
+    getNextPageParam: (lastPage) => lastPage.meta.nextCursor ?? undefined,
+  })
+}
+
+
 

@@ -7,6 +7,8 @@ import { ChooseTimePage } from './customer/booking/ChooseTimePage'
 import { ContactDetailsPage } from './customer/booking/ContactDetailsPage'
 import { CustomerBookingConfirmedPage } from './customer/booking/CustomerBookingConfirmedPage'
 import { CustomerBookingLayout } from './customer/booking/CustomerBookingLayout'
+import { MyBookingsPage } from './customer/bookings/MyBookingsPage'
+import { BookingDetailsPage } from './customer/bookings/BookingDetailsPage'
 import { StaffLayout } from './staff/StaffLayout'
 import { StaffSignInPage } from './staff/auth/StaffSignInPage'
 import { MasterDataPage } from './staff/master-data/MasterDataPage'
@@ -38,7 +40,15 @@ export const routes = [
     path: '/my-bookings',
     element: (
       <RequireRole roles={['CUSTOMER']} signInPath="/sign-in">
-        <div>My bookings</div>
+        <MyBookingsPage />
+      </RequireRole>
+    ),
+  },
+  {
+    path: '/my-bookings/:id',
+    element: (
+      <RequireRole roles={['CUSTOMER']} signInPath="/sign-in">
+        <BookingDetailsPage />
       </RequireRole>
     ),
   },
