@@ -4,7 +4,7 @@
 
 **Blocked by:** [05-alternatives-on-409-no-availability](05-alternatives-on-409-no-availability.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/06-alternative-times`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-06-16
 
-- [ ] TC-06-16 (AC-06.15, WEB-06.4; Web component): given Fake API: 409 with 3 suggestions, then 201; when Confirm; tap "10:00 today"; Confirm; then The card disappears, 10:00 selected; the second request has `desiredStart` 10:00 and a different `Idempotency-Key` from the first. Test: `web/src/staff/booking/NewBookingPage.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-06-16 (AC-06.15, WEB-06.4; Web component): given Fake API: 409 with 3 suggestions, then 201; when Confirm; tap "10:00 today"; Confirm; then The card disappears, 10:00 selected; the second request has `desiredStart` 10:00 and a different `Idempotency-Key` from the first. Test: `web/src/staff/booking/NewBookingPage.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

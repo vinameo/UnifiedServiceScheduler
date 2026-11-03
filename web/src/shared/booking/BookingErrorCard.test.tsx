@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 import { BookingErrorCard } from './BookingErrorCard'
 
@@ -173,5 +174,60 @@ describe('BookingErrorCard (TC-02-28)', () => {
 
     renderCard(<BookingErrorCard error={error} />)
     expect(screen.queryByRole('link', { name: 'View existing booking' })).not.toBeInTheDocument()
+  })
+
+  it('renders AlternativeChips when error has alternatives and triggers onPickAlternative', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-02T08:00:00Z'))
+
+    const onPickAlternative = vi.fn()
+    const error = {
+      status: 409,
+      code: 'NO_AVAILABILITY',
+      reason: 'NO_BAY_AVAILABLE',
+      alternatives: [
+        { start: '2026-11-02T10:00:00+07:00', end: '2026-11-02T11:00:00+07:00' },
+        { start: '2026-11-03T08:00:00+07:00', end: '2026-11-03T09:00:00+07:00' },
+      ],
+    }
+
+    const user = userEvent.setup()
+    renderCard(
+      <BookingErrorCard
+        error={error}
+        timeZone="Asia/Ho_Chi_Minh"
+        onPickAlternative={onPickAlternative}
+        context={{
+          time: '09:00',
+          start: '09:00',
+          end: '10:00',
+          referenceDate: '2026-11-02',
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Nearest available slots')).toBeInTheDocument()
+    const chip1 = screen.getByRole('button', { name: '10:00 today' })
+    const chip2 = screen.getByRole('button', { name: '08:00 Tue 3 Nov' })
+    expect(chip1).toBeInTheDocument()
+    expect(chip2).toBeInTheDocument()
+
+    await user.click(chip1)
+    expect(onPickAlternative).toHaveBeenCalledWith('2026-11-02T10:00:00+07:00')
+
+    vi.useRealTimers()
+  })
+
+  it('renders empty alternative slots message when error has empty alternatives', () => {
+    const error = {
+      status: 409,
+      code: 'NO_AVAILABILITY',
+      reason: 'NO_BAY_AVAILABLE',
+      alternatives: [],
+    }
+
+    renderCard(<BookingErrorCard error={error} timeZone="Asia/Ho_Chi_Minh" />)
+    expect(screen.getByText('Nearest available slots')).toBeInTheDocument()
+    expect(screen.getByText('No free time nearby. Pick another day.')).toBeInTheDocument()
   })
 })

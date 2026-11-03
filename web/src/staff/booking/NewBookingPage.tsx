@@ -197,6 +197,15 @@ export function NewBookingPage() {
     },
   })
 
+  const handlePickAlternative = (startIso: string) => {
+    const slotDate = todayInZone(timeZone, new Date(startIso))
+    if (slotDate !== effectiveSelectedDate) {
+      setSelectedDate(slotDate)
+    }
+    setSelectedTimeIso(startIso)
+    setCurrentError(null)
+  }
+
   const handleConfirm = () => {
     if (!selectedCustomerId || !selectedVehicleId || !selectedServiceTypeId || !effectiveTimeIso) {
       return
@@ -512,6 +521,8 @@ export function NewBookingPage() {
                     <BookingErrorCard
                       error={currentError}
                       variant="staff"
+                      timeZone={timeZone}
+                      onPickAlternative={handlePickAlternative}
                       context={{
                         serviceName: selectedService?.name,
                         durationMinutes: selectedService?.durationMinutes,
@@ -520,6 +531,7 @@ export function NewBookingPage() {
                         bayTypeLabel: bayTypeLabel(selectedService?.requiredBayType),
                         licencePlate: selectedVehicle?.licencePlate,
                         customerName: selectedCustomer?.fullName,
+                        referenceDate: effectiveSelectedDate,
                       }}
                     />
                   </Box>
