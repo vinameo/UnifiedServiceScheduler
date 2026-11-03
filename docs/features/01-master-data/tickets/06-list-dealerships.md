@@ -4,7 +4,7 @@
 
 **Blocked by:** [05-dealership-route-binding-and-service-types](05-dealership-route-binding-and-service-types.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/01-master-data`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-01-07
 
-- [ ] TC-01-07 (AC-01.5; Integration): given Advisor of D1; D1, D2; when `GET /dealerships`; then Exactly 1 item, D1. Test: `…DealershipScopeTest::test_AC_01_5_staff_list_only_their_dealership`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-01-07 (AC-01.5; Integration): given Advisor of D1; D1, D2; when `GET /dealerships`; then Exactly 1 item, D1. Test: `…DealershipScopeTest::test_AC_01_5_staff_list_only_their_dealership`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

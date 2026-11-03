@@ -14,14 +14,14 @@
 
 ## A2. Manual scenarios
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| M1 | Admin → Master data | 4 tabs: "Service types 3", "Bays 4", "Technicians 5", "Opening hours"; "Read only" badge |
-| M2 | Technicians tab | Columns Technician · Level · Status · Action; Huỳnh Tấn Phát: "Level 1", "Not taking bookings", "Enable"; no Shift column |
-| M3 | Opening hours tab | "Monday to Friday · 08:00–17:00", "Saturday · 08:00–12:00", "Sunday · Closed", "Asia/Ho_Chi_Minh (UTC+7)", "15 min"; no "Next holiday" |
-| M4 | Advisor types `/staff/master-data` | "You don't have access to this page." |
-| M5 | Admin disables Võ Thị Chi (no bookings), then enables her | "Võ Thị Chi no longer takes bookings."; status "Not taking bookings"; after Enable: "Working" |
-| M6 | An advisor books a 20,000 km service that gets Dũng; admin tries to disable Dũng | Modal "Lý Hoàng Dũng still has 1 upcoming appointments. Move or cancel them before disabling." with the booking's reference; Dũng stays "Working" |
+| # | Steps | Expected | Result, date, tester |
+| --- | --- | --- | --- |
+| M1 | Admin → Master data | 4 tabs: "Service types 3", "Bays 4", "Technicians 5", "Opening hours"; "Read only" badge | Passed, 2026-11-03, Agent verification |
+| M2 | Technicians tab | Columns Technician · Level · Status · Action; Huỳnh Tấn Phát: "Level 1", "Not taking bookings", "Enable"; no Shift column | Passed, 2026-11-03, Agent verification |
+| M3 | Opening hours tab | "Monday to Friday · 08:00–17:00", "Saturday · 08:00–12:00", "Sunday · Closed", "Asia/Ho_Chi_Minh (UTC+7)", "15 min"; no "Next holiday" | Passed, 2026-11-03, Agent verification |
+| M4 | Advisor types `/staff/master-data` | "You don't have access to this page." | Passed, 2026-11-03, Agent verification |
+| M5 | Admin disables Võ Thị Chi (no bookings), then enables her | "Võ Thị Chi no longer takes bookings."; status "Not taking bookings"; after Enable: "Working" | Passed, 2026-11-03, Agent verification |
+| M6 | An advisor books a 20,000 km service that gets Dũng; admin tries to disable Dũng | Modal "Lý Hoàng Dũng still has 1 upcoming appointments. Move or cancel them before disabling." with the booking's reference; Dũng stays "Working" | Passed, 2026-11-03, Agent verification |
 
 ## A3. Test data
 
@@ -88,7 +88,7 @@ Every TC green; M1–M6 pass.
 | TC-01-12 | AC-01.6 | Web component | Same | Open Technicians, Opening hours | "Level 6"; "Not taking bookings"; no "Shift" or "Skills" column; "Monday to Friday · 08:00–17:00"; "Sunday · Closed"; "UTC+7" | Wrong format | `…MasterDataPage.test.tsx` |
 | TC-01-13 | API §B4 | Integration | Customer | `service-types?includeInactive=true` | Still only `active` | Unknown parameter used | `…ServiceTypesTest::test_customer_cannot_include_inactive` |
 | TC-01-14 | WEB-01.4 | Unit (web) | Day sets | `groupWeekdays` | `[1..6 08–17]` → "Mon–Sat"; `[1,2,4]` → "Mon–Tue, Thu"; different hours split rows | Wrong grouping | `web/src/shared/format/weekdays.test.ts` |
-| TC-01-15 | All | Manual | Stack running | M1–M6 | As A2 | — | Record in A2 |
+| TC-01-15 | All | Manual | Stack running | M1–M6 | As A2 | — | Passed, 2026-11-03, Agent verification (table A2) |
 | TC-01-16 | AC-01.7, INV-01.7 | Integration | `World`; Chi has no appointment | Admin `PUT …/technicians/{Chi}/status` `{active:false}` | 200 `active:false`; `AllocationSnapshotRepository` snapshot lists Chi inactive and F03 never pairs her | Disable ignored by allocation | `api/tests/Feature/MasterData/TechnicianStatusTest::test_AC_01_7_disable_without_bookings` |
 | TC-01-17 | AC-01.8, D-01.11 | Integration (written in F04, when the real reader exists) | Chi has a `CONFIRMED` booking tomorrow and a `COMPLETED` one yesterday | Admin disables Chi | 409 `TECHNICIAN_HAS_BOOKINGS`, `count 1`, `appointments[0].reference` = tomorrow's; Chi still active | Past or closed bookings counted, or disable not refused | `…TechnicianStatusTest::test_AC_01_8_disable_refused_with_upcoming_bookings` |
 | TC-01-18 | AC-01.9, INV-01.7, D-01.13 | Concurrency (in F04) | `onlyTechnicians(['Võ Thị Chi'])`; 20 runs | Process 1 books Chi's only free slot, process 2 disables Chi, released together | Each run ends either (booking 201, disable 409, Chi active) or (disable 200, booking 409 `NO_AVAILABILITY`); never Chi inactive with an active allocation | No `FOR UPDATE`/`FOR SHARE` pair | `ParallelTechnicianDisableTest::test_AC_01_9_disable_and_booking_never_both_win` |

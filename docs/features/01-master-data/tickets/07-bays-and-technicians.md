@@ -4,7 +4,7 @@
 
 **Blocked by:** [06-list-dealerships](06-list-dealerships.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/01-master-data`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-01-05
 
-- [ ] TC-01-05 (AC-01.3, INV-01.4; Integration): given Customer; when `GET /dealerships/{d}/bays`, `/technicians`; then 403 `FORBIDDEN` for both. Test: `…/MasterData/BaysAndTechniciansTest::test_AC_01_3_customer_cannot_read_bays_or_technicians`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-01-05 (AC-01.3, INV-01.4; Integration): given Customer; when `GET /dealerships/{d}/bays`, `/technicians`; then 403 `FORBIDDEN` for both. Test: `…/MasterData/BaysAndTechniciansTest::test_AC_01_3_customer_cannot_read_bays_or_technicians`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

@@ -1,7 +1,11 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BayController;
+use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\ServiceTypeController;
+use App\Http\Controllers\Api\V1\TechnicianController;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -23,4 +27,12 @@ Route::post('/auth/staff/sign-in', [AuthController::class, 'staffSignIn'])
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/sign-out', [AuthController::class, 'signOut']);
     Route::get('/me', [MeController::class, 'me']);
+
+    // Master data (F01)
+    Route::get('/dealerships', [DealershipController::class, 'index']);
+    Route::get('/dealerships/{dealership}', [DealershipController::class, 'show']);
+    Route::get('/dealerships/{dealership}/service-types', [ServiceTypeController::class, 'index']);
+    Route::get('/dealerships/{dealership}/bays', [BayController::class, 'index'])->middleware('can:staff');
+    Route::get('/dealerships/{dealership}/technicians', [TechnicianController::class, 'index'])->middleware('can:staff');
+    Route::put('/dealerships/{dealership}/technicians/{technician}/status', [TechnicianController::class, 'updateStatus'])->middleware('can:admin');
 });

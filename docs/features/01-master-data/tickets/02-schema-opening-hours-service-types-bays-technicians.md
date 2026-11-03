@@ -4,7 +4,7 @@
 
 **Blocked by:** [01-prefactor-empty-world-fixture-baytype-and-level](01-prefactor-empty-world-fixture-baytype-and-level.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/01-master-data`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-01-10
 
-- [ ] TC-01-10 (INV-01.1, INV-01.2; Integration): when Insert: service of 0 minutes, 50 minutes, `required_level` 0 and 8; technician `level` 0 and 8; opening 17:00 closing 08:00; two rows for one weekday; then Each insert fails (`23514` or `23505`). Test: `…/MasterData/MasterDataSchemaTest::test_INV_01_1_and_01_2_checks_reject_bad_rows` (data provider).
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-01-10 (INV-01.1, INV-01.2; Integration): when Insert: service of 0 minutes, 50 minutes, `required_level` 0 and 8; technician `level` 0 and 8; opening 17:00 closing 08:00; two rows for one weekday; then Each insert fails (`23514` or `23505`). Test: `…/MasterData/MasterDataSchemaTest::test_INV_01_1_and_01_2_checks_reject_bad_rows` (data provider).
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

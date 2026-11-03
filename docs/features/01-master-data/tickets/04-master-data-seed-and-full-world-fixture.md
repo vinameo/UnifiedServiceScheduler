@@ -4,7 +4,7 @@
 
 **Blocked by:** [03-schema-vehicles](03-schema-vehicles.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/01-master-data`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-01-09
 
-- [ ] TC-01-09 (INV-01.6; Integration): given Empty DB; when `db:seed` twice; record ids after run 1; then Row counts unchanged; ids unchanged; a technician disabled between the runs stays disabled. Test: `…/MasterData/MasterDataSeederTest::test_INV_01_6_seeding_twice_changes_nothing`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-01-09 (INV-01.6; Integration): given Empty DB; when `db:seed` twice; record ids after run 1; then Row counts unchanged; ids unchanged; a technician disabled between the runs stays disabled. Test: `…/MasterData/MasterDataSeederTest::test_INV_01_6_seeding_twice_changes_nothing`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

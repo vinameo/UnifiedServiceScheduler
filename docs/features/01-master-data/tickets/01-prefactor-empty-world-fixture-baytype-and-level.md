@@ -4,7 +4,7 @@
 
 **Blocked by:** F00 [11-acceptance](../../00-accounts-and-sign-in/tickets/11-acceptance.md) (the whole F00 branch merged to `develop`).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/01-master-data`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** none of its own; existing tests prove it changes nothing.
 
-- [ ] `Level` refuses values outside 1–7 and `BayType` lists the bay types from DB §B1
-- [ ] No change users can see; existing tests stay green unchanged
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] `Level` refuses values outside 1–7 and `BayType` lists the bay types from DB §B1
+- [x] No change users can see; existing tests stay green unchanged
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

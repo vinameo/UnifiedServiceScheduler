@@ -153,7 +153,7 @@ Edge cases:
 | `api/app/Domain/MasterData/BayType.php`, `Level.php` | Enum + `label()`; `Level` value object (1–7, `qualifiesFor(Level $required)`). |
 | `api/app/Models/{ServiceType,Bay,Technician,DealershipOpeningHour,Vehicle}.php` | New. |
 | `api/app/Domain/MasterData/Services/TechnicianService(.php, Interface.php)` | `setActive(User $admin, Technician $t, bool $active, CarbonImmutable $now)` (D-01.11–01.13); bound in `DomainServiceProvider`. |
-| `api/app/Domain/MasterData/Contracts/UpcomingAssignmentsReader.php`, `NoUpcomingAssignments.php` | `count(string $technicianId, CarbonImmutable $now)`, `preview(…, int $limit)`; F01 binds the empty one, F04 the real one. |
+| `api/app/Domain/MasterData/Services/UpcomingAssignmentsReader.php`, `NoUpcomingAssignments.php` | `count(string $technicianId, CarbonImmutable $now)`, `preview(…, int $limit)`; F01 binds the empty one, F04 the real one. |
 | `api/app/Domain/MasterData/Exceptions/{TechnicianNotFound,TechnicianHasBookings}.php` | 404, 409 (README §5). |
 | `api/app/Domain/MasterData/Repositories/MasterDataRepository(.php, Interface.php)` | Reads per dealership; binding in `DomainServiceProvider`. |
 | `api/app/Domain/MasterData/DealershipAccess.php` | Seam for INV-01.3: `resolveFor(User $user, string $id): Dealership` throws `DealershipNotFound`. |

@@ -4,7 +4,7 @@
 
 **Blocked by:** [09-disable-and-enable-a-technician-api](09-disable-and-enable-a-technician-api.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/01-master-data`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-01-21
 
-- [ ] TC-01-21 (WEB-01.5; Web component): given Fake API: disable → 409 with `count 23` and 20 rows; then enable → 200; when Click Disable, confirm; close; click Enable on a disabled row; then Modal shows `disable.blocked` with 20 references and "and 3 more"; row unchanged; enable notification "… takes bookings again.". Test: `web/src/staff/master-data/MasterDataPage.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-01-21 (WEB-01.5; Web component): given Fake API: disable → 409 with `count 23` and 20 rows; then enable → 200; when Click Disable, confirm; close; click Enable on a disabled row; then Modal shows `disable.blocked` with 20 references and "and 3 more"; row unchanged; enable notification "… takes bookings again.". Test: `web/src/staff/master-data/MasterDataPage.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

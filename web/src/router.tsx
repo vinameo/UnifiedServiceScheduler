@@ -5,6 +5,7 @@ import { SignInPage } from './customer/auth/SignInPage'
 import { StaffHomePage } from './staff/StaffHomePage'
 import { StaffLayout } from './staff/StaffLayout'
 import { StaffSignInPage } from './staff/auth/StaffSignInPage'
+import { MasterDataPage } from './staff/master-data/MasterDataPage'
 import { RequireRole } from './shared/auth/RequireRole'
 
 export const routes = [
@@ -41,6 +42,14 @@ export const routes = [
     children: [
       { index: true, element: <StaffHomePage /> },
       { path: 'appointments', element: <StaffHomePage /> },
+      {
+        path: 'master-data',
+        element: (
+          <RequireRole roles={['ADMIN']} signInPath="/staff/sign-in">
+            <MasterDataPage />
+          </RequireRole>
+        ),
+      },
     ],
   },
 ]
