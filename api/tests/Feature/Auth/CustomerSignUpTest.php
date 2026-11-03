@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Domain\Auth\CustomerSearchResult;
 use App\Domain\Auth\Repositories\CustomerRepositoryInterface;
 use App\Domain\Auth\Repositories\UserRepository;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
@@ -216,6 +217,11 @@ class CustomerSignUpTest extends TestCase
             public function find(string $id): ?Customer
             {
                 return null;
+            }
+
+            public function search(string $query, int $limit = 20): CustomerSearchResult
+            {
+                return new CustomerSearchResult([], 0);
             }
         };
 

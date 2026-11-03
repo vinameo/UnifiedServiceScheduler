@@ -180,7 +180,16 @@ export function NewBookingPage() {
   const customerSelectData = (customerSearchResult?.data ?? []).map((c) => ({
     value: c.id,
     label: `${c.fullName} · ${maskPhone(c.phone)}`,
+    disabled: false,
   }))
+
+  if (customerSearchResult && customerSearchResult.meta.total > 20) {
+    customerSelectData.push({
+      value: '__more__',
+      label: `Showing 20 of ${customerSearchResult.meta.total} matches. Type more to narrow the search.`,
+      disabled: true,
+    })
+  }
 
   const vehicleSelectData = vehicles.map((v) => ({
     value: v.id,

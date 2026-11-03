@@ -11,6 +11,8 @@ use App\Domain\Auth\Repositories\CustomerRepository;
 use App\Domain\Auth\Repositories\CustomerRepositoryInterface;
 use App\Domain\Auth\Repositories\UserRepository;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
+use App\Domain\Auth\Services\CustomerService;
+use App\Domain\Auth\Services\CustomerServiceInterface;
 use App\Domain\Auth\Services\SignInService;
 use App\Domain\Auth\Services\SignInServiceInterface;
 use App\Domain\Auth\Services\SignUpService;
@@ -57,6 +59,7 @@ class DomainServiceProvider extends ServiceProvider
         // Auth (F00)
         UserRepositoryInterface::class => UserRepository::class,
         CustomerRepositoryInterface::class => CustomerRepository::class,
+        CustomerServiceInterface::class => CustomerService::class,
         UserServiceInterface::class => UserService::class,
         SignInServiceInterface::class => SignInService::class,
         SignUpServiceInterface::class => SignUpService::class,

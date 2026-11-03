@@ -4,7 +4,7 @@
 
 **Blocked by:** [06-error-cards-on-new-booking](06-error-cards-on-new-booking.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/02-create-booking`
 
@@ -12,7 +12,7 @@
 
 **Test cases:** TC-02-19, TC-02-23, TC-02-36
 
-- [ ] TC-02-19 (AC-02.15; Integration): given Seed customers; when Advisor `?query=hu`, `?query=hùng`, `?query=0903`, `?query=hung@`; customer `?query=hùng`; then 400; Hùng; Hùng; Hùng; 403. Test: `Feature/Customers/CustomerSearchTest::test_AC_02_15_search_rules`.
-- [ ] TC-02-23 (D-02.10, API §B4; Integration): given Customer named "100% Auto"; when `?query=%%%`; `?query=100%`; then `%%%`: empty; `100%`: "100% Auto". Test: `CustomerSearchTest::test_like_wildcards_are_escaped`.
-- [ ] TC-02-36 (D-02.15; Integration): given 25 customers named "Nguyễn …"; when Advisor `?query=nguy`; then 20 rows; `meta.total` 25. Test: `Feature/Customers/CustomerSearchTest::test_D_02_15_total_is_the_real_count`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-02-19 (AC-02.15; Integration): given Seed customers; when Advisor `?query=hu`, `?query=hùng`, `?query=0903`, `?query=hung@`; customer `?query=hùng`; then 400; Hùng; Hùng; Hùng; 403. Test: `Feature/Customers/CustomerSearchTest::test_AC_02_15_search_rules`.
+- [x] TC-02-23 (D-02.10, API §B4; Integration): given Customer named "100% Auto"; when `?query=%%%`; `?query=100%`; then `%%%`: empty; `100%`: "100% Auto". Test: `CustomerSearchTest::test_like_wildcards_are_escaped`.
+- [x] TC-02-36 (D-02.15; Integration): given 25 customers named "Nguyễn …"; when Advisor `?query=nguy`; then 20 rows; `meta.total` 25. Test: `Feature/Customers/CustomerSearchTest::test_D_02_15_total_is_the_real_count`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AppointmentController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BayController;
+use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ServiceTypeController;
@@ -40,4 +41,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Booking (F02)
     Route::post('/appointments', [AppointmentController::class, 'store'])
         ->middleware(['can:create-appointment', 'idempotent']);
+
+    // Customers (F02)
+    Route::get('/customers', [CustomerController::class, 'index'])
+        ->middleware(['can:search-customers', 'throttle:60,1']);
 });
