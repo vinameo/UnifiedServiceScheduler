@@ -6,6 +6,10 @@ use InvalidArgumentException;
 
 final class CandidateFinder implements CandidateFinderInterface
 {
+    public function __construct(
+        private AllocationStrategy $strategy = new LowestLevelFirstStrategy,
+    ) {}
+
     public function find(AllocationRequest $request, ResourceSnapshot $snapshot): AllocationResult
     {
         if ($request->dealershipId !== $snapshot->dealershipId) {
@@ -58,11 +62,26 @@ final class CandidateFinder implements CandidateFinderInterface
             return new AllocationResult(pairs: [], failure: AllocationFailure::NO_BAY_AVAILABLE);
         }
 
-        // Generate candidate pairs up to maxPairs
+        // Rank technicians and bays via strategy
+        $rankedTechnicians = $this->strategy->rankTechnicians($freeTechnicians, $request, $snapshot);
+        $rankedBays = $this->strategy->rankBays($freeBays, $request);
+
+        // Generate candidate pairs per D-03.3:
+        // Sum of 0-based technician rank i and bay rank j (i + j) ascending,
+        // ties broken by technician rank i ascending. Take up to maxPairs.
         $pairs = [];
-        foreach ($freeTechnicians as $tech) {
-            foreach ($freeBays as $bay) {
-                $pairs[] = new CandidatePair($tech, $bay);
+        $numTech = count($rankedTechnicians);
+        $numBays = count($rankedBays);
+        $maxSum = ($numTech - 1) + ($numBays - 1);
+
+        for ($s = 0; $s <= $maxSum; $s++) {
+            $minI = max(0, $s - ($numBays - 1));
+            $maxI = min($numTech - 1, $s);
+
+            for ($i = $minI; $i <= $maxI; $i++) {
+                $j = $s - $i;
+                $pairs[] = new CandidatePair($rankedTechnicians[$i], $rankedBays[$j]);
+
                 if (count($pairs) >= $request->maxPairs) {
                     break 2;
                 }

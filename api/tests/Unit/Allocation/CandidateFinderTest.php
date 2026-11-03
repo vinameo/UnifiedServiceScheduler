@@ -288,6 +288,138 @@ class CandidateFinderTest extends TestCase
     }
 
     /**
+     * TC-03-15: D-03.10, D-03.5
+     * Given An (2) free; Em (6) busy;
+     * when Search MAINT_20K (level 3);
+     * then NO_TECHNICIAN_AVAILABLE (Em qualifies but is busy; An does not qualify).
+     */
+    public function test_D_03_10_free_but_too_junior_is_not_used(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('An', level: 2)
+            ->technician('Em', level: 6)
+            ->busy('Em', '09:00-10:00')
+            ->bay('S1', BayType::STANDARD)
+            ->build();
+
+        $request = SnapshotBuilder::request('MAINT_20K', '09:00-10:00');
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertFalse($result->found());
+        $this->assertSame([], $result->pairs);
+        $this->assertSame(AllocationFailure::NO_TECHNICIAN_AVAILABLE, $result->failure);
+    }
+
+    /**
+     * TC-03-16: D-03.5
+     * Given Every technician and bay busy;
+     * when Search;
+     * then NO_TECHNICIAN_AVAILABLE.
+     */
+    public function test_D_03_5_both_busy_reports_technician_first(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('An', level: 2)
+            ->busy('An', '09:00-10:00')
+            ->bay('K1', BayType::QUICK)
+            ->busy('K1', '09:00-10:00')
+            ->build();
+
+        $request = SnapshotBuilder::request('OIL', '09:00-10:00');
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertFalse($result->found());
+        $this->assertSame([], $result->pairs);
+        $this->assertSame(AllocationFailure::NO_TECHNICIAN_AVAILABLE, $result->failure);
+    }
+
+    /**
+     * TC-03-24: D-03.2, D-03.3, BR-03.2
+     * Given 3 technicians T1<T2<T3, 2 bays K1<K2, all free;
+     * when Search;
+     * then Exactly 5 pairs: (T1,K1),(T1,K2),(T2,K1),(T2,K2),(T3,K1).
+     */
+    public function test_D_03_3_pairs_order_and_limit(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('T1', level: 1)
+            ->technician('T2', level: 2)
+            ->technician('T3', level: 3)
+            ->bay('K1', BayType::QUICK)
+            ->bay('K2', BayType::QUICK)
+            ->build();
+
+        $request = SnapshotBuilder::request('OIL', '09:00-10:00', maxPairs: 5);
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertTrue($result->found());
+        $this->assertCount(5, $result->pairs);
+
+        $expected = [
+            ['T1', 'K1'],
+            ['T1', 'K2'],
+            ['T2', 'K1'],
+            ['T2', 'K2'],
+            ['T3', 'K1'],
+        ];
+
+        foreach ($expected as $idx => [$expectedTech, $expectedBay]) {
+            $this->assertSame($expectedTech, $result->pairs[$idx]->technician->name);
+            $this->assertSame($expectedBay, $result->pairs[$idx]->bay->code);
+        }
+    }
+
+    /**
+     * TC-03-28: D-03.3
+     * Given 2 technicians T1<T2 (both qualify for OIL), 5 QUICK bays B1<…<B5, all free;
+     * when Search;
+     * then Pairs (T1,B1),(T1,B2),(T2,B1),(T1,B3),(T2,B2); both technicians in the first 5.
+     */
+    public function test_D_03_3_first_pairs_spread_over_technicians(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('T1', level: 1)
+            ->technician('T2', level: 2)
+            ->bay('B1', BayType::QUICK)
+            ->bay('B2', BayType::QUICK)
+            ->bay('B3', BayType::QUICK)
+            ->bay('B4', BayType::QUICK)
+            ->bay('B5', BayType::QUICK)
+            ->build();
+
+        $request = SnapshotBuilder::request('OIL', '09:00-10:00', maxPairs: 5);
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertTrue($result->found());
+        $this->assertCount(5, $result->pairs);
+
+        $expected = [
+            ['T1', 'B1'],
+            ['T1', 'B2'],
+            ['T2', 'B1'],
+            ['T1', 'B3'],
+            ['T2', 'B2'],
+        ];
+
+        foreach ($expected as $idx => [$expectedTech, $expectedBay]) {
+            $this->assertSame($expectedTech, $result->pairs[$idx]->technician->name);
+            $this->assertSame($expectedBay, $result->pairs[$idx]->bay->code);
+        }
+
+        $techniciansInPairs = array_unique(array_map(fn ($pair) => $pair->technician->name, $result->pairs));
+        $this->assertContains('T1', $techniciansInPairs);
+        $this->assertContains('T2', $techniciansInPairs);
+    }
+
+    /**
      * TC-03-23: INV-03.4, API §B3
      * When TimeRange(10:00, 10:00); maxPairs: 0; snapshot of another dealership; snapshot of another day;
      * then Each throws InvalidArgumentException.

@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Domain\Allocation\AllocationStrategy;
 use App\Domain\Allocation\CandidateFinder;
 use App\Domain\Allocation\CandidateFinderInterface;
+use App\Domain\Allocation\LowestLevelFirstStrategy;
 use App\Domain\Auth\Repositories\CustomerRepository;
 use App\Domain\Auth\Repositories\CustomerRepositoryInterface;
 use App\Domain\Auth\Repositories\UserRepository;
@@ -48,6 +50,7 @@ class DomainServiceProvider extends ServiceProvider
         UpcomingAssignmentsReader::class => NoUpcomingAssignments::class,
 
         // Allocation (F03)
+        AllocationStrategy::class => LowestLevelFirstStrategy::class,
         CandidateFinderInterface::class => CandidateFinder::class,
     ];
 }
