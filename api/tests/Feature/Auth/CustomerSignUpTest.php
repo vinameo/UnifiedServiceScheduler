@@ -219,6 +219,11 @@ class CustomerSignUpTest extends TestCase
                 return null;
             }
 
+            public function findByUserId(int $userId): ?Customer
+            {
+                return null;
+            }
+
             public function search(string $query, int $limit = 20): CustomerSearchResult
             {
                 return new CustomerSearchResult([], 0);

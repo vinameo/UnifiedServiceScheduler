@@ -29,6 +29,8 @@ Route::post('/auth/staff/sign-in', [AuthController::class, 'staffSignIn'])
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/sign-out', [AuthController::class, 'signOut']);
     Route::get('/me', [MeController::class, 'me']);
+    Route::get('/me/vehicles', [MeController::class, 'vehicles'])->middleware('can:customer');
+    Route::post('/me/vehicles', [MeController::class, 'addVehicle'])->middleware(['can:customer', 'idempotent']);
 
     // Master data (F01)
     Route::get('/dealerships', [DealershipController::class, 'index']);

@@ -14,5 +14,7 @@ interface CustomerRepositoryInterface
 
     public function find(string $id): ?Customer;
 
+    public function findByUserId(int $userId): ?Customer;
+
     public function search(string $query, int $limit = 20): CustomerSearchResult;
 }

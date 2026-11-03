@@ -12,4 +12,15 @@ interface VehicleRepositoryInterface
      * @return list<Vehicle>
      */
     public function findByCustomer(string $customerId): array;
+
+    public function countByCustomer(string $customerId): int;
+
+    public function findByPlateKey(string $plateKey): ?Vehicle;
+
+    public function findByVin(string $vin): ?Vehicle;
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    public function create(array $attributes): Vehicle;
 }

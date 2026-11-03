@@ -24,4 +24,27 @@ final class VehicleRepository implements VehicleRepositoryInterface
                 ->all()
         );
     }
+
+    public function countByCustomer(string $customerId): int
+    {
+        return Vehicle::query()->where('customer_id', $customerId)->count();
+    }
+
+    public function findByPlateKey(string $plateKey): ?Vehicle
+    {
+        return Vehicle::query()->where('plate_key', $plateKey)->first();
+    }
+
+    public function findByVin(string $vin): ?Vehicle
+    {
+        return Vehicle::query()->where('vin', $vin)->first();
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    public function create(array $attributes): Vehicle
+    {
+        return Vehicle::create($attributes);
+    }
 }

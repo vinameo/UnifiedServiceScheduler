@@ -23,6 +23,11 @@ final class CustomerRepository implements CustomerRepositoryInterface
         return Customer::query()->where('id', $id)->first();
     }
 
+    public function findByUserId(int $userId): ?Customer
+    {
+        return Customer::query()->where('user_id', $userId)->first();
+    }
+
     public function search(string $query, int $limit = 20): CustomerSearchResult
     {
         $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query);
