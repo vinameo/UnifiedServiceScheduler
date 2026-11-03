@@ -19,7 +19,8 @@ use App\Domain\Auth\Services\UserService;
 use App\Domain\Auth\Services\UserServiceInterface;
 use App\Domain\Booking\Repositories\AllocationSnapshotRepository;
 use App\Domain\Booking\Repositories\AllocationSnapshotRepositoryInterface;
-use App\Domain\Booking\Repositories\NoBusyIntervals;
+use App\Domain\Booking\Repositories\ResourceAllocationRepository;
+use App\Domain\Booking\Repositories\ResourceAllocationRepositoryInterface;
 use App\Domain\MasterData\Repositories\MasterDataRepository;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\MasterData\Services\MasterDataService;
@@ -57,6 +58,9 @@ class DomainServiceProvider extends ServiceProvider
         AllocationStrategy::class => LowestLevelFirstStrategy::class,
         CandidateFinderInterface::class => CandidateFinder::class,
         AllocationSnapshotRepositoryInterface::class => AllocationSnapshotRepository::class,
-        BusyIntervalReader::class => NoBusyIntervals::class,
+        BusyIntervalReader::class => ResourceAllocationRepository::class,
+
+        // Booking (F04)
+        ResourceAllocationRepositoryInterface::class => ResourceAllocationRepository::class,
     ];
 }
