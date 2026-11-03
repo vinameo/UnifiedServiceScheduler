@@ -4,7 +4,7 @@
 
 **Blocked by:** [16-web-useidempotencykey](16-web-useidempotencykey.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/04-booking-integrity`
 
@@ -12,7 +12,7 @@
 
 **Test cases:** TC-04-36, TC-04-37, TC-04-39
 
-- [ ] TC-04-36 (WEB-04.2, WEB-04.4; Web component): given Fake API: first call times out, second 201; when Submit; see the panel; tap "Retry"; then Panel "No response from the server yet"; the second call sends the **same** `Idempotency-Key`. Test: `…/IdempotentRetryPanel.test.tsx`.
-- [ ] TC-04-37 (WEB-04.3; Web component): given Fake API hangs; when Click submit twice quickly; then Exactly 1 request; the button shows "Confirming…" and is `disabled`. Test: `…/SubmitButton.test.tsx`.
-- [ ] TC-04-39 (WEB §B2; Web component): given Fake API returns 409 `REQUEST_IN_PROGRESS`; when Submit; then `inProgress.body` copy; "Retry" uses the same key. Test: `…/IdempotentRetryPanel.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-04-36 (WEB-04.2, WEB-04.4; Web component): given Fake API: first call times out, second 201; when Submit; see the panel; tap "Retry"; then Panel "No response from the server yet"; the second call sends the **same** `Idempotency-Key`. Test: `…/IdempotentRetryPanel.test.tsx`.
+- [x] TC-04-37 (WEB-04.3; Web component): given Fake API hangs; when Click submit twice quickly; then Exactly 1 request; the button shows "Confirming…" and is `disabled`. Test: `…/SubmitButton.test.tsx`.
+- [x] TC-04-39 (WEB §B2; Web component): given Fake API returns 409 `REQUEST_IN_PROGRESS`; when Submit; then `inProgress.body` copy; "Retry" uses the same key. Test: `…/IdempotentRetryPanel.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
