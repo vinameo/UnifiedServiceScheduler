@@ -5,6 +5,7 @@ namespace Tests\Support\Allocation;
 use App\Domain\Allocation\AllocationRequest;
 use App\Domain\Allocation\BayState;
 use App\Domain\Allocation\BusyInterval;
+use App\Domain\Allocation\OpeningHours;
 use App\Domain\Allocation\ResourceSnapshot;
 use App\Domain\Allocation\TechnicianState;
 use App\Domain\Allocation\TimeRange;
@@ -40,6 +41,47 @@ class SnapshotBuilder
         string $dealershipId = self::DEFAULT_DEALERSHIP_ID,
     ): self {
         return new self($localDate, $timezone, $dealershipId);
+    }
+
+    /**
+     * Returns [00:00, 24:00) of local date converted to UTC.
+     * Respects 23-hour and 25-hour days across DST changes (INV-03.5).
+     */
+    public static function dayWindow(string $localDate, string $timezone): TimeRange
+    {
+        $localStart = CarbonImmutable::parse("{$localDate} 00:00:00", $timezone);
+        $startUtc = $localStart->setTimezone('UTC');
+        $endUtc = $localStart->addDay()->setTimezone('UTC');
+
+        return TimeRange::of($startUtc, $endUtc);
+    }
+
+    /**
+     * Returns standard seed opening hours map:
+     * Mon-Fri 08:00:00 to 17:00:00, Sat 08:00:00 to 12:00:00, Sun closed.
+     *
+     * @return array<int, array{opens_at: string, closes_at: string}>
+     */
+    public static function seedOpeningHoursMap(): array
+    {
+        $map = [];
+        for ($weekday = 1; $weekday <= 5; $weekday++) {
+            $map[$weekday] = [
+                'opens_at' => '08:00:00',
+                'closes_at' => '17:00:00',
+            ];
+        }
+        $map[6] = [
+            'opens_at' => '08:00:00',
+            'closes_at' => '12:00:00',
+        ];
+
+        return $map;
+    }
+
+    public static function seedOpeningHours(string $timezone = 'Asia/Ho_Chi_Minh'): OpeningHours
+    {
+        return OpeningHours::fromWeekdayMap(self::seedOpeningHoursMap(), $timezone);
     }
 
     public function technician(
