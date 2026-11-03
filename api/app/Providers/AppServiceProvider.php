@@ -62,7 +62,7 @@ class AppServiceProvider extends ServiceProvider
             /** @var User|null $user */
             $user = request()->user();
 
-            return (new DealershipAccess)->resolveFor($user, $value);
+            return app(DealershipAccess::class)->resolveFor($user, $value);
         });
     }
 }
