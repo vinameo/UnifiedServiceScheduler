@@ -158,4 +158,62 @@ class LowestLevelFirstStrategyTest extends TestCase
         $this->assertSame('00000000-0000-0000-0000-000000000001', $rankedTies[0]->id);
         $this->assertSame('00000000-0000-0000-0000-000000000002', $rankedTies[1]->id);
     }
+
+    public function test_prefer_technician_and_bay_moves_to_front(): void
+    {
+        $id1 = '00000000-0000-0000-0000-000000000001';
+        $id2 = '00000000-0000-0000-0000-000000000002';
+        $id3 = '00000000-0000-0000-0000-000000000003';
+
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('T1', level: 1, id: $id1)
+            ->technician('T2', level: 2, id: $id2)
+            ->technician('T3', level: 3, id: $id3)
+            ->bay('B1', BayType::QUICK, id: $id1)
+            ->bay('B2', BayType::QUICK, id: $id2)
+            ->bay('B3', BayType::QUICK, id: $id3)
+            ->build();
+
+        $strategy = new LowestLevelFirstStrategy;
+
+        // Prefer T3 moves T3 to index 0, keeping T1 and T2 in their relative sorted order
+        $requestTech = SnapshotBuilder::request('OIL', '10:00-11:00', preferTechnicianId: $id3);
+        $rankedTechs = $strategy->rankTechnicians($snapshot->technicians, $requestTech, $snapshot);
+        $this->assertSame($id3, $rankedTechs[0]->id);
+        $this->assertSame($id1, $rankedTechs[1]->id);
+        $this->assertSame($id2, $rankedTechs[2]->id);
+
+        // Prefer B3 moves B3 to index 0, keeping B1 and B2 in their relative sorted order
+        $requestBay = SnapshotBuilder::request('OIL', '10:00-11:00', preferBayId: $id3);
+        $rankedBays = $strategy->rankBays($snapshot->bays, $requestBay);
+        $this->assertSame($id3, $rankedBays[0]->id);
+        $this->assertSame($id1, $rankedBays[1]->id);
+        $this->assertSame($id2, $rankedBays[2]->id);
+    }
+
+    public function test_unknown_preference_leaves_order_unchanged(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('T1', level: 1)
+            ->technician('T2', level: 2)
+            ->bay('B1', BayType::QUICK)
+            ->bay('B2', BayType::QUICK)
+            ->build();
+
+        $strategy = new LowestLevelFirstStrategy;
+        $request = SnapshotBuilder::request(
+            'OIL',
+            '10:00-11:00',
+            preferTechnicianId: '00000000-0000-0000-0000-000000000999',
+            preferBayId: '00000000-0000-0000-0000-000000000999',
+        );
+
+        $rankedTechs = $strategy->rankTechnicians($snapshot->technicians, $request, $snapshot);
+        $this->assertSame('T1', $rankedTechs[0]->name);
+        $this->assertSame('T2', $rankedTechs[1]->name);
+
+        $rankedBays = $strategy->rankBays($snapshot->bays, $request);
+        $this->assertSame('B1', $rankedBays[0]->code);
+        $this->assertSame('B2', $rankedBays[1]->code);
+    }
 }

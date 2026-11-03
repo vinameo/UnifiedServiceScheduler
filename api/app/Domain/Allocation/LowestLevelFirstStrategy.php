@@ -28,6 +28,21 @@ final class LowestLevelFirstStrategy implements AllocationStrategy
             return strcmp($a->id, $b->id);
         });
 
+        if ($request->preferTechnicianId !== null) {
+            $preferredIndex = null;
+            foreach ($ranked as $index => $tech) {
+                if ($tech->id === $request->preferTechnicianId) {
+                    $preferredIndex = $index;
+                    break;
+                }
+            }
+
+            if ($preferredIndex !== null) {
+                $preferred = array_splice($ranked, $preferredIndex, 1);
+                array_unshift($ranked, $preferred[0]);
+            }
+        }
+
         return $ranked;
     }
 
@@ -47,6 +62,21 @@ final class LowestLevelFirstStrategy implements AllocationStrategy
 
             return strcmp($a->id, $b->id);
         });
+
+        if ($request->preferBayId !== null) {
+            $preferredIndex = null;
+            foreach ($ranked as $index => $bay) {
+                if ($bay->id === $request->preferBayId) {
+                    $preferredIndex = $index;
+                    break;
+                }
+            }
+
+            if ($preferredIndex !== null) {
+                $preferred = array_splice($ranked, $preferredIndex, 1);
+                array_unshift($ranked, $preferred[0]);
+            }
+        }
 
         return $ranked;
     }

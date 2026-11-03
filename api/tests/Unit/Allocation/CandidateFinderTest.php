@@ -420,6 +420,133 @@ class CandidateFinderTest extends TestCase
     }
 
     /**
+     * TC-03-17: AC-03.12, INV-03.6, D-03.8
+     * Given Appointment X: An + K2 10:00–11:00; Dũng free with fewer minutes than An;
+     * when Search 10:30–11:30, exclude = X, preferTechnicianId = An, preferBayId = K2;
+     * then First pair (An, K2).
+     */
+    public function test_AC_03_12_reschedule_inside_own_slot_keeps_technician(): void
+    {
+        $appointmentX = '00000000-0000-0000-0000-000000000099';
+
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('An', level: 2)
+            ->technician('Dũng', level: 2)
+            ->bay('K1', BayType::QUICK)
+            ->bay('K2', BayType::QUICK)
+            // Appointment X occupies An and K2 from 10:00 to 11:00
+            ->busy('An', '10:00-11:00', appointment: $appointmentX)
+            // An has an additional busy slot (60 mins), so An has 60 booked minutes (excluding X)
+            ->busy('An', '08:00-09:00', appointment: '00000000-0000-0000-0000-000000000001')
+            // K2 is occupied by Appointment X from 10:00 to 11:00
+            ->busy('K2', '10:00-11:00', appointment: $appointmentX)
+            ->build();
+
+        $an = array_values(array_filter($snapshot->technicians, fn ($t) => $t->name === 'An'))[0];
+        $k2 = array_values(array_filter($snapshot->bays, fn ($b) => $b->code === 'K2'))[0];
+
+        $request = SnapshotBuilder::request(
+            'OIL',
+            '10:30-11:30',
+            preferTechnicianId: $an->id,
+            preferBayId: $k2->id,
+            excludeAppointmentId: $appointmentX,
+        );
+
+        $finder = new CandidateFinder;
+        $result = $finder->find($request, $snapshot);
+
+        $this->assertTrue($result->found());
+        $this->assertNotEmpty($result->pairs);
+        $this->assertSame('An', $result->pairs[0]->technician->name);
+        $this->assertSame('K2', $result->pairs[0]->bay->code);
+
+        // Contrast 1: Without excludeAppointmentId, An and K2 are busy, so Dũng and K1 are matched
+        $requestWithoutExclude = SnapshotBuilder::request(
+            'OIL',
+            '10:30-11:30',
+            preferTechnicianId: $an->id,
+            preferBayId: $k2->id,
+        );
+        $resultWithoutExclude = $finder->find($requestWithoutExclude, $snapshot);
+        $this->assertTrue($resultWithoutExclude->found());
+        $this->assertSame('Dũng', $resultWithoutExclude->pairs[0]->technician->name);
+        $this->assertSame('K1', $resultWithoutExclude->pairs[0]->bay->code);
+
+        // Contrast 2: Without preferences, Dũng (fewer minutes) and K1 (alphabetical code) are ranked first
+        $requestWithoutPreferences = SnapshotBuilder::request(
+            'OIL',
+            '10:30-11:30',
+            excludeAppointmentId: $appointmentX,
+        );
+        $resultWithoutPreferences = $finder->find($requestWithoutPreferences, $snapshot);
+        $this->assertTrue($resultWithoutPreferences->found());
+        $this->assertSame('Dũng', $resultWithoutPreferences->pairs[0]->technician->name);
+        $this->assertSame('K1', $resultWithoutPreferences->pairs[0]->bay->code);
+    }
+
+    /**
+     * TC-03-18: D-03.8
+     * Given preferTechnicianId = Phát (inactive);
+     * when Search;
+     * then Same result as without prefer, no error.
+     */
+    public function test_D_03_8_unqualified_preference_is_ignored(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('An', level: 2)
+            ->technician('Dũng', level: 3)
+            ->technician('Phát', level: 2, active: false)
+            ->bay('K1', BayType::QUICK)
+            ->bay('K2', BayType::QUICK, active: false)
+            ->build();
+
+        $phat = array_values(array_filter($snapshot->technicians, fn ($t) => $t->name === 'Phát'))[0];
+        $inactiveBay = array_values(array_filter($snapshot->bays, fn ($b) => $b->code === 'K2'))[0];
+
+        $requestBaseline = SnapshotBuilder::request('OIL', '10:00-11:00');
+
+        $finder = new CandidateFinder;
+        $baselineResult = $finder->find($requestBaseline, $snapshot);
+        $this->assertTrue($baselineResult->found());
+
+        // Preferring inactive technician (Phát) yields the exact same result without error
+        $requestWithInactiveTech = SnapshotBuilder::request(
+            'OIL',
+            '10:00-11:00',
+            preferTechnicianId: $phat->id,
+        );
+        $resultWithInactiveTech = $finder->find($requestWithInactiveTech, $snapshot);
+
+        $this->assertTrue($resultWithInactiveTech->found());
+        $this->assertCount(count($baselineResult->pairs), $resultWithInactiveTech->pairs);
+        foreach ($baselineResult->pairs as $idx => $pair) {
+            $this->assertSame($pair->technician->id, $resultWithInactiveTech->pairs[$idx]->technician->id);
+            $this->assertSame($pair->bay->id, $resultWithInactiveTech->pairs[$idx]->bay->id);
+        }
+
+        // Also test: non-existent technician ID preference is ignored without error
+        $requestWithUnknownTech = SnapshotBuilder::request(
+            'OIL',
+            '10:00-11:00',
+            preferTechnicianId: '00000000-0000-0000-0000-000000000999',
+        );
+        $resultWithUnknownTech = $finder->find($requestWithUnknownTech, $snapshot);
+        $this->assertTrue($resultWithUnknownTech->found());
+        $this->assertSame($baselineResult->pairs[0]->technician->id, $resultWithUnknownTech->pairs[0]->technician->id);
+
+        // Also test: inactive bay preference is ignored without error
+        $requestWithInactiveBay = SnapshotBuilder::request(
+            'OIL',
+            '10:00-11:00',
+            preferBayId: $inactiveBay->id,
+        );
+        $resultWithInactiveBay = $finder->find($requestWithInactiveBay, $snapshot);
+        $this->assertTrue($resultWithInactiveBay->found());
+        $this->assertSame($baselineResult->pairs[0]->bay->id, $resultWithInactiveBay->pairs[0]->bay->id);
+    }
+
+    /**
      * TC-03-23: INV-03.4, API §B3
      * When TimeRange(10:00, 10:00); maxPairs: 0; snapshot of another dealership; snapshot of another day;
      * then Each throws InvalidArgumentException.
