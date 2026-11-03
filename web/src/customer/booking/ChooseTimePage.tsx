@@ -126,6 +126,7 @@ export function ChooseTimePage() {
         {availabilityError && (
           <BookingErrorCard
             error={availabilityError}
+            variant="customer"
             context={{
               time: draft.start ? formatInZone(draft.start, timeZone, 'time') : '',
               start: draft.start ? formatInZone(draft.start, timeZone, 'time') : '',

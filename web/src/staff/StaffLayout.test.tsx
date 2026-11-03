@@ -42,7 +42,9 @@ describe('StaffLayout', () => {
     })
 
     expect(screen.getByRole('link', { name: 'New booking' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Appointments' })).toBeInTheDocument()
+    const appointmentsLink = screen.getByRole('link', { name: 'Appointments' })
+    expect(appointmentsLink).toBeInTheDocument()
+    expect(appointmentsLink).toHaveAttribute('href', '/staff/appointments')
     expect(screen.getByRole('link', { name: 'Workshop board' })).toBeInTheDocument()
 
     expect(screen.queryByRole('link', { name: 'Monitoring' })).not.toBeInTheDocument()

@@ -4,7 +4,7 @@
 
 **Blocked by:** [07-my-bookings-and-customer-details-screens](07-my-bookings-and-customer-details-screens.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/05-view-appointments`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-05-17
 
-- [ ] TC-05-17 (D-05.8; Web component): given Staff confirmed page; `VEHICLE_ALREADY_BOOKED` card with `existingAppointment`; when Render; then "View appointment" → `/staff/appointments/{id}`; "View existing booking" → the right id. Test: `web/src/staff/booking/BookingConfirmedPage.test.tsx`, `BookingErrorCard.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-05-17 (D-05.8; Web component): given Staff confirmed page; `VEHICLE_ALREADY_BOOKED` card with `existingAppointment`; when Render; then "View appointment" → `/staff/appointments/{id}`; "View existing booking" → the right id. Test: `web/src/staff/booking/BookingConfirmedPage.test.tsx`, `BookingErrorCard.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

@@ -90,7 +90,7 @@ describe('BookingConfirmedPage (Staff)', () => {
     apiMock.restore()
   })
 
-  it('renders "View appointment" button and navigates to details page', async () => {
+  it('TC-05-17: renders "View appointment" button and navigates to details page', async () => {
     apiMock.get(`/appointments/${appointmentId}`, [
       200,
       mockAppointment,
@@ -122,6 +122,35 @@ describe('BookingConfirmedPage (Staff)', () => {
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(`/staff/appointments/${appointmentId}`)
+    })
+  })
+
+  it('renders "Book another" button and navigates to /staff', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    const router = createMemoryRouter(routes, {
+      initialEntries: [
+        {
+          pathname: `/staff/bookings/${appointmentId}/confirmed`,
+          state: mockAppointment,
+        },
+      ],
+    })
+
+    render(
+      <AppProviders>
+        <RouterProvider router={router} />
+      </AppProviders>,
+    )
+
+    await screen.findByText('Appointment confirmed')
+    const bookAnotherBtn = screen.getByRole('button', { name: /Book another/i })
+    expect(bookAnotherBtn).toBeInTheDocument()
+
+    await user.click(bookAnotherBtn)
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/staff')
     })
   })
 })

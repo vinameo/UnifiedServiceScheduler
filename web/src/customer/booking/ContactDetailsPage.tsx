@@ -22,6 +22,7 @@ import { useAddVehicle, useMyVehicles, type Vehicle } from '../../shared/api/veh
 import { useMe } from '../../shared/auth/useMe'
 import { formatInZone } from '../../shared/format/time'
 import { useIdempotencyKey } from '../../shared/idempotency/useIdempotencyKey'
+import { BookingErrorCard, type BookingProblem } from '../../shared/booking/BookingErrorCard'
 import { useBookingDraft, type NewVehicleDraft } from './BookingDraftContext'
 
 function formatDuration(minutes: number): string {
@@ -66,6 +67,7 @@ export function ContactDetailsPage() {
   const [reminderOptIn, setReminderOptIn] = useState<boolean>(draft.reminderOptIn ?? true)
   const [plateError, setPlateError] = useState<string | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
+  const [bookingProblem, setBookingProblem] = useState<BookingProblem | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Idempotency keys
@@ -87,6 +89,7 @@ export function ContactDetailsPage() {
   const handleConfirm = async () => {
     setPlateError(null)
     setBookingError(null)
+    setBookingProblem(null)
     setIsSubmitting(true)
 
     try {
@@ -154,10 +157,10 @@ export function ContactDetailsPage() {
         navigate('/book/time')
         return
       }
-      if (problem?.code === 'VEHICLE_ALREADY_BOOKED') {
-        setBookingError('This vehicle is already booked for an appointment during this time.')
+      if (problem) {
+        setBookingProblem(problem)
       } else {
-        setBookingError(problem?.title ?? 'Failed to confirm appointment. Please try again.')
+        setBookingError('Failed to confirm appointment. Please try again.')
       }
     } finally {
       setIsSubmitting(false)
@@ -361,11 +364,25 @@ export function ContactDetailsPage() {
         />
 
         {/* Booking Error Alert if any */}
-        {bookingError && (
+        {bookingProblem ? (
+          <BookingErrorCard
+            error={bookingProblem}
+            variant="customer"
+            context={{
+              serviceName: service?.name,
+              durationMinutes: service?.durationMinutes,
+              start: draft.start ? formatInZone(draft.start, timeZone, 'time') : '',
+              licencePlate:
+                currentVehicleMode === 'new'
+                  ? newVehicle.licencePlate
+                  : vehicles.find((v) => v.id === currentVehicleMode)?.licencePlate,
+            }}
+          />
+        ) : bookingError ? (
           <Alert color="red" title="Booking error">
             {bookingError}
           </Alert>
-        )}
+        ) : null}
       </Stack>
 
       {/* Sticky Bottom Footer */}

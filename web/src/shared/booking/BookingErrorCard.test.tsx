@@ -118,4 +118,60 @@ describe('BookingErrorCard (TC-02-28)', () => {
     expect(screen.getByText(/You can book up to 90 days ahead/)).toBeInTheDocument()
     expect(screen.getByText(/2027-01-31/)).toBeInTheDocument()
   })
+
+  it('TC-05-17: VEHICLE_ALREADY_BOOKED with existingAppointment links to /staff/appointments/{id} for staff', () => {
+    const error = {
+      status: 409,
+      code: 'VEHICLE_ALREADY_BOOKED',
+      existingAppointment: {
+        id: 'apt-staff-existing-99',
+        reference: 'APT-20261102-0099',
+      },
+    }
+
+    renderCard(<BookingErrorCard error={error} variant="staff" />)
+    const link = screen.getByRole('link', { name: 'View existing booking' })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/staff/appointments/apt-staff-existing-99')
+  })
+
+  it('TC-05-17: VEHICLE_ALREADY_BOOKED with existingAppointment defaults to staff appointment link when unspecified', () => {
+    const error = {
+      status: 409,
+      code: 'VEHICLE_ALREADY_BOOKED',
+      existingAppointment: {
+        id: 'apt-staff-existing-88',
+      },
+    }
+
+    renderCard(<BookingErrorCard error={error} />)
+    const link = screen.getByRole('link', { name: 'View existing booking' })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/staff/appointments/apt-staff-existing-88')
+  })
+
+  it('TC-05-17: VEHICLE_ALREADY_BOOKED with existingAppointment links to /my-bookings/{id} for customer', () => {
+    const error = {
+      status: 409,
+      code: 'VEHICLE_ALREADY_BOOKED',
+      existingAppointment: {
+        id: 'apt-cust-existing-77',
+      },
+    }
+
+    renderCard(<BookingErrorCard error={error} variant="customer" />)
+    const link = screen.getByRole('link', { name: 'View existing booking' })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/my-bookings/apt-cust-existing-77')
+  })
+
+  it('TC-05-17: VEHICLE_ALREADY_BOOKED without existingAppointment does not render View existing booking', () => {
+    const error = {
+      status: 409,
+      code: 'VEHICLE_ALREADY_BOOKED',
+    }
+
+    renderCard(<BookingErrorCard error={error} />)
+    expect(screen.queryByRole('link', { name: 'View existing booking' })).not.toBeInTheDocument()
+  })
 })

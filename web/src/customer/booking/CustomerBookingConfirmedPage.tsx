@@ -130,7 +130,10 @@ export function CustomerBookingConfirmedPage() {
           Please arrive 10 minutes early. You can change or cancel it under My bookings.
         </Text>
 
-        <Button component={Link} to="/book" fullWidth mt="sm">
+        <Button component={Link} to="/my-bookings" fullWidth mt="sm">
+          View my bookings
+        </Button>
+        <Button component={Link} to="/book" variant="default" fullWidth>
           Book another service
         </Button>
       </Stack>

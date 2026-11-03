@@ -473,6 +473,7 @@ export function NewBookingPage() {
                   <Box mb="md">
                     <BookingErrorCard
                       error={currentError}
+                      variant="staff"
                       context={{
                         serviceName: selectedService?.name,
                         durationMinutes: selectedService?.durationMinutes,

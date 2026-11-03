@@ -205,4 +205,73 @@ describe('IdempotentRetryPanel (TC-04-36, TC-04-39, WEB-04.4)', () => {
     expect(capturedKeys).toHaveLength(2)
     expect(capturedKeys[1]).toBe(capturedKeys[0])
   })
+
+  it('D-05.8: renders "Check appointment list" for staff linking to /staff/appointments', () => {
+    render(
+      <AppProviders>
+        <IdempotentRetryPanel
+          idempotencyKey="c0a80101-1234-4567-89ab-0123456789ab"
+          reason="no-response"
+          variant="staff"
+          onRetry={vi.fn()}
+        />
+      </AppProviders>,
+    )
+
+    const link = screen.getByRole('link', { name: 'Check appointment list' })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/staff/appointments')
+  })
+
+  it('D-05.8: renders "Check appointment list" for staff with date query parameter', () => {
+    render(
+      <AppProviders>
+        <IdempotentRetryPanel
+          idempotencyKey="c0a80101-1234-4567-89ab-0123456789ab"
+          reason="no-response"
+          variant="staff"
+          date="2026-11-02"
+          onRetry={vi.fn()}
+        />
+      </AppProviders>,
+    )
+
+    const link = screen.getByRole('link', { name: 'Check appointment list' })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/staff/appointments?date=2026-11-02')
+  })
+
+  it('D-05.8: renders "Check appointment list" for customer linking to /my-bookings', () => {
+    render(
+      <AppProviders>
+        <IdempotentRetryPanel
+          idempotencyKey="c0a80101-1234-4567-89ab-0123456789ab"
+          reason="no-response"
+          variant="customer"
+          onRetry={vi.fn()}
+        />
+      </AppProviders>,
+    )
+
+    const link = screen.getByRole('link', { name: 'Check appointment list' })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/my-bookings')
+  })
+
+  it('D-05.8: custom secondaryAction overrides the default Check appointment list button', () => {
+    render(
+      <AppProviders>
+        <IdempotentRetryPanel
+          idempotencyKey="c0a80101-1234-4567-89ab-0123456789ab"
+          reason="no-response"
+          variant="staff"
+          onRetry={vi.fn()}
+          secondaryAction={<button type="button">Custom secondary action</button>}
+        />
+      </AppProviders>,
+    )
+
+    expect(screen.queryByRole('link', { name: 'Check appointment list' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Custom secondary action' })).toBeInTheDocument()
+  })
 })

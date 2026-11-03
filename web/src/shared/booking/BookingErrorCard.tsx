@@ -1,5 +1,6 @@
 import React from 'react'
-import { Alert, Box, Stack, Text } from '@mantine/core'
+import { Alert, Box, Button, Stack, Text } from '@mantine/core'
+import { Link, useInRouterContext } from 'react-router'
 import { noAvailabilityReasonCopy } from '../api/errorCopy'
 
 export interface BookingProblem {
@@ -30,15 +31,43 @@ export interface BookingErrorCardContext {
   bayTypeLabel?: string
   licencePlate?: string
   customerName?: string
+  variant?: 'staff' | 'customer'
 }
 
 export interface BookingErrorCardProps {
   error: BookingProblem | null | undefined
   context?: BookingErrorCardContext
   actions?: React.ReactNode
+  variant?: 'staff' | 'customer'
 }
 
-export function BookingErrorCard({ error, context = {}, actions }: BookingErrorCardProps) {
+function ExistingBookingButton({ url }: { url: string }) {
+  const inRouter = useInRouterContext()
+  if (inRouter) {
+    return (
+      <Button
+        component={Link}
+        to={url}
+        size="xs"
+        variant="default"
+      >
+        View existing booking
+      </Button>
+    )
+  }
+  return (
+    <Button
+      component="a"
+      href={url}
+      size="xs"
+      variant="default"
+    >
+      View existing booking
+    </Button>
+  )
+}
+
+export function BookingErrorCard({ error, context = {}, actions, variant }: BookingErrorCardProps) {
   if (!error) {
     return null
   }
@@ -86,6 +115,15 @@ export function BookingErrorCard({ error, context = {}, actions }: BookingErrorC
     body = `You can book up to 90 days ahead${error.maxDate ? ` (up to ${error.maxDate})` : ''}.`
   }
 
+  const isCustomer = (variant ?? context.variant) === 'customer'
+  const existingAppointmentId =
+    error.code === 'VEHICLE_ALREADY_BOOKED' ? error.existingAppointment?.id : undefined
+  const existingAppointmentUrl = existingAppointmentId
+    ? isCustomer
+      ? `/my-bookings/${existingAppointmentId}`
+      : `/staff/appointments/${existingAppointmentId}`
+    : undefined
+
   return (
     <Alert
       color="red"
@@ -95,6 +133,11 @@ export function BookingErrorCard({ error, context = {}, actions }: BookingErrorC
     >
       <Stack gap="xs">
         <Text size="sm">{body}</Text>
+        {existingAppointmentUrl && (
+          <Box mt="xs">
+            <ExistingBookingButton url={existingAppointmentUrl} />
+          </Box>
+        )}
         {actions && <Box mt="xs">{actions}</Box>}
       </Stack>
     </Alert>
