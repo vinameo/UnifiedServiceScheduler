@@ -4,6 +4,7 @@ namespace App\Domain\Booking\Services;
 
 use App\Domain\Allocation\CandidatePair;
 use App\Domain\Booking\AppointmentEventType;
+use App\Domain\Booking\AppointmentStatus;
 use App\Domain\Booking\Events\AllocationRetried;
 use App\Domain\Booking\Exceptions\NoAvailability;
 use App\Domain\Booking\Exceptions\VehicleAlreadyBooked;
@@ -11,6 +12,9 @@ use App\Domain\Booking\NewAppointment;
 use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
 use App\Domain\Booking\Repositories\ResourceAllocationRepositoryInterface;
 use App\Domain\Booking\ResourceType;
+use App\Domain\Notifications\OutboxEventType;
+use App\Domain\Notifications\Services\OutboxWriter;
+use App\Domain\Notifications\Services\OutboxWriterInterface;
 use App\Models\Appointment;
 use App\Models\Dealership;
 use Carbon\CarbonImmutable;
@@ -24,12 +28,16 @@ class AppointmentWriter implements AppointmentWriterInterface
 {
     private AppointmentEventRecorderInterface $eventRecorder;
 
+    private OutboxWriterInterface $outboxWriter;
+
     public function __construct(
         private AppointmentRepositoryInterface $appointmentRepository,
         private ResourceAllocationRepositoryInterface $allocationRepository,
         ?AppointmentEventRecorderInterface $eventRecorder = null,
+        ?OutboxWriterInterface $outboxWriter = null,
     ) {
         $this->eventRecorder = $eventRecorder ?? new AppointmentEventRecorder;
+        $this->outboxWriter = $outboxWriter ?? new OutboxWriter;
     }
 
     /**
@@ -139,6 +147,24 @@ class AppointmentWriter implements AppointmentWriterInterface
                         actorRole: null,
                         data: [],
                     );
+
+                    if ($data->status === AppointmentStatus::CONFIRMED) {
+                        $this->outboxWriter->append(
+                            dealershipId: $data->dealershipId,
+                            appointmentId: $appointmentId,
+                            eventType: OutboxEventType::AppointmentConfirmed,
+                            payload: [
+                                'appointmentId' => $appointmentId,
+                                'reference' => $reference,
+                                'customerId' => $data->customerId,
+                                'vehicleId' => $data->vehicleId,
+                                'serviceTypeId' => $data->serviceTypeId,
+                                'start' => $data->range->start->toIso8601String(),
+                                'end' => $data->range->end->toIso8601String(),
+                            ],
+                            now: $now,
+                        );
+                    }
 
                     return $created;
                 });

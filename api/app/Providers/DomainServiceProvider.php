@@ -36,6 +36,8 @@ use App\Domain\MasterData\Services\MasterDataServiceInterface;
 use App\Domain\MasterData\Services\TechnicianService;
 use App\Domain\MasterData\Services\TechnicianServiceInterface;
 use App\Domain\MasterData\Services\UpcomingAssignmentsReader;
+use App\Domain\Notifications\Services\OutboxWriter;
+use App\Domain\Notifications\Services\OutboxWriterInterface;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -73,5 +75,8 @@ class DomainServiceProvider extends ServiceProvider
         AppointmentWriterInterface::class => AppointmentWriter::class,
         AppointmentEventRecorderInterface::class => AppointmentEventRecorder::class,
         AppointmentTransitionInterface::class => AppointmentTransition::class,
+
+        // Notifications (F04, F11)
+        OutboxWriterInterface::class => OutboxWriter::class,
     ];
 }

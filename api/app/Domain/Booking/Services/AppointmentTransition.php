@@ -11,6 +11,8 @@ use App\Domain\Booking\Exceptions\InvalidStatusTransition;
 use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
 use App\Domain\Booking\Repositories\ResourceAllocationRepositoryInterface;
 use App\Domain\Notifications\OutboxEventType;
+use App\Domain\Notifications\Services\OutboxWriter;
+use App\Domain\Notifications\Services\OutboxWriterInterface;
 use App\Models\Appointment;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -18,11 +20,16 @@ use Illuminate\Support\Facades\DB;
 
 class AppointmentTransition implements AppointmentTransitionInterface
 {
+    private OutboxWriterInterface $outboxWriter;
+
     public function __construct(
         private AppointmentRepositoryInterface $appointmentRepository,
         private ResourceAllocationRepositoryInterface $allocationRepository,
         private AppointmentEventRecorderInterface $eventRecorder,
-    ) {}
+        ?OutboxWriterInterface $outboxWriter = null,
+    ) {
+        $this->outboxWriter = $outboxWriter ?? new OutboxWriter;
+    }
 
     /**
      * @param  array<string, mixed>  $changes
@@ -51,7 +58,7 @@ class AppointmentTransition implements AppointmentTransitionInterface
             throw new InvalidStatusTransition($current->status, $to);
         }
 
-        return DB::transaction(function () use ($id, $expectedVersion, $to, $changes, $actor, $now, $current) {
+        return DB::transaction(function () use ($id, $expectedVersion, $to, $changes, $outbox, $actor, $now, $current) {
             $updateData = array_merge($changes, [
                 'status' => $to->value,
             ]);
@@ -84,6 +91,20 @@ class AppointmentTransition implements AppointmentTransitionInterface
                 actorRole: $actorRole,
                 data: $changes,
             );
+
+            if ($outbox !== null) {
+                $this->outboxWriter->append(
+                    dealershipId: (string) $current->dealership_id,
+                    appointmentId: $id,
+                    eventType: $outbox,
+                    payload: array_merge($changes, [
+                        'appointmentId' => $id,
+                        'reference' => $current->reference,
+                        'status' => $to->value,
+                    ]),
+                    now: $now,
+                );
+            }
 
             return $this->appointmentRepository->find($id) ?? throw new AppointmentNotFound($id);
         });
