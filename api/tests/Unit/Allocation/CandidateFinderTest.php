@@ -3,7 +3,12 @@
 namespace Tests\Unit\Allocation;
 
 use App\Domain\Allocation\AllocationFailure;
+use App\Domain\Allocation\AllocationRequest;
+use App\Domain\Allocation\AllocationStrategy;
+use App\Domain\Allocation\BayState;
 use App\Domain\Allocation\CandidateFinder;
+use App\Domain\Allocation\ResourceSnapshot;
+use App\Domain\Allocation\TechnicianState;
 use App\Domain\Allocation\TimeRange;
 use App\Domain\MasterData\BayType;
 use App\Domain\MasterData\Level;
@@ -595,5 +600,76 @@ class CandidateFinderTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
         $scenario();
+    }
+
+    /**
+     * TC-03-27: INV-03.8, FR-03.5
+     * Given A fake strategy that reverses the order;
+     * when CandidateFinder with that strategy;
+     * then Pair order is reversed too.
+     */
+    public function test_INV_03_8_ranking_comes_from_the_strategy(): void
+    {
+        $snapshot = SnapshotBuilder::day('2026-11-02')
+            ->technician('T1', level: 1)
+            ->technician('T2', level: 2)
+            ->bay('K1', BayType::QUICK)
+            ->bay('K2', BayType::QUICK)
+            ->build();
+
+        $request = SnapshotBuilder::request('OIL', '09:00-10:00', maxPairs: 5);
+
+        // 1. Default strategy ranks T1 before T2 (level 1 < level 2) and K1 before K2 (code 'K1' < 'K2')
+        $defaultFinder = new CandidateFinder;
+        $defaultResult = $defaultFinder->find($request, $snapshot);
+
+        $this->assertTrue($defaultResult->found());
+        $this->assertCount(4, $defaultResult->pairs);
+        $this->assertSame('T1', $defaultResult->pairs[0]->technician->name);
+        $this->assertSame('K1', $defaultResult->pairs[0]->bay->code);
+        $this->assertSame('T1', $defaultResult->pairs[1]->technician->name);
+        $this->assertSame('K2', $defaultResult->pairs[1]->bay->code);
+        $this->assertSame('T2', $defaultResult->pairs[2]->technician->name);
+        $this->assertSame('K1', $defaultResult->pairs[2]->bay->code);
+        $this->assertSame('T2', $defaultResult->pairs[3]->technician->name);
+        $this->assertSame('K2', $defaultResult->pairs[3]->bay->code);
+
+        // 2. Custom pluggable strategy that reverses the candidate order
+        $reverseStrategy = new class implements AllocationStrategy
+        {
+            /**
+             * @param  list<TechnicianState>  $free
+             * @return list<TechnicianState>
+             */
+            public function rankTechnicians(array $free, AllocationRequest $request, ResourceSnapshot $snapshot): array
+            {
+                return array_reverse($free);
+            }
+
+            /**
+             * @param  list<BayState>  $free
+             * @return list<BayState>
+             */
+            public function rankBays(array $free, AllocationRequest $request): array
+            {
+                return array_reverse($free);
+            }
+        };
+
+        // 3. Injecting the custom strategy into CandidateFinder alters candidate pair ranking
+        // without any modifications to CandidateFinder (INV-03.8, FR-03.5)
+        $customFinder = new CandidateFinder($reverseStrategy);
+        $customResult = $customFinder->find($request, $snapshot);
+
+        $this->assertTrue($customResult->found());
+        $this->assertCount(4, $customResult->pairs);
+        $this->assertSame('T2', $customResult->pairs[0]->technician->name);
+        $this->assertSame('K2', $customResult->pairs[0]->bay->code);
+        $this->assertSame('T2', $customResult->pairs[1]->technician->name);
+        $this->assertSame('K1', $customResult->pairs[1]->bay->code);
+        $this->assertSame('T1', $customResult->pairs[2]->technician->name);
+        $this->assertSame('K2', $customResult->pairs[2]->bay->code);
+        $this->assertSame('T1', $customResult->pairs[3]->technician->name);
+        $this->assertSame('K1', $customResult->pairs[3]->bay->code);
     }
 }
