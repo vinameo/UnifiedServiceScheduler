@@ -16,6 +16,10 @@ use App\Domain\MasterData\Repositories\MasterDataRepository;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\MasterData\Services\MasterDataService;
 use App\Domain\MasterData\Services\MasterDataServiceInterface;
+use App\Domain\MasterData\Services\NoUpcomingAssignments;
+use App\Domain\MasterData\Services\TechnicianService;
+use App\Domain\MasterData\Services\TechnicianServiceInterface;
+use App\Domain\MasterData\Services\UpcomingAssignmentsReader;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -38,5 +42,7 @@ class DomainServiceProvider extends ServiceProvider
         // MasterData (F01)
         MasterDataRepositoryInterface::class => MasterDataRepository::class,
         MasterDataServiceInterface::class => MasterDataService::class,
+        TechnicianServiceInterface::class => TechnicianService::class,
+        UpcomingAssignmentsReader::class => NoUpcomingAssignments::class,
     ];
 }

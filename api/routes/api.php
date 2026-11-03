@@ -34,4 +34,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dealerships/{dealership}/service-types', [ServiceTypeController::class, 'index']);
     Route::get('/dealerships/{dealership}/bays', [BayController::class, 'index'])->middleware('can:staff');
     Route::get('/dealerships/{dealership}/technicians', [TechnicianController::class, 'index'])->middleware('can:staff');
+    Route::put('/dealerships/{dealership}/technicians/{technician}/status', [TechnicianController::class, 'updateStatus'])->middleware('can:admin');
 });
