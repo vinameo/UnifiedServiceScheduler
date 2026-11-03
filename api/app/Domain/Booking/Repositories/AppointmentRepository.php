@@ -185,6 +185,117 @@ class AppointmentRepository implements AppointmentRepositoryInterface
     }
 
     /**
+     * @return CursorPage<Appointment>
+     */
+    public function listForCustomer(
+        User $user,
+        string $scope,
+        int $limit = 50,
+        ?string $cursor = null,
+    ): CursorPage {
+        $customerId = $user->customer->id ?? $user->customer()->value('id');
+        if ($customerId === null) {
+            return new CursorPage(
+                items: collect(),
+                nextCursor: null,
+                limit: $limit,
+                total: 0,
+            );
+        }
+
+        $now = CarbonImmutable::now()->utc();
+
+        $baseQuery = Appointment::query()->where('customer_id', $customerId);
+
+        if ($scope === 'upcoming') {
+            $baseQuery->whereIn('status', [
+                AppointmentStatus::CONFIRMED->value,
+                AppointmentStatus::CHECKED_IN->value,
+                AppointmentStatus::IN_PROGRESS->value,
+            ])->where('end_at', '>', $now);
+        } else {
+            $baseQuery->where(function ($q) use ($now) {
+                $q->whereIn('status', [
+                    AppointmentStatus::COMPLETED->value,
+                    AppointmentStatus::CANCELLED->value,
+                    AppointmentStatus::NO_SHOW->value,
+                ])->orWhere(function ($sub) use ($now) {
+                    $sub->whereIn('status', [
+                        AppointmentStatus::CONFIRMED->value,
+                        AppointmentStatus::CHECKED_IN->value,
+                        AppointmentStatus::IN_PROGRESS->value,
+                    ])->where('end_at', '<=', $now);
+                });
+            });
+        }
+
+        $total = (clone $baseQuery)->count();
+
+        $dataQuery = (clone $baseQuery);
+
+        if ($cursor !== null && $cursor !== '') {
+            $decoded = CursorPaginator::decode($cursor, ['start_at', 'id']);
+            $cursorStart = (string) $decoded['start_at'];
+            $cursorId = (string) $decoded['id'];
+
+            if ($scope === 'upcoming') {
+                $dataQuery->where(function ($q) use ($cursorStart, $cursorId) {
+                    $q->where('start_at', '>', $cursorStart)
+                        ->orWhere(function ($sub) use ($cursorStart, $cursorId) {
+                            $sub->where('start_at', '=', $cursorStart)
+                                ->where('id', '>', $cursorId);
+                        });
+                });
+            } else {
+                $dataQuery->where(function ($q) use ($cursorStart, $cursorId) {
+                    $q->where('start_at', '<', $cursorStart)
+                        ->orWhere(function ($sub) use ($cursorStart, $cursorId) {
+                            $sub->where('start_at', '=', $cursorStart)
+                                ->where('id', '<', $cursorId);
+                        });
+                });
+            }
+        }
+
+        if ($scope === 'upcoming') {
+            $dataQuery->orderBy('start_at', 'asc')->orderBy('id', 'asc');
+        } else {
+            $dataQuery->orderBy('start_at', 'desc')->orderBy('id', 'desc');
+        }
+
+        $items = $dataQuery
+            ->limit($limit + 1)
+            ->with([
+                'dealership',
+                'customer',
+                'vehicle',
+                'serviceType',
+                'technician',
+                'bay',
+            ])
+            ->get();
+
+        if ($items->count() > $limit) {
+            $pageItems = $items->slice(0, $limit);
+            $lastItem = $pageItems->last();
+            $nextCursor = $lastItem !== null ? CursorPaginator::encode([
+                'start_at' => $lastItem->start_at,
+                'id' => $lastItem->id,
+            ]) : null;
+        } else {
+            $pageItems = $items;
+            $nextCursor = null;
+        }
+
+        return new CursorPage(
+            items: $pageItems->values(),
+            nextCursor: $nextCursor,
+            limit: $limit,
+            total: $total,
+        );
+    }
+
+    /**
      * @return Collection<int, AppointmentEvent>
      */
     public function history(string $appointmentId): Collection

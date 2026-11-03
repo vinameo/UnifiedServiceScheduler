@@ -36,6 +36,16 @@ interface AppointmentRepositoryInterface
     ): CursorPage;
 
     /**
+     * @return CursorPage<Appointment>
+     */
+    public function listForCustomer(
+        User $user,
+        string $scope,
+        int $limit = 50,
+        ?string $cursor = null,
+    ): CursorPage;
+
+    /**
      * @return Collection<int, AppointmentEvent>
      */
     public function history(string $appointmentId): Collection;

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DealershipAppointmentController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\MyAppointmentController;
 use App\Http\Controllers\Api\V1\ServiceTypeController;
 use App\Http\Controllers\Api\V1\TechnicianController;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -32,6 +33,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [MeController::class, 'me']);
     Route::get('/me/vehicles', [MeController::class, 'vehicles'])->middleware('can:customer');
     Route::post('/me/vehicles', [MeController::class, 'addVehicle'])->middleware(['can:customer', 'idempotent']);
+    Route::get('/me/appointments', [MyAppointmentController::class, 'index'])->middleware('can:customer');
 
     // Master data (F01)
     Route::get('/dealerships', [DealershipController::class, 'index']);

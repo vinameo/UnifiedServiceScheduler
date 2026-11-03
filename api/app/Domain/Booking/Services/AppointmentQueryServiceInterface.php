@@ -5,6 +5,7 @@ namespace App\Domain\Booking\Services;
 use App\Models\Appointment;
 use App\Models\AppointmentEvent;
 use App\Models\Dealership;
+use App\Models\User;
 use App\Support\Pagination\CursorPage;
 use Illuminate\Support\Collection;
 
@@ -22,6 +23,16 @@ interface AppointmentQueryServiceInterface
         ?string $technicianId = null,
         ?string $bayId = null,
         ?array $statuses = null,
+        int $limit = 50,
+        ?string $cursor = null,
+    ): CursorPage;
+
+    /**
+     * @return CursorPage<Appointment>
+     */
+    public function listForCustomer(
+        User $user,
+        string $scope,
         int $limit = 50,
         ?string $cursor = null,
     ): CursorPage;
