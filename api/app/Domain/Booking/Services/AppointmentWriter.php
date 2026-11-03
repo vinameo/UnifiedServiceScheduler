@@ -3,6 +3,7 @@
 namespace App\Domain\Booking\Services;
 
 use App\Domain\Allocation\CandidatePair;
+use App\Domain\Booking\AppointmentEventType;
 use App\Domain\Booking\Events\AllocationRetried;
 use App\Domain\Booking\Exceptions\NoAvailability;
 use App\Domain\Booking\Exceptions\VehicleAlreadyBooked;
@@ -21,10 +22,15 @@ use RuntimeException;
 
 class AppointmentWriter implements AppointmentWriterInterface
 {
+    private AppointmentEventRecorderInterface $eventRecorder;
+
     public function __construct(
         private AppointmentRepositoryInterface $appointmentRepository,
         private ResourceAllocationRepositoryInterface $allocationRepository,
-    ) {}
+        ?AppointmentEventRecorderInterface $eventRecorder = null,
+    ) {
+        $this->eventRecorder = $eventRecorder ?? new AppointmentEventRecorder;
+    }
 
     /**
      * @param  list<CandidatePair>  $pairs
@@ -120,6 +126,19 @@ class AppointmentWriter implements AppointmentWriterInterface
                     }
 
                     $this->allocationRepository->insertFor($appointmentId, $data->dealershipId, $allocations, $now);
+
+                    $this->eventRecorder->record(
+                        appointmentId: $appointmentId,
+                        dealershipId: $data->dealershipId,
+                        type: AppointmentEventType::CREATED,
+                        version: 1,
+                        occurredAt: $now,
+                        fromStatus: null,
+                        toStatus: $data->status,
+                        actorUserId: $data->createdByUserId,
+                        actorRole: null,
+                        data: [],
+                    );
 
                     return $created;
                 });

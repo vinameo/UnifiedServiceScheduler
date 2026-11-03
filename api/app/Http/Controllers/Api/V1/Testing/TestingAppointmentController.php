@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api\V1\Testing;
 use App\Domain\Allocation\AllocationRequest;
 use App\Domain\Allocation\CandidateFinderInterface;
 use App\Domain\Allocation\TimeRange;
+use App\Domain\Booking\AppointmentEventType;
 use App\Domain\Booking\AppointmentStatus;
 use App\Domain\Booking\Exceptions\NoAvailability;
 use App\Domain\Booking\NewAppointment;
 use App\Domain\Booking\Repositories\AllocationSnapshotRepositoryInterface;
 use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
+use App\Domain\Booking\Services\AppointmentEventRecorderInterface;
+use App\Domain\Booking\Services\AppointmentTransitionInterface;
 use App\Domain\Booking\Services\AppointmentWriterInterface;
 use App\Domain\MasterData\Level;
 use App\Http\AppointmentResponder;
@@ -24,6 +27,8 @@ use DateTimeZone;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class TestingAppointmentController extends Controller
 {
@@ -32,6 +37,8 @@ class TestingAppointmentController extends Controller
         private CandidateFinderInterface $candidateFinder,
         private AppointmentWriterInterface $appointmentWriter,
         private AppointmentRepositoryInterface $appointmentRepository,
+        private AppointmentEventRecorderInterface $eventRecorder,
+        private AppointmentTransitionInterface $appointmentTransition,
     ) {}
 
     public function store(CreateTestingAppointmentRequest $request): JsonResponse
@@ -110,10 +117,36 @@ class TestingAppointmentController extends Controller
         }
 
         $toggled = ! $appointment->reminder_opt_in;
+        $user = $request->user();
 
-        $this->appointmentRepository->updateVersioned($id, $expectedVersion, [
-            'reminder_opt_in' => $toggled,
-        ], $now);
+        DB::transaction(function () use ($id, $expectedVersion, $toggled, $now, $appointment, $user) {
+            $newVersion = $this->appointmentRepository->updateVersioned($id, $expectedVersion, [
+                'reminder_opt_in' => $toggled,
+            ], $now);
+
+            $eventType = match ($appointment->status) {
+                AppointmentStatus::IN_PROGRESS => AppointmentEventType::STARTED,
+                default => AppointmentEventType::from($appointment->status->value),
+            };
+
+            $actorRole = null;
+            if ($user !== null) {
+                $actorRole = $user->role instanceof \BackedEnum ? $user->role->value : ($user->role ? (string) $user->role : null);
+            }
+
+            $this->eventRecorder->record(
+                appointmentId: $id,
+                dealershipId: (string) $appointment->dealership_id,
+                type: $eventType,
+                version: $newVersion,
+                occurredAt: $now,
+                fromStatus: $appointment->status,
+                toStatus: $appointment->status,
+                actorUserId: $user?->id,
+                actorRole: $actorRole,
+                data: ['reminder_opt_in' => $toggled],
+            );
+        });
 
         $fresh = $this->appointmentRepository->find($id);
         if ($fresh === null) {
@@ -123,5 +156,34 @@ class TestingAppointmentController extends Controller
         return (new AppointmentResource($fresh))
             ->response()
             ->header('ETag', "\"{$fresh->version}\"");
+    }
+
+    public function transition(string $id, Request $request): JsonResponse
+    {
+        $expectedVersion = ExpectedVersion::from($request);
+        $request->validate([
+            'to' => ['required', Rule::enum(AppointmentStatus::class)],
+        ]);
+
+        /** @var string $toInput */
+        $toInput = $request->input('to');
+        $toStatus = AppointmentStatus::from($toInput);
+        $changes = $request->except(['to']);
+        $user = $request->user();
+        $now = CarbonImmutable::now();
+
+        $appointment = $this->appointmentTransition->transition(
+            id: $id,
+            expectedVersion: $expectedVersion,
+            to: $toStatus,
+            changes: $changes,
+            outbox: null,
+            actor: $user,
+            now: $now,
+        );
+
+        return (new AppointmentResource($appointment))
+            ->response()
+            ->header('ETag', "\"{$appointment->version}\"");
     }
 }

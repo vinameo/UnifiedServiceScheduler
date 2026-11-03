@@ -9,3 +9,6 @@ Route::post('appointments', [TestingAppointmentController::class, 'store'])
 
 Route::post('appointments/{id}/touch', [TestingAppointmentController::class, 'touch'])
     ->middleware(['auth:sanctum', 'idempotent', 'if-match']);
+
+Route::post('appointments/{id}/transition', [TestingAppointmentController::class, 'transition'])
+    ->middleware(['auth:sanctum', 'idempotent', 'if-match']);

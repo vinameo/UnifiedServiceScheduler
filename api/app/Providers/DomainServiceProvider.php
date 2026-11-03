@@ -23,6 +23,10 @@ use App\Domain\Booking\Repositories\AppointmentRepository;
 use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
 use App\Domain\Booking\Repositories\ResourceAllocationRepository;
 use App\Domain\Booking\Repositories\ResourceAllocationRepositoryInterface;
+use App\Domain\Booking\Services\AppointmentEventRecorder;
+use App\Domain\Booking\Services\AppointmentEventRecorderInterface;
+use App\Domain\Booking\Services\AppointmentTransition;
+use App\Domain\Booking\Services\AppointmentTransitionInterface;
 use App\Domain\Booking\Services\AppointmentWriter;
 use App\Domain\Booking\Services\AppointmentWriterInterface;
 use App\Domain\MasterData\Repositories\MasterDataRepository;
@@ -67,5 +71,7 @@ class DomainServiceProvider extends ServiceProvider
         ResourceAllocationRepositoryInterface::class => ResourceAllocationRepository::class,
         AppointmentRepositoryInterface::class => AppointmentRepository::class,
         AppointmentWriterInterface::class => AppointmentWriter::class,
+        AppointmentEventRecorderInterface::class => AppointmentEventRecorder::class,
+        AppointmentTransitionInterface::class => AppointmentTransition::class,
     ];
 }

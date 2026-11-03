@@ -1,0 +1,9 @@
+# 10: TransitionAppointment and appointment history — Design Notes
+
+| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| TransitionAppointment status change and allocation release (RQ D-04.9, INV-04.5) | AC-04.14, INV-04.5 | `api/app/Domain/Booking/Services/AppointmentTransition.php` | validates canMoveTo; versioned update; if !to.holdsSlot() deactivates all active allocations in same transaction | deactivated allocations have active = false and deactivated_at = now; M-04.2 returns 0 invalid rows | `1-requirement-spec.md:217-223` | follow |
+| 412 before 422 precedence order (RQ §B7, TC-04-26) | AC-04.6, AC-04.22 | `api/app/Domain/Booking/Services/AppointmentTransition.php:40-47` | check version mismatch against expectedVersion before evaluating canMoveTo; stale version returns 412 immediately | if appointment modified by concurrent request, user receives latest status and ETag | `1-requirement-spec.md:222` | follow |
+| AppointmentEventRecorder append-only history (RQ D-04.5, INV-04.11) | INV-04.11 | `api/app/Domain/Booking/Services/AppointmentEventRecorder.php` | records exactly one immutable appointment_events row per change with post-update version | append-only log; events never updated or deleted | `3-database-spec.md:134-148` | follow |
+| Test route POST /api/v1/_testing/appointments/{id}/transition (API §B5) | AC-04.14, TC-04-26 | `api/app/Http/Controllers/Api/V1/Testing/TestingAppointmentController.php` | parses to status and If-Match expectedVersion; calls TransitionAppointment; answers 200 with new ETag | missing appointment throws 404; invalid transition throws 422; version clash answers 412 | `4-api-spec.md:106` | follow |
+
