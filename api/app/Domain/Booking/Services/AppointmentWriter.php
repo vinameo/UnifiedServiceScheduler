@@ -3,9 +3,13 @@
 namespace App\Domain\Booking\Services;
 
 use App\Domain\Allocation\CandidatePair;
+use App\Domain\Allocation\TimeRange;
 use App\Domain\Booking\AppointmentEventType;
 use App\Domain\Booking\AppointmentStatus;
 use App\Domain\Booking\Events\AllocationRetried;
+use App\Domain\Booking\Events\AppointmentModifiedDetected;
+use App\Domain\Booking\Exceptions\AppointmentModified;
+use App\Domain\Booking\Exceptions\AppointmentNotFound;
 use App\Domain\Booking\Exceptions\NoAvailability;
 use App\Domain\Booking\Exceptions\VehicleAlreadyBooked;
 use App\Domain\Booking\NewAppointment;
@@ -246,6 +250,240 @@ class AppointmentWriter implements AppointmentWriterInterface
             requestedStart: $data->range->start,
             requestedEnd: $data->range->end,
             dealershipId: $data->dealershipId,
+        );
+    }
+
+    /**
+     * INV-04.7: F09 reschedule, F12 extend/reassign.
+     *
+     * @param  list<CandidatePair>  $pairs
+     */
+    public function moveTo(
+        string $appointmentId,
+        int $expectedVersion,
+        TimeRange $newRange,
+        array $pairs,
+        AppointmentEventType $event,
+        ?OutboxEventType $outbox,
+        CarbonImmutable $now,
+    ): Appointment {
+        $appointment = $this->appointmentRepository->find($appointmentId);
+        if ($appointment === null) {
+            throw new AppointmentNotFound($appointmentId);
+        }
+
+        if ($appointment->version !== $expectedVersion) {
+            AppointmentModifiedDetected::dispatch($appointmentId, $expectedVersion);
+            throw new AppointmentModified($appointmentId, $appointment);
+        }
+
+        if (empty($pairs)) {
+            throw new NoAvailability(
+                reason: 'SLOT_TAKEN',
+                requestedStart: $newRange->start,
+                requestedEnd: $newRange->end,
+                dealershipId: $appointment->dealership_id,
+            );
+        }
+
+        $tries = 0;
+        $remainingPairs = $pairs;
+
+        while (! empty($remainingPairs) && $tries < 3) {
+            $tries++;
+            /** @var CandidatePair $pair */
+            $pair = array_shift($remainingPairs);
+            $technicianId = $pair->technician->id;
+            $bayId = $pair->bay->id;
+
+            try {
+                $updated = DB::transaction(function () use (
+                    $appointmentId,
+                    $expectedVersion,
+                    $newRange,
+                    $technicianId,
+                    $bayId,
+                    $appointment,
+                    $event,
+                    $outbox,
+                    $now,
+                ): Appointment {
+                    $techRow = DB::table('technicians')
+                        ->where('id', $technicianId)
+                        ->sharedLock()
+                        ->first();
+
+                    if ($techRow === null || ! $techRow->active) {
+                        throw new TechnicianInactiveException;
+                    }
+
+                    // 1. version update (this also locks the row)
+                    $newVersion = $this->appointmentRepository->updateVersioned(
+                        $appointmentId,
+                        $expectedVersion,
+                        [
+                            'technician_id' => $technicianId,
+                            'bay_id' => $bayId,
+                            'start_at' => $newRange->start,
+                            'end_at' => $newRange->end,
+                        ],
+                        $now,
+                    );
+
+                    // 2. set old allocations active = false
+                    $this->allocationRepository->deactivateFor($appointmentId, $now);
+
+                    // 3. insert new allocations (EXCLUDE checks them)
+                    $allocations = [
+                        [
+                            'resource_type' => ResourceType::TECHNICIAN,
+                            'resource_id' => $technicianId,
+                            'start_at' => $newRange->start,
+                            'end_at' => $newRange->end,
+                        ],
+                        [
+                            'resource_type' => ResourceType::BAY,
+                            'resource_id' => $bayId,
+                            'start_at' => $newRange->start,
+                            'end_at' => $newRange->end,
+                        ],
+                    ];
+
+                    if ($appointment->vehicle_id !== null) {
+                        $allocations[] = [
+                            'resource_type' => ResourceType::VEHICLE,
+                            'resource_id' => $appointment->vehicle_id,
+                            'start_at' => $newRange->start,
+                            'end_at' => $newRange->end,
+                        ];
+                    }
+
+                    $this->allocationRepository->insertFor($appointmentId, $appointment->dealership_id, $allocations, $now);
+
+                    // 4. insert event row
+                    $this->eventRecorder->record(
+                        appointmentId: $appointmentId,
+                        dealershipId: $appointment->dealership_id,
+                        type: $event,
+                        version: $newVersion,
+                        occurredAt: $now,
+                        fromStatus: $appointment->status,
+                        toStatus: $appointment->status,
+                        actorUserId: null,
+                        actorRole: null,
+                        data: [
+                            'from' => [
+                                'start' => $appointment->start_at->toIso8601String(),
+                                'end' => $appointment->end_at->toIso8601String(),
+                                'technicianId' => $appointment->technician_id,
+                                'bayId' => $appointment->bay_id,
+                            ],
+                            'to' => [
+                                'start' => $newRange->start->toIso8601String(),
+                                'end' => $newRange->end->toIso8601String(),
+                                'technicianId' => $technicianId,
+                                'bayId' => $bayId,
+                            ],
+                        ],
+                    );
+
+                    // 5. insert outbox row
+                    if ($outbox !== null) {
+                        $this->outboxWriter->append(
+                            dealershipId: $appointment->dealership_id,
+                            appointmentId: $appointmentId,
+                            eventType: $outbox,
+                            payload: [
+                                'appointmentId' => $appointmentId,
+                                'reference' => $appointment->reference,
+                                'customerId' => $appointment->customer_id,
+                                'vehicleId' => $appointment->vehicle_id,
+                                'serviceTypeId' => $appointment->service_type_id,
+                                'start' => $newRange->start->toIso8601String(),
+                                'end' => $newRange->end->toIso8601String(),
+                            ],
+                            now: $now,
+                        );
+                    }
+
+                    return $this->appointmentRepository->find($appointmentId) ?? $appointment;
+                });
+
+                return $updated;
+            } catch (QueryException $e) {
+                if ($e->getCode() === '23P01') {
+                    $clashType = ExclusionViolationParser::parse($e);
+
+                    if ($clashType === ResourceType::VEHICLE) {
+                        $conflicting = null;
+                        if ($appointment->vehicle_id !== null) {
+                            $conflicting = DB::table('resource_allocations')
+                                ->where('resource_type', 'VEHICLE')
+                                ->where('resource_id', $appointment->vehicle_id)
+                                ->where('active', true)
+                                ->whereRaw('period && tstzrange(?, ?, \'[)\')', [
+                                    $newRange->start->toIso8601String(),
+                                    $newRange->end->toIso8601String(),
+                                ])
+                                ->first();
+                        }
+
+                        $existing = null;
+                        if ($conflicting !== null) {
+                            $existing = ['id' => (string) $conflicting->appointment_id];
+                            $conflictingAppt = DB::table('appointments')->where('id', $conflicting->appointment_id)->first();
+                            if ($conflictingAppt !== null) {
+                                $existing['reference'] = (string) $conflictingAppt->reference;
+                                $existing['start'] = (string) $conflictingAppt->start_at;
+                                $existing['end'] = (string) $conflictingAppt->end_at;
+                            }
+                        }
+
+                        throw new VehicleAlreadyBooked($existing);
+                    }
+
+                    if ($clashType === ResourceType::BAY) {
+                        $remainingPairs = array_values(array_filter(
+                            $remainingPairs,
+                            fn (CandidatePair $p): bool => $p->bay->id !== $bayId
+                        ));
+                        AllocationRetried::dispatch($appointment->dealership_id, ResourceType::BAY, $bayId);
+
+                        continue;
+                    }
+
+                    $remainingPairs = array_values(array_filter(
+                        $remainingPairs,
+                        fn (CandidatePair $p): bool => $p->technician->id !== $technicianId
+                    ));
+                    AllocationRetried::dispatch($appointment->dealership_id, ResourceType::TECHNICIAN, $technicianId);
+
+                    continue;
+                }
+
+                if ($e->getCode() === '40P01') {
+                    usleep(random_int(10000, 30000));
+
+                    continue;
+                }
+
+                throw $e;
+            } catch (TechnicianInactiveException) {
+                $remainingPairs = array_values(array_filter(
+                    $remainingPairs,
+                    fn (CandidatePair $p): bool => $p->technician->id !== $technicianId
+                ));
+                AllocationRetried::dispatch($appointment->dealership_id, ResourceType::TECHNICIAN, $technicianId);
+
+                continue;
+            }
+        }
+
+        throw new NoAvailability(
+            reason: 'SLOT_TAKEN',
+            requestedStart: $newRange->start,
+            requestedEnd: $newRange->end,
+            dealershipId: $appointment->dealership_id,
         );
     }
 }

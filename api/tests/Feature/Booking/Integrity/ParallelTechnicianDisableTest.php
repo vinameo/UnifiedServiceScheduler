@@ -8,6 +8,7 @@ use App\Models\Vehicle;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Support\AssertsNoOverlap;
 use Tests\Support\Concurrency\Parallel;
 use Tests\Support\World;
@@ -75,6 +76,7 @@ class ParallelTechnicianDisableTest extends TestCase
                         'headers' => [
                             'Accept' => 'application/json',
                             'Content-Type' => 'application/json',
+                            'Idempotency-Key' => (string) Str::uuid(),
                         ],
                         'body' => [
                             'dealershipId' => $dealershipId,

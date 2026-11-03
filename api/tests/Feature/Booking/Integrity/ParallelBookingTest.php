@@ -8,6 +8,7 @@ use App\Models\Vehicle;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Support\Concurrency\Parallel;
 use Tests\Support\World;
 use Tests\TestCase;
@@ -60,6 +61,7 @@ class ParallelBookingTest extends TestCase
                 'headers' => [
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json',
+                    'Idempotency-Key' => (string) Str::uuid(),
                 ],
                 'body' => [
                     'dealershipId' => $dealershipId,
@@ -132,6 +134,7 @@ class ParallelBookingTest extends TestCase
                 'headers' => [
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json',
+                    'Idempotency-Key' => (string) Str::uuid(),
                 ],
                 'body' => [
                     'dealershipId' => $dealershipId,

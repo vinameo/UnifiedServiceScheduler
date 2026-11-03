@@ -6,6 +6,7 @@ use App\Domain\Allocation\BayState;
 use App\Domain\Allocation\CandidatePair;
 use App\Domain\Allocation\TechnicianState;
 use App\Domain\Allocation\TimeRange;
+use App\Domain\Booking\AppointmentEventType;
 use App\Domain\Booking\AppointmentStatus;
 use App\Domain\Booking\Events\AllocationRetried;
 use App\Domain\Booking\Exceptions\NoAvailability;
@@ -17,6 +18,7 @@ use App\Domain\Booking\ResourceType;
 use App\Domain\Booking\Services\AppointmentWriter;
 use App\Domain\MasterData\BayType;
 use App\Domain\MasterData\Level;
+use App\Domain\Notifications\OutboxEventType;
 use App\Models\Bay;
 use App\Models\Technician;
 use App\Models\Vehicle;
@@ -541,5 +543,148 @@ class AppointmentWriterTest extends TestCase
             ->where('resource_id', $techAn->id)
             ->count();
         $this->assertSame(0, $anAllocationsCount, 'Disabled technician must never receive allocations');
+    }
+
+    public function test_INV_04_7_move_frees_old_before_taking_new(): void
+    {
+        $world = World::saigonD7();
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $techAn = $world->technician('An');
+        $techDung = $world->technician('Dũng');
+        $bayK2 = $world->bay('K2');
+        $bayK3 = $world->bay('K3');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-20 08:00:00', 'UTC');
+        $t1000 = CarbonImmutable::parse('2026-11-20 10:00:00', 'UTC');
+        $t1030 = CarbonImmutable::parse('2026-11-20 10:30:00', 'UTC');
+        $t1100 = CarbonImmutable::parse('2026-11-20 11:00:00', 'UTC');
+        $t1130 = CarbonImmutable::parse('2026-11-20 11:30:00', 'UTC');
+
+        $writer = new AppointmentWriter(new AppointmentRepository, new ResourceAllocationRepository);
+
+        // Given: Appointment with An + K2 from 10:00–11:00 at version 1
+        $pairAnK2 = new CandidatePair(
+            new TechnicianState($techAn->id, $techAn->name, Level::from($techAn->level)),
+            new BayState($bayK2->id, $bayK2->code, $bayK2->bay_type),
+        );
+
+        $appointment = $writer->create(
+            new NewAppointment(
+                dealershipId: $world->dealership->id,
+                customerId: $customer->id,
+                vehicleId: $vehicle->id,
+                serviceTypeId: $service->id,
+                range: TimeRange::of($t1000, $t1100),
+                createdByUserId: $user->id,
+            ),
+            [$pairAnK2],
+            $now,
+        );
+
+        $this->assertSame(1, $appointment->version);
+        $this->assertSame($techAn->id, $appointment->technician_id);
+        $this->assertSame($bayK2->id, $appointment->bay_id);
+
+        // When: moveTo 10:30–11:30 with pair (An, K2)
+        // This shifts the range by 30 minutes, overlapping with the old range 10:00–11:00.
+        // Part 1: No self-clash because old allocations are deactivated before new ones are inserted.
+        $moved = $writer->moveTo(
+            appointmentId: $appointment->id,
+            expectedVersion: 1,
+            newRange: TimeRange::of($t1030, $t1130),
+            pairs: [$pairAnK2],
+            event: AppointmentEventType::RESCHEDULED,
+            outbox: OutboxEventType::AppointmentRescheduled,
+            now: $now->addMinute(),
+        );
+
+        $this->assertSame(2, $moved->version);
+        $this->assertSame($t1030->toIso8601String(), CarbonImmutable::parse($moved->start_at)->toIso8601String());
+        $this->assertSame($t1130->toIso8601String(), CarbonImmutable::parse($moved->end_at)->toIso8601String());
+
+        // Assert exactly 3 active allocations remain for this appointment (and 3 inactive old allocations)
+        $activeAllocations = DB::table('resource_allocations')
+            ->where('appointment_id', $appointment->id)
+            ->where('active', true)
+            ->get();
+        $this->assertCount(3, $activeAllocations);
+
+        $inactiveAllocations = DB::table('resource_allocations')
+            ->where('appointment_id', $appointment->id)
+            ->where('active', false)
+            ->get();
+        $this->assertCount(3, $inactiveAllocations);
+
+        // Check M-04.2: No active overlapping allocations
+        $overlaps = DB::select(<<<'SQL'
+            SELECT r1.id AS id1, r2.id AS id2
+            FROM resource_allocations r1
+            JOIN resource_allocations r2
+              ON r1.resource_type = r2.resource_type
+             AND r1.resource_id = r2.resource_id
+             AND r1.id < r2.id
+             AND r1.active AND r2.active
+             AND r1.period && r2.period
+        SQL);
+        $this->assertEmpty($overlaps, 'No active allocations may overlap');
+
+        // Part 2: Second scenario - initial appointment with expectedVersion = 1,
+        // but the first pair is taken by another appointment during moveTo.
+        // It must retry with the next candidate pair using the SAME expectedVersion (no false 412).
+        ['user' => $user2, 'customer' => $customer2, 'vehicle' => $vehicle2] = $world->customerWithVehicle();
+        $appointment2 = $writer->create(
+            new NewAppointment(
+                dealershipId: $world->dealership->id,
+                customerId: $customer2->id,
+                vehicleId: $vehicle2->id,
+                serviceTypeId: $service->id,
+                range: TimeRange::of($t1000, $t1100),
+                createdByUserId: $user2->id,
+            ),
+            [
+                new CandidatePair(
+                    new TechnicianState($techDung->id, $techDung->name, Level::from($techDung->level)),
+                    new BayState($bayK3->id, $bayK3->code, $bayK3->bay_type),
+                ),
+            ],
+            $now,
+        );
+        $this->assertSame(1, $appointment2->version);
+
+        // Candidate pairs for moveTo:
+        // Pair 1: (An, K2) -> taken by $appointment (10:30–11:30)
+        // Pair 2: (Dung, K3) -> free
+        $pairDungK3 = new CandidatePair(
+            new TechnicianState($techDung->id, $techDung->name, Level::from($techDung->level)),
+            new BayState($bayK3->id, $bayK3->code, $bayK3->bay_type),
+        );
+
+        $moved2 = $writer->moveTo(
+            appointmentId: $appointment2->id,
+            expectedVersion: 1,
+            newRange: TimeRange::of($t1030, $t1130),
+            pairs: [$pairAnK2, $pairDungK3],
+            event: AppointmentEventType::RESCHEDULED,
+            outbox: OutboxEventType::AppointmentRescheduled,
+            now: $now->addMinutes(2),
+        );
+
+        // Successfully moved using pair 2 (Dung, K3) with version 2
+        $this->assertSame(2, $moved2->version);
+        $this->assertSame($techDung->id, $moved2->technician_id);
+        $this->assertSame($bayK3->id, $moved2->bay_id);
+
+        $overlaps2 = DB::select(<<<'SQL'
+            SELECT r1.id AS id1, r2.id AS id2
+            FROM resource_allocations r1
+            JOIN resource_allocations r2
+              ON r1.resource_type = r2.resource_type
+             AND r1.resource_id = r2.resource_id
+             AND r1.id < r2.id
+             AND r1.active AND r2.active
+             AND r1.period && r2.period
+        SQL);
+        $this->assertEmpty($overlaps2, 'No active allocations may overlap');
     }
 }

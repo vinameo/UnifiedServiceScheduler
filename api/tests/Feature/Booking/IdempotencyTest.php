@@ -391,8 +391,7 @@ class IdempotencyTest extends TestCase
         $this->assertSame(1, DB::table('idempotency_keys')->where('key', $key)->count());
 
         // 2. Run artisan idempotency:prune
-        $exitCode = $this->artisan('idempotency:prune');
-        $this->assertSame(0, $exitCode);
+        $this->artisan('idempotency:prune')->assertSuccessful();
 
         // Row is deleted
         $this->assertSame(0, DB::table('idempotency_keys')->where('key', $key)->count());
