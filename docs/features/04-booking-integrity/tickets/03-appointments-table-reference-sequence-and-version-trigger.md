@@ -4,7 +4,7 @@
 
 **Blocked by:** [02-appointment-enums-and-the-status-rules](02-appointment-enums-and-the-status-rules.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/04-booking-integrity`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-04-13
 
-- [ ] TC-04-13 (AC-04.13, D-04.7; Integration): given Appointment at version 1; when `DB::table('appointments')->update(['status' => 'CANCELLED'])` without changing the version; then `version = version + 2`; then Both throw `QueryException` (P0001). Test: `VersionTriggerTest::test_AC_04_13_update_without_increment_is_rejected`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-04-13 (AC-04.13, D-04.7; Integration): given Appointment at version 1; when `DB::table('appointments')->update(['status' => 'CANCELLED'])` without changing the version; then `version = version + 2`; then Both throw `QueryException` (P0001). Test: `VersionTriggerTest::test_AC_04_13_update_without_increment_is_rejected`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
