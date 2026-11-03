@@ -2,21 +2,21 @@ import {
   Anchor,
   Box,
   Button,
-  Card,
   Container,
   Group,
-  SimpleGrid,
   Stack,
   Text,
   Title,
 } from '@mantine/core'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { useAvailability } from '../../shared/api/availability'
 import { useDealership, useServiceTypes } from '../../shared/api/masterData'
 import { BookingErrorCard } from '../../shared/booking/BookingErrorCard'
+import { SlotGrid } from '../../shared/booking/SlotGrid'
 import { formatInZone, getTimezoneOffsetLabel, todayInZone } from '../../shared/format/time'
-import { localSlotsForDay, type DayOpeningHours } from '../../shared/format/slots'
 import { useBookingDraft } from './BookingDraftContext'
+import { FullyBookedCard } from './FullyBookedCard'
 
 function formatDuration(minutes: number): string {
   if (minutes >= 120 && minutes % 60 === 0) {
@@ -41,7 +41,19 @@ export function ChooseTimePage() {
   const timeZone = dealership?.timezone ?? 'Asia/Ho_Chi_Minh'
 
   const minDate = todayInZone(timeZone)
-  const [selectedDate, setSelectedDate] = useState<string>(draft.date ?? minDate)
+  const selectedDate = draft.date ?? minDate
+
+  const {
+    data: availability,
+    isLoading: isAvailabilityLoading,
+    isError: isAvailabilityError,
+    error: availabilityErrorObj,
+    refetch: refetchAvailability,
+  } = useAvailability({
+    dealershipId: draft.dealershipId,
+    serviceTypeId: draft.serviceTypeId,
+    date: selectedDate,
+  })
 
   // Calculate 14 days starting from today in dealership timezone
   const days = Array.from({ length: 14 }, (_, i) => {
@@ -63,19 +75,24 @@ export function ChooseTimePage() {
   })
 
   const currentDayInfo = days.find((d) => d.date === selectedDate) ?? days[0]
-  const isClosedDay = currentDayInfo ? !currentDayInfo.isOpen : false
-  const effectiveHours: DayOpeningHours = currentDayInfo?.openingHours ?? {
-    opensAt: '08:00',
-    closesAt: '17:00',
-  }
+  const isClosedDay = availability ? availability.closed : (currentDayInfo ? !currentDayInfo.isOpen : false)
 
-  const durationMinutes = service?.durationMinutes ?? 60
-  const slots = isClosedDay
-    ? []
-    : localSlotsForDay(selectedDate, effectiveHours, durationMinutes, 15, timeZone)
+  const isTimeStillAvailable =
+    !draft.start || !availability?.slots || availability.date !== selectedDate
+      ? true
+      : availability.slots.some((s) => s.start === draft.start && s.available)
+  const effectiveStart = isTimeStillAvailable ? draft.start : null
 
-  const morningSlots = slots.filter((s) => s.time < '12:00')
-  const afternoonSlots = slots.filter((s) => s.time >= '12:00')
+  // Drop selected time if date/service changes and it is no longer available
+  useEffect(() => {
+    if (!availability || availability.date !== selectedDate || !draft.start) {
+      return
+    }
+    const slot = availability.slots.find((s) => s.start === draft.start)
+    if (!slot || !slot.available) {
+      updateDraft({ start: null })
+    }
+  }, [availability, selectedDate, draft.start, updateDraft])
 
   const handleSelectSlot = (slotIso: string) => {
     updateDraft({
@@ -84,8 +101,16 @@ export function ChooseTimePage() {
     })
   }
 
+  const handlePickNextAvailable = (slotIso: string) => {
+    const slotDate = todayInZone(timeZone, new Date(slotIso))
+    updateDraft({
+      date: slotDate,
+      start: slotIso,
+    })
+  }
+
   const handleContinue = () => {
-    if (draft.start) {
+    if (effectiveStart) {
       navigate('/book/details')
     }
   }
@@ -95,11 +120,17 @@ export function ChooseTimePage() {
 
   // Selected summary text
   let choiceSummary = ''
-  if (draft.start) {
-    const dayShort = formatInZone(draft.start, timeZone, 'dayShort')
-    const time = formatInZone(draft.start, timeZone, 'time')
+  if (effectiveStart) {
+    const dayShort = formatInZone(effectiveStart, timeZone, 'dayShort')
+    const time = formatInZone(effectiveStart, timeZone, 'time')
     choiceSummary = `Your choice ${dayShort}, ${time}`
   }
+
+  const isFullyBooked =
+    !isClosedDay &&
+    !isAvailabilityLoading &&
+    !isAvailabilityError &&
+    Boolean(availability && availability.freeCount === 0)
 
   return (
     <Container size={390} py="md" pb={100}>
@@ -127,6 +158,14 @@ export function ChooseTimePage() {
           <BookingErrorCard
             error={availabilityError}
             variant="customer"
+            timeZone={timeZone}
+            onPickAlternative={(altIso) => {
+              const slotDate = todayInZone(timeZone, new Date(altIso))
+              updateDraft({
+                date: slotDate,
+                start: altIso,
+              })
+            }}
             context={{
               time: draft.start ? formatInZone(draft.start, timeZone, 'time') : '',
               start: draft.start ? formatInZone(draft.start, timeZone, 'time') : '',
@@ -158,7 +197,6 @@ export function ChooseTimePage() {
                   variant={isSelected ? 'filled' : 'default'}
                   disabled={!d.isOpen}
                   onClick={() => {
-                    setSelectedDate(d.date)
                     updateDraft({ date: d.date, start: null })
                   }}
                   style={{ flexShrink: 0 }}
@@ -171,65 +209,35 @@ export function ChooseTimePage() {
         </Box>
 
         {/* Time slots */}
-        {isClosedDay ? (
-          <Card withBorder padding="md">
-            <Text c="dimmed" ta="center">
-              The dealership is closed on this day.
-            </Text>
-          </Card>
-        ) : (
-          <Stack gap="md">
-            {morningSlots.length > 0 && (
-              <Box>
-                <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb="xs">
-                  Morning
-                </Text>
-                <SimpleGrid cols={4} spacing="xs">
-                  {morningSlots.map((slot) => {
-                    const isSelected = draft.start === slot.iso
-                    return (
-                      <Button
-                        key={slot.iso}
-                        size="xs"
-                        variant={isSelected ? 'filled' : 'default'}
-                        onClick={() => handleSelectSlot(slot.iso)}
-                      >
-                        {slot.time}
-                      </Button>
-                    )
-                  })}
-                </SimpleGrid>
-              </Box>
-            )}
+        <SlotGrid
+          slots={availability?.slots ?? []}
+          freeCount={availability?.freeCount}
+          closed={isClosedDay}
+          loading={isAvailabilityLoading}
+          error={isAvailabilityError ? availabilityErrorObj : undefined}
+          onRetry={() => refetchAvailability()}
+          variant="customer"
+          timeZone={timeZone}
+          value={effectiveStart}
+          onChange={handleSelectSlot}
+          renderFullyBooked={
+            isFullyBooked && draft.dealershipId && draft.serviceTypeId ? (
+              <FullyBookedCard
+                dealershipId={draft.dealershipId}
+                serviceTypeId={draft.serviceTypeId}
+                serviceName={service?.name ?? ''}
+                phone={dealership?.phone}
+                timeZone={timeZone}
+                date={selectedDate}
+                onPick={handlePickNextAvailable}
+              />
+            ) : undefined
+          }
+        />
 
-            {afternoonSlots.length > 0 && (
-              <Box>
-                <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb="xs">
-                  Afternoon
-                </Text>
-                <SimpleGrid cols={4} spacing="xs">
-                  {afternoonSlots.map((slot) => {
-                    const isSelected = draft.start === slot.iso
-                    return (
-                      <Button
-                        key={slot.iso}
-                        size="xs"
-                        variant={isSelected ? 'filled' : 'default'}
-                        onClick={() => handleSelectSlot(slot.iso)}
-                      >
-                        {slot.time}
-                      </Button>
-                    )
-                  })}
-                </SimpleGrid>
-              </Box>
-            )}
-
-            <Text size="xs" c="dimmed">
-              Times in dealership time zone ({tzOffsetLabel}).
-            </Text>
-          </Stack>
-        )}
+        <Text size="xs" c="dimmed">
+          Times in dealership time zone ({tzOffsetLabel}).
+        </Text>
       </Stack>
 
       {/* Sticky Bottom Footer */}
@@ -258,7 +266,7 @@ export function ChooseTimePage() {
                 </Text>
               )}
             </Box>
-            <Button onClick={handleContinue} disabled={!draft.start}>
+            <Button onClick={handleContinue} disabled={!effectiveStart}>
               Continue
             </Button>
           </Group>

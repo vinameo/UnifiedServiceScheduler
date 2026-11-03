@@ -30,6 +30,7 @@ function renderSlotGrid(props: Partial<SlotGridProps> & { onChange?: (iso: strin
           loading={props.loading}
           error={props.error}
           onRetry={props.onRetry}
+          renderFullyBooked={props.renderFullyBooked}
         />
       </MantineProvider>,
     ),
@@ -75,7 +76,7 @@ describe('SlotGrid (TC-06-14)', () => {
     expect(screen.getByText('The dealership is closed on this day.')).toBeInTheDocument()
   })
 
-  it('customer variant displays group free slot counts', () => {
+  it('customer variant displays group free slot counts and hint notice', () => {
     renderSlotGrid({
       variant: 'customer',
       slots: [
@@ -87,6 +88,22 @@ describe('SlotGrid (TC-06-14)', () => {
 
     expect(screen.getByText(/Morning\s+1 free slots/)).toBeInTheDocument()
     expect(screen.getByText(/Afternoon\s+1 free slots/)).toBeInTheDocument()
+    expect(
+      screen.getByText('Times can be taken by someone else until you confirm.'),
+    ).toBeInTheDocument()
+  })
+
+  it('renders renderFullyBooked when freeCount is 0', () => {
+    renderSlotGrid({
+      variant: 'customer',
+      freeCount: 0,
+      slots: [
+        { start: '2026-11-02T08:00:00+07:00', available: false, reason: 'NO_BAY_AVAILABLE' },
+      ],
+      renderFullyBooked: <div>Custom fully booked component</div>,
+    })
+
+    expect(screen.getByText('Custom fully booked component')).toBeInTheDocument()
   })
 })
 

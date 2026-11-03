@@ -22,6 +22,7 @@ export interface SlotGridProps {
   loading?: boolean
   error?: unknown
   onRetry?: () => void
+  renderFullyBooked?: React.ReactNode
 }
 
 function resolveSlotTime(slot: AvailabilitySlot | SlotGridSlot, timeZone?: string): string {
@@ -50,6 +51,7 @@ export function SlotGrid({
   loading = false,
   error,
   onRetry,
+  renderFullyBooked,
 }: SlotGridProps) {
   if (closed) {
     return (
@@ -97,6 +99,12 @@ export function SlotGrid({
     )
   }
 
+  const effectiveFreeCount = freeCount ?? slots.filter((s) => s.available).length
+
+  if (effectiveFreeCount === 0 && renderFullyBooked) {
+    return <>{renderFullyBooked}</>
+  }
+
   if (slots.length === 0) {
     return (
       <Text size="sm" c="dimmed">
@@ -104,8 +112,6 @@ export function SlotGrid({
       </Text>
     )
   }
-
-  const effectiveFreeCount = freeCount ?? slots.filter((s) => s.available).length
 
   const enrichedSlots = slots.map((s) => ({
     ...s,
@@ -186,6 +192,12 @@ export function SlotGrid({
           </Text>
           {renderSlotsGroup(afternoonSlots)}
         </Box>
+      )}
+
+      {variant === 'customer' && (
+        <Text size="xs" c="dimmed">
+          Times can be taken by someone else until you confirm.
+        </Text>
       )}
     </Stack>
   )
