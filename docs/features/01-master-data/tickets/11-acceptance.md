@@ -15,5 +15,5 @@
 - [x] TC-01-15 (All; Manual): given Stack running; when M1–M6; then As A2. Test: `Record in A2`.
 - [x] Every `TC-` row of `6-test-case.md` is automated and green, or run by hand with the result recorded in `6-test-case.md`
 - [x] BA metrics (`2-business-analytics-spec.md` §B2) measured and recorded
-- [ ] Whole-branch self-review written to `.claude/reviews/feature__01-master-data.md` (the merge hook requires it)
+- [x] Whole-branch self-review written to `.claude/reviews/feature__01-master-data.md` (the merge hook requires it)
 - [x] README §8 checks green; no existing test skipped, deleted or weakened
