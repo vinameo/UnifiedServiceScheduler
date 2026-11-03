@@ -23,7 +23,7 @@ import { useIdempotencyKey } from '../../shared/idempotency/useIdempotencyKey'
 import { SubmitButton } from '../../shared/idempotency/SubmitButton'
 import { TimeGrid } from '../../shared/booking/TimeGrid'
 import { BookingErrorCard, type BookingProblem } from '../../shared/booking/BookingErrorCard'
-import { formatInZone } from '../../shared/format/time'
+import { formatInZone, todayInZone } from '../../shared/format/time'
 import { localSlotsForDay } from '../../shared/format/slots'
 import { maskPhone } from '../../shared/format/phone'
 
@@ -82,25 +82,38 @@ export function NewBookingPage() {
   const { data: dealership } = useDealership(dealershipId)
   const timeZone = dealership?.timezone ?? 'Asia/Ho_Chi_Minh'
 
+  const minDate = todayInZone(timeZone)
+  const maxDate = (() => {
+    const d = new Date(`${minDate}T12:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + 90)
+    return d.toISOString().slice(0, 10)
+  })()
+
   const initialDraft = loadSavedDraft()
+  const defaultDate = initialDraft?.selectedDate && initialDraft.selectedDate >= minDate
+    ? initialDraft.selectedDate
+    : minDate
+
   const [customerSearchQuery, setCustomerSearchQuery] = useState('')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(initialDraft?.selectedCustomerId ?? null)
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(initialDraft?.selectedVehicleId ?? null)
   const [selectedServiceTypeId, setSelectedServiceTypeId] = useState<string | null>(initialDraft?.selectedServiceTypeId ?? null)
-  const [selectedDate, setSelectedDate] = useState(initialDraft?.selectedDate ?? '2026-11-02')
+  const [selectedDate, setSelectedDate] = useState(defaultDate)
   const [selectedTimeIso, setSelectedTimeIso] = useState<string | null>(initialDraft?.selectedTimeIso ?? null)
   const [currentError, setCurrentError] = useState<BookingProblem | null>(null)
   const [vehicleError, setVehicleError] = useState<string | null>(null)
+
+  const effectiveSelectedDate = selectedDate < minDate ? minDate : selectedDate
 
   useEffect(() => {
     saveDraft({
       selectedCustomerId,
       selectedVehicleId,
       selectedServiceTypeId,
-      selectedDate,
+      selectedDate: effectiveSelectedDate,
       selectedTimeIso,
     })
-  }, [selectedCustomerId, selectedVehicleId, selectedServiceTypeId, selectedDate, selectedTimeIso])
+  }, [selectedCustomerId, selectedVehicleId, selectedServiceTypeId, effectiveSelectedDate, selectedTimeIso])
 
   const { data: customerSearchResult } = useCustomerSearch(customerSearchQuery)
   const { data: vehicles = [] } = useCustomerVehicles(selectedCustomerId ?? undefined)
@@ -112,15 +125,20 @@ export function NewBookingPage() {
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId)
 
   // Calculate opening hours for selected date
-  const selectedWeekday = new Date(`${selectedDate}T12:00:00Z`).getUTCDay()
+  const selectedWeekday = new Date(`${effectiveSelectedDate}T12:00:00Z`).getUTCDay()
   const normalizedWeekday = selectedWeekday === 0 ? 7 : selectedWeekday
-  const dayOpeningHours = dealership?.openingHours?.find((h) => h.weekday === normalizedWeekday) ?? {
+  const hasOpeningHours = Boolean(dealership?.openingHours && dealership.openingHours.length > 0)
+  const dayOpeningHours = dealership?.openingHours?.find((h) => h.weekday === normalizedWeekday)
+  const isClosedDay = hasOpeningHours && !dayOpeningHours
+  const effectiveOpeningHours = dayOpeningHours ?? {
     opensAt: '08:00',
     closesAt: '17:00',
   }
 
   const durationMinutes = selectedService?.durationMinutes ?? 60
-  const slots = localSlotsForDay(selectedDate, dayOpeningHours, durationMinutes, 15, timeZone)
+  const slots = isClosedDay
+    ? []
+    : localSlotsForDay(effectiveSelectedDate, effectiveOpeningHours, durationMinutes, 15, timeZone)
 
   const actionInput = {
     dealershipId,
@@ -200,7 +218,7 @@ export function NewBookingPage() {
     selectedCustomerId && selectedVehicleId && selectedServiceTypeId && selectedTimeIso,
   )
 
-  const formattedDate = formatInZone(`${selectedDate}T00:00:00Z`, timeZone, 'dayLong')
+  const formattedDate = formatInZone(`${effectiveSelectedDate}T00:00:00Z`, timeZone, 'dayLong')
 
   let summaryTimeDisplay = '—'
   let selectedStartFormatted = ''
@@ -215,9 +233,13 @@ export function NewBookingPage() {
   }
 
   const handleDateShift = (days: number) => {
-    const d = new Date(`${selectedDate}T12:00:00Z`)
+    const d = new Date(`${effectiveSelectedDate}T12:00:00Z`)
     d.setUTCDate(d.getUTCDate() + days)
-    setSelectedDate(d.toISOString().slice(0, 10))
+    const nextDate = d.toISOString().slice(0, 10)
+    if (nextDate < minDate || nextDate > maxDate) {
+      return
+    }
+    setSelectedDate(nextDate)
     setSelectedTimeIso(null)
   }
 
@@ -332,11 +354,21 @@ export function NewBookingPage() {
               <Stack gap="md">
                 <Group justify="space-between" align="center">
                   <Group gap="xs">
-                    <ActionIcon variant="default" onClick={() => handleDateShift(-1)} aria-label="Previous day">
+                    <ActionIcon
+                      variant="default"
+                      onClick={() => handleDateShift(-1)}
+                      disabled={effectiveSelectedDate <= minDate}
+                      aria-label="Previous day"
+                    >
                       ‹
                     </ActionIcon>
                     <Text fw={600}>{formattedDate}</Text>
-                    <ActionIcon variant="default" onClick={() => handleDateShift(1)} aria-label="Next day">
+                    <ActionIcon
+                      variant="default"
+                      onClick={() => handleDateShift(1)}
+                      disabled={effectiveSelectedDate >= maxDate}
+                      aria-label="Next day"
+                    >
                       ›
                     </ActionIcon>
                   </Group>
@@ -344,7 +376,9 @@ export function NewBookingPage() {
                   <TextInput
                     type="date"
                     size="xs"
-                    value={selectedDate}
+                    value={effectiveSelectedDate}
+                    min={minDate}
+                    max={maxDate}
                     onChange={(e) => {
                       setSelectedDate(e.currentTarget.value)
                       setSelectedTimeIso(null)
@@ -352,11 +386,17 @@ export function NewBookingPage() {
                   />
                 </Group>
 
-                <TimeGrid
-                  slots={slots}
-                  value={selectedTimeIso}
-                  onChange={setSelectedTimeIso}
-                />
+                {isClosedDay ? (
+                  <Text size="sm" c="dimmed">
+                    The dealership is closed on this day.
+                  </Text>
+                ) : (
+                  <TimeGrid
+                    slots={slots}
+                    value={selectedTimeIso}
+                    onChange={setSelectedTimeIso}
+                  />
+                )}
 
                 <Text size="xs" c="dimmed">
                   Times in dealership time zone (GMT+7).

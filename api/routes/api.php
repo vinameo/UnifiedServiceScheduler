@@ -45,4 +45,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Customers (F02)
     Route::get('/customers', [CustomerController::class, 'index'])
         ->middleware(['can:search-customers', 'throttle:60,1']);
+    Route::get('/customers/{customer}/vehicles', [CustomerController::class, 'vehicles'])
+        ->middleware('can:search-customers');
 });

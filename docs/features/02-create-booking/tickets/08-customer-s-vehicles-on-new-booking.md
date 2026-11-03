@@ -4,7 +4,7 @@
 
 **Blocked by:** [07-customer-search-for-staff](07-customer-search-for-staff.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/02-create-booking`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-02-37
 
-- [ ] TC-02-37 (WEB §B3; Web component): given Clock 2026-11-02T18:30Z (01:30 on 3 Nov in Ho Chi Minh); browser `TZ=America/New_York`; when Render New booking; then The date picker's minimum is 2026-11-03. Test: `web/src/staff/booking/NewBookingPage.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-02-37 (WEB §B3; Web component): given Clock 2026-11-02T18:30Z (01:30 on 3 Nov in Ho Chi Minh); browser `TZ=America/New_York`; when Render New booking; then The date picker's minimum is 2026-11-03. Test: `web/src/staff/booking/NewBookingPage.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

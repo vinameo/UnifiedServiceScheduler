@@ -6,6 +6,8 @@ use App\Domain\Auth\Services\CustomerServiceInterface;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customers\SearchCustomersRequest;
 use App\Http\Resources\CustomerSummaryResource;
+use App\Http\Resources\VehicleResource;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class CustomerController extends Controller
@@ -22,5 +24,14 @@ class CustomerController extends Controller
 
         return CustomerSummaryResource::collection($result->customers)
             ->additional(['meta' => ['total' => $result->total]]);
+    }
+
+    public function vehicles(string $customer): JsonResponse
+    {
+        $vehicles = $this->customerService->vehicles($customer);
+
+        return response()->json([
+            'data' => VehicleResource::collection($vehicles),
+        ]);
     }
 }

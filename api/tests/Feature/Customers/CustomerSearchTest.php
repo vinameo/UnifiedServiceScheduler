@@ -129,4 +129,34 @@ class CustomerSearchTest extends TestCase
             ->assertJsonPath('meta.total', 25)
             ->assertJsonCount(20, 'data');
     }
+
+    public function test_customer_vehicles_endpoint_rules(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Toyota', 'model' => 'Vios', 'plate_key' => '51H12345', 'licence_plate' => '51H-123.45']
+        );
+
+        // 1. Advisor reads customer's vehicles -> 200
+        $res = $this->actingAs($advisor)->getJson("/api/v1/customers/{$customer->id}/vehicles");
+        $res->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $vehicle->id)
+            ->assertJsonPath('data.0.licencePlate', '51H-123.45')
+            ->assertJsonPath('data.0.make', 'Toyota')
+            ->assertJsonPath('data.0.model', 'Vios');
+
+        // 2. Unknown customer UUID -> 404 CUSTOMER_NOT_FOUND
+        $unknownId = (string) Str::uuid();
+        $resUnknown = $this->actingAs($advisor)->getJson("/api/v1/customers/{$unknownId}/vehicles");
+        $resUnknown->assertStatus(404)
+            ->assertJsonPath('code', 'CUSTOMER_NOT_FOUND');
+
+        // 3. Malformed customer ID -> 404 CUSTOMER_NOT_FOUND
+        $resMalformed = $this->actingAs($advisor)->getJson('/api/v1/customers/not-a-uuid/vehicles');
+        $resMalformed->assertStatus(404)
+            ->assertJsonPath('code', 'CUSTOMER_NOT_FOUND');
+    }
 }

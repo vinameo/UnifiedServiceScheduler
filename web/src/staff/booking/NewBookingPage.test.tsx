@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderRoute } from '../../test/render'
@@ -12,12 +12,15 @@ describe('NewBookingPage (TC-02-25)', () => {
   const serviceTypeId = '0192d444-0000-7000-8000-000000000004'
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-02T08:00:00Z'))
     sessionStorage.clear()
     apiMock.install()
     apiMock.reset()
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     sessionStorage.clear()
     apiMock.restore()
   })
@@ -491,5 +494,59 @@ describe('NewBookingPage (TC-02-25)', () => {
         'This vehicle does not belong to Nguyễn Văn Hùng. Choose another vehicle or change the customer.',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('TC-02-37: date picker minimum is today in the dealership timezone', async () => {
+    vi.setSystemTime(new Date('2026-11-02T18:30:00Z')) // 01:30 on Nov 3 in Asia/Ho_Chi_Minh
+
+    apiMock.get('/me', [
+      200,
+      {
+        id: 2,
+        email: 'advisor@saigonauto.test',
+        name: 'Trần Thị Cố Vấn',
+        role: 'SERVICE_ADVISOR',
+        dealership_id: dealershipId,
+        dealership: {
+          id: dealershipId,
+          code: 'SGA-D7',
+          name: 'Saigon Auto',
+          branchName: 'District 7',
+          timezone: 'Asia/Ho_Chi_Minh',
+          phone: '028 3812 3456',
+        },
+      },
+    ])
+
+    apiMock.get(`/dealerships/${dealershipId}`, [
+      200,
+      {
+        data: {
+          id: dealershipId,
+          code: 'SGA-D7',
+          name: 'Saigon Auto',
+          branchName: 'District 7',
+          timezone: 'Asia/Ho_Chi_Minh',
+          phone: '028 3812 3456',
+          slotStepMinutes: 15,
+          openingHours: [{ weekday: 2, opensAt: '08:00', closesAt: '17:00' }],
+        },
+      },
+    ])
+
+    apiMock.get(`/dealerships/${dealershipId}/service-types`, [
+      200,
+      { data: [] },
+    ])
+
+    const { container } = renderRoute('/staff')
+
+    await waitFor(() => {
+      expect(screen.getByText('Book a service appointment')).toBeInTheDocument()
+    })
+
+    const dateInput = container.querySelector('input[type="date"]') as HTMLInputElement
+    expect(dateInput).not.toBeNull()
+    expect(dateInput.getAttribute('min')).toBe('2026-11-03')
   })
 })
