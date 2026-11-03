@@ -4,7 +4,7 @@
 
 **Blocked by:** [04-resource-allocations-with-the-exclude-constraint](04-resource-allocations-with-the-exclude-constraint.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/04-booking-integrity`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-04-30
 
-- [ ] TC-04-30 (DB-04.1–04.5; Integration): when Insert: `period` `(]`; empty `period`; `HELD` without `expires_at`; `CONFIRMED` without vehicle (fails); `EXPIRED` and `CANCELLED` without vehicle (allowed); `version = 0`; two active allocations of one type for one appointment; then Each fails with `23514` or `23505`. Test: `SchemaChecksTest::test_schema_checks` (data provider).
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-04-30 (DB-04.1–04.5; Integration): when Insert: `period` `(]`; empty `period`; `HELD` without `expires_at`; `CONFIRMED` without vehicle (fails); `EXPIRED` and `CANCELLED` without vehicle (allowed); `version = 0`; two active allocations of one type for one appointment; then Each fails with `23514` or `23505`. Test: `SchemaChecksTest::test_schema_checks` (data provider).
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

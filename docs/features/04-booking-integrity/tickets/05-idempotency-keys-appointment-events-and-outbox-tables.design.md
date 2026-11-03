@@ -1,0 +1,8 @@
+# 05: Idempotency keys, appointment events and outbox tables — Design Notes
+
+| Sketch or rule (spec §) | Invariant (INV/AC) | Checked against (code/DB) | Changes between read and write | Deleted or inactive rows | Same rule elsewhere | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| idempotency_keys schema & constraints (DB §DB-04.3) | INV-04.9, INV-04.10 | `docs/features/04-booking-integrity/3-database-spec.md:110-130` | user_id + key uniqueness enforced by unique constraint; locked_until and status check | prune job deletes rows older than 24h via expires_at index | `CLAUDE.md:158-164` (Core rule 3) | follow |
+| appointment_events schema & append-only log (DB §DB-04.4) | INV-04.11 | `docs/features/04-booking-integrity/3-database-spec.md:134-148` | immutable event record appended per state change; version matches appointments.version | none: append-only audit trail; no updates or deletes | `CLAUDE.md` §Backend conventions | follow |
+| outbox_messages schema & constraints (DB §DB-04.5) | INV-04.12 | `docs/features/04-booking-integrity/3-database-spec.md:149-170` | unique (event_id, channel) prevents duplicate outbound message insertion; atomic with state change | relay queries WHERE status = 'PENDING' AND next_attempt_at <= now | `CLAUDE.md:166-172` (Core rule 4) | follow |
+| database check constraints on appointments and allocations (DB §DB-04.1, DB-04.2) | INV-04.5, INV-04.1 | `docs/features/04-booking-integrity/3-database-spec.md:44-57,91` | enforced at database level on every INSERT/UPDATE statement; rejects invalid state with 23514 or 23505 | confirmed requires vehicle; held/expired/cancelled allows null vehicle | `1-requirement-spec.md:47,109` | follow |
