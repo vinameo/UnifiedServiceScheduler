@@ -4,7 +4,7 @@
 
 **Blocked by:** F05 [10-acceptance](../../05-view-appointments/tickets/10-acceptance.md) (the whole F05 branch merged to `develop`).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/06-alternative-times`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** none of its own; existing tests prove it changes nothing.
 
-- [ ] No change users can see; existing tests stay green unchanged
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] No change users can see; existing tests stay green unchanged
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

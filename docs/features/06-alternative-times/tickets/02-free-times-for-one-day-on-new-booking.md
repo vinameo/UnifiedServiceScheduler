@@ -4,7 +4,7 @@
 
 **Blocked by:** [01-prefactor-timegrid-takes-chip-state-from-props](01-prefactor-timegrid-takes-chip-state-from-props.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/06-alternative-times`
 
@@ -12,8 +12,8 @@
 
 **Test cases:** TC-06-01, TC-06-02, TC-06-14
 
-- [ ] TC-06-01 (AC-06.1; Integration): given `onlyTechnicians(['An'])`, An busy 09:00–10:00 tomorrow; when `GET availability` OIL tomorrow; then 08:00 `true`; 08:15…09:45 `false` (`NO_TECHNICIAN_AVAILABLE`); 10:00 `true`. Test: `AvailabilityTest::test_AC_06_1_busy_technician_blocks_overlapping_starts`.
-- [ ] TC-06-02 (AC-06.2; Integration): given Closes 17:00; when OIL tomorrow; then Last slot `start 16:00`; no 16:15. Test: `…::test_AC_06_2_last_start_is_close_minus_duration`.
-- [ ] TC-06-14 (AC-06.13, WEB-06.3; Web component): given Fake API: 3 slots, the middle one `false`; when Render New booking, click the middle slot; then The middle slot is struck through, `aria-disabled`, not selectable; "2 free start times" shown. Test: `web/src/shared/booking/SlotGrid.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
-- [ ] Run `/code-review` on the branch and fix findings before later tickets build on it
+- [x] TC-06-01 (AC-06.1; Integration): given `onlyTechnicians(['An'])`, An busy 09:00–10:00 tomorrow; when `GET availability` OIL tomorrow; then 08:00 `true`; 08:15…09:45 `false` (`NO_TECHNICIAN_AVAILABLE`); 10:00 `true`. Test: `AvailabilityTest::test_AC_06_1_busy_technician_blocks_overlapping_starts`.
+- [x] TC-06-02 (AC-06.2; Integration): given Closes 17:00; when OIL tomorrow; then Last slot `start 16:00`; no 16:15. Test: `…::test_AC_06_2_last_start_is_close_minus_duration`.
+- [x] TC-06-14 (AC-06.13, WEB-06.3; Web component): given Fake API: 3 slots, the middle one `false`; when Render New booking, click the middle slot; then The middle slot is struck through, `aria-disabled`, not selectable; "2 free start times" shown. Test: `web/src/shared/booking/SlotGrid.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] Run `/code-review` on the branch and fix findings before later tickets build on it

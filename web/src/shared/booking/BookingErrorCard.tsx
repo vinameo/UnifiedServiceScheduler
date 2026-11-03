@@ -2,6 +2,7 @@ import React from 'react'
 import { Alert, Box, Button, Stack, Text } from '@mantine/core'
 import { Link, useInRouterContext } from 'react-router'
 import { noAvailabilityReasonCopy } from '../api/errorCopy'
+import { AlternativeChips, type AlternativeSlot } from './AlternativeChips'
 
 export interface BookingProblem {
   status?: number
@@ -19,6 +20,7 @@ export interface BookingProblem {
     start?: string
     end?: string
   } | null
+  alternatives?: AlternativeSlot[]
   [key: string]: unknown
 }
 
@@ -27,11 +29,14 @@ export interface BookingErrorCardContext {
   durationMinutes?: number
   start?: string
   end?: string
+  date?: string
+  referenceDate?: string
   time?: string
   bayTypeLabel?: string
   licencePlate?: string
   customerName?: string
   variant?: 'staff' | 'customer'
+  timeZone?: string
 }
 
 export interface BookingErrorCardProps {
@@ -39,6 +44,8 @@ export interface BookingErrorCardProps {
   context?: BookingErrorCardContext
   actions?: React.ReactNode
   variant?: 'staff' | 'customer'
+  timeZone?: string
+  onPickAlternative?: (startIso: string) => void
 }
 
 function ExistingBookingButton({ url }: { url: string }) {
@@ -67,7 +74,14 @@ function ExistingBookingButton({ url }: { url: string }) {
   )
 }
 
-export function BookingErrorCard({ error, context = {}, actions, variant }: BookingErrorCardProps) {
+export function BookingErrorCard({
+  error,
+  context = {},
+  actions,
+  variant,
+  timeZone,
+  onPickAlternative,
+}: BookingErrorCardProps) {
   if (!error) {
     return null
   }
@@ -124,6 +138,9 @@ export function BookingErrorCard({ error, context = {}, actions, variant }: Book
       : `/staff/appointments/${existingAppointmentId}`
     : undefined
 
+  const effectiveTimeZone = timeZone ?? context.timeZone ?? 'Asia/Ho_Chi_Minh'
+  const effectiveReferenceDate = context.referenceDate ?? context.date
+
   return (
     <Alert
       color="red"
@@ -133,6 +150,16 @@ export function BookingErrorCard({ error, context = {}, actions, variant }: Book
     >
       <Stack gap="xs">
         <Text size="sm">{body}</Text>
+        {Array.isArray(error.alternatives) && (
+          <Box mt="xs">
+            <AlternativeChips
+              alternatives={error.alternatives}
+              timeZone={effectiveTimeZone}
+              referenceDate={effectiveReferenceDate}
+              onPick={onPickAlternative ?? (() => {})}
+            />
+          </Box>
+        )}
         {existingAppointmentUrl && (
           <Box mt="xs">
             <ExistingBookingButton url={existingAppointmentUrl} />

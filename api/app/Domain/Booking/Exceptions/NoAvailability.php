@@ -7,12 +7,16 @@ use Carbon\CarbonImmutable;
 
 class NoAvailability extends ProblemException
 {
+    /**
+     * @param  list<array{start: string, end: string}>  $alternatives
+     */
     public function __construct(
-        string $reason,
-        CarbonImmutable $requestedStart,
-        CarbonImmutable $requestedEnd,
-        ?string $dealershipId = null,
+        public readonly string $reason,
+        public readonly CarbonImmutable $requestedStart,
+        public readonly CarbonImmutable $requestedEnd,
+        public readonly ?string $dealershipId = null,
         ?string $detail = null,
+        public readonly array $alternatives = [],
     ) {
         parent::__construct(
             status: 409,
@@ -24,7 +28,8 @@ class NoAvailability extends ProblemException
                 'requestedStart' => $requestedStart->toIso8601String(),
                 'requestedEnd' => $requestedEnd->toIso8601String(),
                 'dealershipId' => $dealershipId,
-            ]),
+                'alternatives' => $alternatives,
+            ], fn ($value) => $value !== null),
         );
     }
 }

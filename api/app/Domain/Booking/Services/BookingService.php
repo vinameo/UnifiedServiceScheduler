@@ -5,6 +5,7 @@ namespace App\Domain\Booking\Services;
 use App\Domain\Allocation\AllocationRequest;
 use App\Domain\Allocation\CandidateFinderInterface;
 use App\Domain\Allocation\OpeningHours;
+use App\Domain\Allocation\TimeRange;
 use App\Domain\Auth\Repositories\CustomerRepositoryInterface;
 use App\Domain\Auth\Role;
 use App\Domain\Booking\AppointmentStatus;
@@ -34,6 +35,7 @@ final readonly class BookingService implements BookingServiceInterface
         private AllocationSnapshotRepositoryInterface $snapshotRepository,
         private CandidateFinderInterface $candidateFinder,
         private AppointmentWriterInterface $appointmentWriter,
+        private ?AvailabilityServiceInterface $availabilityService = null,
     ) {}
 
     public function create(CreateBookingInput $input, User $actor): Appointment
@@ -114,30 +116,56 @@ final readonly class BookingService implements BookingServiceInterface
         );
 
         $result = $this->candidateFinder->find($allocationRequest, $snapshot);
-        if (empty($result->pairs)) {
-            throw new NoAvailability(
-                reason: $result->failure !== null ? $result->failure->value : 'SLOT_TAKEN',
-                requestedStart: $range->start,
-                requestedEnd: $range->end,
+
+        try {
+            if (empty($result->pairs)) {
+                throw new NoAvailability(
+                    reason: $result->failure !== null ? $result->failure->value : 'SLOT_TAKEN',
+                    requestedStart: $range->start->setTimezone($tz),
+                    requestedEnd: $range->end->setTimezone($tz),
+                    dealershipId: $dealershipId,
+                );
+            }
+
+            // 7. Write appointment
+            $source = $isCustomer ? 'CUSTOMER' : 'STAFF';
+            $newAppointment = new NewAppointment(
                 dealershipId: $dealershipId,
+                customerId: $customer->id,
+                vehicleId: $vehicle->id,
+                serviceTypeId: $serviceType->id,
+                range: $range,
+                status: AppointmentStatus::CONFIRMED,
+                expiresAt: null,
+                reminderOptIn: $input->reminderOptIn,
+                source: $source,
+                createdByUserId: $actor->id,
+            );
+
+            return $this->appointmentWriter->create($newAppointment, $result->pairs, $now);
+        } catch (NoAvailability $e) {
+            $availability = $this->availabilityService ?? app(AvailabilityServiceInterface::class);
+            $suggestions = $availability->near(
+                dealershipId: $dealershipId,
+                type: $serviceType,
+                wanted: $range->start->setTimezone($tz),
+                now: $now,
+                actor: $actor,
+            );
+
+            $formattedAlternatives = array_map(fn (TimeRange $r) => [
+                'start' => $r->start->setTimezone($tz)->toIso8601String(),
+                'end' => $r->end->setTimezone($tz)->toIso8601String(),
+            ], $suggestions);
+
+            throw new NoAvailability(
+                reason: $e->reason,
+                requestedStart: $e->requestedStart->setTimezone($tz),
+                requestedEnd: $e->requestedEnd->setTimezone($tz),
+                dealershipId: $e->dealershipId,
+                detail: $e->detail,
+                alternatives: $formattedAlternatives,
             );
         }
-
-        // 7. Write appointment
-        $source = $isCustomer ? 'CUSTOMER' : 'STAFF';
-        $newAppointment = new NewAppointment(
-            dealershipId: $dealershipId,
-            customerId: $customer->id,
-            vehicleId: $vehicle->id,
-            serviceTypeId: $serviceType->id,
-            range: $range,
-            status: AppointmentStatus::CONFIRMED,
-            expiresAt: null,
-            reminderOptIn: $input->reminderOptIn,
-            source: $source,
-            createdByUserId: $actor->id,
-        );
-
-        return $this->appointmentWriter->create($newAppointment, $result->pairs, $now);
     }
 }
