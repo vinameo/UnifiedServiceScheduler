@@ -23,4 +23,23 @@ export const customerBookingsCopy = {
     newBooking: 'New booking',
     back: 'Back',
   },
+  cancel: {
+    button: 'Cancel appointment',
+    title: (time: string, day: string) => `Cancel your ${time} appointment on ${day}?`,
+    body: 'The slot will be released for others to book. You cannot restore it after cancelling.',
+    reason: 'Reason (optional)',
+    reasons: {
+      SOMETHING_CAME_UP: 'Something came up',
+      DONE_ELSEWHERE: 'I had it done elsewhere',
+      OTHER: 'Other reason',
+    },
+    otherNote: 'Note (optional)',
+    keep: 'Keep appointment',
+    confirm: 'Cancel appointment',
+    submitting: 'Cancelling…',
+    doneTitle: 'You cancelled this appointment',
+    doneBody: "The time slot has been released. We'll send you a cancellation SMS.",
+    byDealership: (phone: string) => `This appointment was cancelled by the dealership. Call ${phone} if you have questions.`,
+    tooLate: (phone: string) => `It's less than 2 hours before your appointment. Please call ${phone} to cancel.`,
+  },
 }

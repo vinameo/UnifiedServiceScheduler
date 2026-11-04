@@ -4,7 +4,7 @@
 
 **Blocked by:** [05-customer-cancels-api](05-customer-cancels-api.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/07-cancel-appointment`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-07-16
 
-- [ ] TC-07-16 (AC-07.13, WEB-07.4; Web component): given Fake clock 08:00; booking 09:00; when Render customer details; then No Cancel button; "It's less than 2 hours … call 028 3812 3456 to cancel.". Test: `web/src/customer/bookings/BookingDetailsPage.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-07-16 (AC-07.13, WEB-07.4; Web component): given Fake clock 08:00; booking 09:00; when Render customer details; then No Cancel button; "It's less than 2 hours … call 028 3812 3456 to cancel.". Test: `web/src/customer/bookings/BookingDetailsPage.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
