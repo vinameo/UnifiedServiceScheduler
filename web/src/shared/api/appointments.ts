@@ -334,5 +334,44 @@ export function useCancelAppointment(appointmentId: string) {
   })
 }
 
+export interface RescheduleAppointmentPayload {
+  newStart: string
+  keepTechnician?: boolean
+}
+
+export function useRescheduleAppointment(appointmentId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      newStart,
+      keepTechnician,
+      idempotencyKey,
+      etag,
+    }: RescheduleAppointmentPayload & { idempotencyKey: string; etag: string }) => {
+      const response = await api.post<Appointment>(
+        `/appointments/${appointmentId}/reschedule`,
+        { newStart, keepTechnician },
+        {
+          headers: {
+            'Idempotency-Key': idempotencyKey,
+            ...withIfMatch(etag),
+          },
+        },
+      )
+      const rawEtag = response.headers['etag']
+      const newEtag = typeof rawEtag === 'string' ? rawEtag : ''
+      return { appointment: response.data, etag: newEtag }
+    },
+    onSuccess: ({ appointment, etag }) => {
+      setAppointment(queryClient, appointment, etag)
+      queryClient.invalidateQueries({ queryKey: ['dealershipAppointments'] })
+      queryClient.invalidateQueries({ queryKey: ['myAppointments'] })
+      queryClient.invalidateQueries({ queryKey: ['availability'] })
+      queryClient.invalidateQueries({ queryKey: ['appointmentHistory', appointmentId] })
+    },
+  })
+}
+
 
 

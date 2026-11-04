@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\ExpectedVersion;
 use App\Http\Requests\Booking\CreateAppointmentRequest;
 use App\Http\Requests\CancelAppointmentRequest;
+use App\Http\Requests\RescheduleAppointmentRequest;
 use App\Http\Resources\AppointmentEventResource;
 use App\Models\Appointment;
 use App\Models\User;
@@ -73,5 +74,23 @@ class AppointmentController extends Controller
         );
 
         return AppointmentResponder::ok($cancelled);
+    }
+
+    public function reschedule(RescheduleAppointmentRequest $request, Appointment $appointment): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $expectedVersion = ExpectedVersion::from($request);
+
+        $rescheduled = $this->bookingService->reschedule(
+            actor: $user,
+            appointmentId: $appointment->id,
+            expectedVersion: $expectedVersion,
+            newStart: $request->newStart(),
+            keepTechnician: $request->keepTechnician(),
+            now: CarbonImmutable::now(),
+        );
+
+        return AppointmentResponder::ok($rescheduled);
     }
 }

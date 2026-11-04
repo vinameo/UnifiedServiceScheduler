@@ -45,11 +45,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dealerships/{dealership}/technicians', [TechnicianController::class, 'index'])->middleware('can:staff');
     Route::put('/dealerships/{dealership}/technicians/{technician}/status', [TechnicianController::class, 'updateStatus'])->middleware('can:admin');
 
-    // Booking (F02, F05, F07)
+    // Booking (F02, F05, F07, F09)
     Route::post('/appointments', [AppointmentController::class, 'store'])
         ->middleware(['can:create-appointment', 'idempotent']);
     Route::post('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])
         ->middleware(['can:cancel-appointment', 'idempotent', 'if-match']);
+    Route::post('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule'])
+        ->middleware(['can:reschedule-appointment,appointment', 'idempotent', 'if-match']);
     Route::get('/appointments/{appointment}', [AppointmentController::class, 'show'])
         ->middleware('can:view,appointment');
     Route::get('/appointments/{appointment}/history', [AppointmentController::class, 'history'])

@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Group, Skeleton, Stack, Text } from '@mantine/core'
+import { Alert, Badge, Box, Button, Group, Skeleton, Stack, Text } from '@mantine/core'
 import { formatInZone } from '../format/time'
 import { type AvailabilitySlot, reasonTooltip } from '../api/availability'
 
@@ -23,6 +23,7 @@ export interface SlotGridProps {
   error?: unknown
   onRetry?: () => void
   renderFullyBooked?: React.ReactNode
+  currentStart?: string | null
 }
 
 function resolveSlotTime(slot: AvailabilitySlot | SlotGridSlot, timeZone?: string): string {
@@ -52,6 +53,7 @@ export function SlotGrid({
   error,
   onRetry,
   renderFullyBooked,
+  currentStart,
 }: SlotGridProps) {
   if (closed) {
     return (
@@ -124,35 +126,47 @@ export function SlotGrid({
   const renderSlotsGroup = (groupSlots: typeof enrichedSlots) => (
     <Group gap="xs">
       {groupSlots.map((slot) => {
+        const isCurrent = Boolean(
+          currentStart &&
+            (slot.start === currentStart ||
+              new Date(slot.start).getTime() === new Date(currentStart).getTime()),
+        )
         const isSelected = value === slot.start
-        const isAvailable = slot.available
-        const isDisabled = disabled || !isAvailable
-        const tooltip = !isAvailable ? reasonTooltip(slot.reason) : undefined
+        const isAvailable = slot.available || isCurrent
+        const isDisabled = disabled || !isAvailable || isCurrent
+        const tooltip = isCurrent
+          ? 'Current appointment time'
+          : (!isAvailable ? reasonTooltip(slot.reason) : undefined)
 
         return (
           <Button
             key={slot.start}
-            variant={isSelected ? 'filled' : 'default'}
-            color={isSelected ? 'blue' : undefined}
+            variant={isCurrent ? 'outline' : isSelected ? 'filled' : 'default'}
+            color={isSelected ? 'blue' : isCurrent ? 'gray' : undefined}
             size="sm"
             disabled={isDisabled}
             aria-pressed={isSelected}
             aria-disabled={isDisabled || undefined}
             title={tooltip}
-            td={!isAvailable ? 'line-through' : undefined}
+            td={!isAvailable && !isCurrent ? 'line-through' : undefined}
             onClick={() => {
-              if (!isDisabled) {
+              if (!isDisabled && !isCurrent) {
                 onChange(slot.start)
               }
             }}
             styles={{
               root: {
                 fontWeight: isSelected ? 600 : 400,
-                textDecoration: !isAvailable ? 'line-through' : undefined,
+                textDecoration: !isAvailable && !isCurrent ? 'line-through' : undefined,
               },
             }}
           >
             {slot.displayTime}
+            {isCurrent && (
+              <Badge size="xs" variant="outline" ml="xs" style={{ verticalAlign: 'middle' }}>
+                Current
+              </Badge>
+            )}
           </Button>
         )
       })}

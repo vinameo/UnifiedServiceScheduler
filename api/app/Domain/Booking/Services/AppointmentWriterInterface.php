@@ -8,6 +8,7 @@ use App\Domain\Booking\AppointmentEventType;
 use App\Domain\Booking\NewAppointment;
 use App\Domain\Notifications\OutboxEventType;
 use App\Models\Appointment;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 
 interface AppointmentWriterInterface
@@ -30,5 +31,6 @@ interface AppointmentWriterInterface
         AppointmentEventType $event,
         ?OutboxEventType $outbox,
         CarbonImmutable $now,
+        ?User $actor = null,
     ): Appointment;
 }

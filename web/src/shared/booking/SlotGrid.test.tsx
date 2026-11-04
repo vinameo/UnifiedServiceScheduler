@@ -31,6 +31,7 @@ function renderSlotGrid(props: Partial<SlotGridProps> & { onChange?: (iso: strin
           error={props.error}
           onRetry={props.onRetry}
           renderFullyBooked={props.renderFullyBooked}
+          currentStart={props.currentStart}
         />
       </MantineProvider>,
     ),
@@ -104,6 +105,32 @@ describe('SlotGrid (TC-06-14)', () => {
     })
 
     expect(screen.getByText('Custom fully booked component')).toBeInTheDocument()
+  })
+
+  it('marks current booking slot as Current chip and prevents selecting it', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSlotGrid({
+      currentStart: '2026-11-02T08:00:00+07:00',
+      slots: [
+        { start: '2026-11-02T08:00:00+07:00', available: true, reason: null },
+        { start: '2026-11-02T08:30:00+07:00', available: true, reason: null },
+      ],
+    })
+
+    // "Current" badge is displayed on the slot
+    expect(screen.getByText('Current')).toBeInTheDocument()
+    const currentBtn = screen.getByRole('button', { name: /08:00/ })
+    expect(currentBtn).toBeDisabled()
+
+    // Clicking current slot does not fire onChange
+    await user.click(currentBtn)
+    expect(onChange).not.toHaveBeenCalled()
+
+    // Other free slot is selectable
+    const otherBtn = screen.getByRole('button', { name: '08:30' })
+    expect(otherBtn).not.toBeDisabled()
+    await user.click(otherBtn)
+    expect(onChange).toHaveBeenCalledWith('2026-11-02T08:30:00+07:00')
   })
 })
 

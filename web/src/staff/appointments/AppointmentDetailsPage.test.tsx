@@ -125,6 +125,10 @@ describe('AppointmentDetailsPage', () => {
     expect(screen.getByText('Toyota Vios 2021 · 51H-123.45')).toBeInTheDocument()
     expect(screen.getByText('RL4BT3F3X0M001234')).toBeInTheDocument()
 
+    // Reschedule and Cancel buttons present for CONFIRMED appointment
+    expect(screen.getByRole('button', { name: 'Reschedule' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel appointment' })).toBeInTheDocument()
+
     // Phone is masked initially
     expect(screen.getByText('0903 *** 218')).toBeInTheDocument()
     const showButton = screen.getByRole('button', { name: /Show number/i })
@@ -160,6 +164,7 @@ describe('AppointmentDetailsPage', () => {
         'This appointment is closed and can no longer be changed. Its bay and technician have been released for this time slot.',
       ),
     ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument()
   })
 
   it('shows not found error view when appointment does not exist or user lacks permission', async () => {

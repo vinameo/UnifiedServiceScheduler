@@ -42,6 +42,23 @@ export const appointmentCopy = {
       OTHER: 'Other',
     },
   },
+  reschedule: {
+    button: 'Reschedule',
+    title: 'Reschedule appointment',
+    subtitle: (customer: string, vehicle: string, service: string, duration: number) =>
+      `${customer} · ${vehicle} · ${service} (${duration} min)`,
+    info: 'The current booking stays in place until the new time is confirmed. If the new time has just filled up, nothing changes and the customer keeps the original booking.',
+    current: 'Current booking',
+    choose: 'Choose a new time',
+    keepTech: (name: string) => `Prefer keeping technician ${name}`,
+    changeTo: (when: string) => `Change to ${when}`,
+    back: 'Back',
+    confirm: 'Confirm reschedule',
+    submitting: 'Moving…',
+    done: (when: string) => `Appointment moved to ${when}`,
+    currentChip: 'Current',
+    rescheduleExisting: 'Reschedule existing booking',
+  },
   list: {
     title: 'Appointments',
     subtitle: (dayLong: string, offset: string) =>
