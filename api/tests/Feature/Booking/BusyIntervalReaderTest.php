@@ -75,6 +75,7 @@ class BusyIntervalReaderTest extends TestCase
         ]);
 
         // Appointment 2: Dũng held 10:00 - 11:00 local (03:00 - 04:00 UTC), expires_at = now + 4m (valid hold!)
+        ['user' => $user2, 'customer' => $customer2, 'vehicle' => $vehicle2] = $world->customerWithVehicle();
         $apt2Id = (string) Str::uuid();
         $apt2Start = CarbonImmutable::parse('2026-11-04 10:00:00', 'Asia/Ho_Chi_Minh')->setTimezone('UTC');
         $apt2End = CarbonImmutable::parse('2026-11-04 11:00:00', 'Asia/Ho_Chi_Minh')->setTimezone('UTC');
@@ -83,8 +84,8 @@ class BusyIntervalReaderTest extends TestCase
             'id' => $apt2Id,
             'reference' => 'APT-20261104-0002',
             'dealership_id' => $dealership->id,
-            'customer_id' => $customer->id,
-            'vehicle_id' => $vehicle->id,
+            'customer_id' => $customer2->id,
+            'vehicle_id' => $vehicle2->id,
             'service_type_id' => $service->id,
             'technician_id' => $techDung->id,
             'bay_id' => $bay2->id,
@@ -94,7 +95,7 @@ class BusyIntervalReaderTest extends TestCase
             'expires_at' => $now->addMinutes(4),
             'version' => 1,
             'source' => 'CUSTOMER',
-            'created_by_user_id' => $user->id,
+            'created_by_user_id' => $user2->id,
             'created_at' => $now->subMinute(),
             'updated_at' => $now->subMinute(),
         ]);

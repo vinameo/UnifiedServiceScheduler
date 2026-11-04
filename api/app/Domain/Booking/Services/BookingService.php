@@ -209,8 +209,54 @@ final readonly class BookingService implements BookingServiceInterface
                 createdByUserId: $actor->id,
             );
 
-            return $this->tracer->span('booking.write', function () use ($newAppointment, $result, $now) {
-                return $this->appointmentWriter->create($newAppointment, $result->pairs, $now);
+            return $this->tracer->span('booking.write', function () use (
+                $isHold,
+                $customer,
+                $actor,
+                $now,
+                $newAppointment,
+                $result,
+            ) {
+                if (! $isHold) {
+                    return $this->appointmentWriter->create($newAppointment, $result->pairs, $now);
+                }
+
+                return DB::transaction(function () use (
+                    $customer,
+                    $actor,
+                    $now,
+                    $newAppointment,
+                    $result,
+                ): Appointment {
+                    // Lock customer row FOR UPDATE to serialise holds for this customer (D-10.4)
+                    DB::table('customers')->where('id', $customer->id)->lockForUpdate()->first();
+
+                    // Read existing HELD appointment for this customer after acquiring the lock
+                    /** @var object{id: string, version: int}|null $existingHold */
+                    $existingHold = DB::table('appointments')
+                        ->where('customer_id', $customer->id)
+                        ->where('status', AppointmentStatus::HELD->value)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($existingHold !== null) {
+                        try {
+                            $this->appointmentTransition->transition(
+                                id: (string) $existingHold->id,
+                                expectedVersion: (int) $existingHold->version,
+                                to: AppointmentStatus::EXPIRED,
+                                changes: [],
+                                outbox: null,
+                                actor: $actor,
+                                now: $now,
+                            );
+                        } catch (AppointmentModified|InvalidStatusTransition) {
+                            // Concurrently modified or expired: ignore since it is no longer HELD
+                        }
+                    }
+
+                    return $this->appointmentWriter->create($newAppointment, $result->pairs, $now);
+                });
             });
         } catch (NoAvailability $e) {
             $availability = $this->availabilityService ?? app(AvailabilityServiceInterface::class);
