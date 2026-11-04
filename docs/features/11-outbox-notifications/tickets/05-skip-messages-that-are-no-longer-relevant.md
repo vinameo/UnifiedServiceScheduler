@@ -4,7 +4,7 @@
 
 **Blocked by:** [04-back-off-and-failed](04-back-off-and-failed.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/11-outbox-notifications`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-11-09
 
-- [ ] TC-11-09 (AC-11.7, D-11.7; Integration): given Confirmation rows `PENDING`; the booking then cancelled (cancel rows written); when `runOnce`; then Confirmation rows `SKIPPED`; cancellation rows `SENT`. Test: `…::test_AC_11_7_stale_messages_are_skipped`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-11-09 (AC-11.7, D-11.7; Integration): given Confirmation rows `PENDING`; the booking then cancelled (cancel rows written); when `runOnce`; then Confirmation rows `SKIPPED`; cancellation rows `SENT`. Test: `…::test_AC_11_7_stale_messages_are_skipped`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

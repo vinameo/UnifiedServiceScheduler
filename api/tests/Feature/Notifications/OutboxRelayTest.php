@@ -7,6 +7,7 @@ use App\Domain\Notifications\Channels\FailingChannel;
 use App\Domain\Notifications\Channels\NotificationChannel;
 use App\Domain\Notifications\Mail\AppointmentNotification;
 use App\Domain\Notifications\OutboxChannel;
+use App\Domain\Notifications\OutboxEventType;
 use App\Domain\Notifications\Recipient;
 use App\Domain\Notifications\Services\OutboxRelayInterface;
 use App\Models\OutboxMessage;
@@ -563,5 +564,244 @@ class OutboxRelayTest extends TestCase
         $subsequentResult = $relay->runOnce($currentTime);
         $this->assertSame(0, $subsequentResult->claimed);
         $this->assertSame(0, $subsequentResult->failed);
+    }
+
+    /**
+     * TC-11-09 (AC-11.7, D-11.7; Integration):
+     * given Confirmation rows PENDING; the booking then cancelled (cancel rows written);
+     * when runOnce;
+     * then Confirmation rows SKIPPED; cancellation rows SENT.
+     * Test: …::test_AC_11_7_stale_messages_are_skipped.
+     */
+    public function test_AC_11_7_stale_messages_are_skipped(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $customer->update(['phone' => '0901234567']);
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $bookingNow = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($bookingNow);
+
+        $desiredStart = '2026-11-02T09:00:00+07:00';
+        $key = (string) Str::uuid();
+
+        $bookingResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+            'customerId' => $customer->id,
+            'vehicleId' => $vehicle->id,
+            'serviceTypeId' => $service->id,
+            'desiredStart' => $desiredStart,
+        ], [
+            'Idempotency-Key' => $key,
+        ]);
+
+        $bookingResponse->assertStatus(201);
+        $apptId = $bookingResponse->json('id');
+        $this->assertNotNull($apptId);
+
+        // Precondition: 3 confirmation rows are PENDING
+        $confirmationRows = DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('event_type', OutboxEventType::AppointmentConfirmed->value)
+            ->get();
+        $this->assertCount(3, $confirmationRows);
+        foreach ($confirmationRows as $row) {
+            $this->assertSame('PENDING', $row->status);
+            $this->assertSame(0, $row->attempts);
+        }
+
+        // Cancel the booking before the relay runs (cancel rows written)
+        $cancelNow = CarbonImmutable::parse('2026-11-02 08:05:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($cancelNow);
+
+        $cancelResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$apptId}/cancel", [
+            'reason' => 'CUSTOMER_BUSY',
+            'note' => 'Customer called to cancel',
+        ], [
+            'If-Match' => '"1"',
+            'Idempotency-Key' => (string) Str::uuid(),
+        ]);
+        $cancelResponse->assertStatus(200);
+
+        // Verify cancellation rows exist and are PENDING
+        $cancellationRows = DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('event_type', OutboxEventType::AppointmentCancelled->value)
+            ->get();
+        $this->assertCount(3, $cancellationRows);
+        foreach ($cancellationRows as $row) {
+            $this->assertSame('PENDING', $row->status);
+            $this->assertSame(0, $row->attempts);
+        }
+
+        // Set up recording fake channels for SMS & DMS, and Mail fake for EMAIL
+        $smsFake = new RecordingChannel;
+        $dmsFake = new RecordingChannel;
+
+        /** @var ChannelRegistryInterface $registry */
+        $registry = app(ChannelRegistryInterface::class);
+        $registry->register(OutboxChannel::SMS, $smsFake);
+        $registry->register(OutboxChannel::DMS, $dmsFake);
+        Mail::fake();
+
+        // Run relay runOnce
+        $relayNow = CarbonImmutable::parse('2026-11-02 08:05:10', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($relayNow);
+
+        /** @var OutboxRelayInterface $relay */
+        $relay = app(OutboxRelayInterface::class);
+        $result = $relay->runOnce($relayNow);
+
+        $this->assertSame(6, $result->claimed);
+        $this->assertSame(3, $result->sent);
+        $this->assertSame(0, $result->failed);
+        $this->assertSame(3, $result->skipped);
+
+        // Confirmation rows are SKIPPED with reason NO_LONGER_CONFIRMED
+        $updatedConfirmationRows = DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('event_type', OutboxEventType::AppointmentConfirmed->value)
+            ->get();
+        $this->assertCount(3, $updatedConfirmationRows);
+        foreach ($updatedConfirmationRows as $row) {
+            $this->assertSame('SKIPPED', $row->status);
+            $this->assertSame('NO_LONGER_CONFIRMED', $row->last_error);
+            $this->assertNull($row->sent_at);
+        }
+
+        // Cancellation rows are SENT
+        $updatedCancellationRows = DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('event_type', OutboxEventType::AppointmentCancelled->value)
+            ->get();
+        $this->assertCount(3, $updatedCancellationRows);
+        foreach ($updatedCancellationRows as $row) {
+            $this->assertSame('SENT', $row->status);
+            $this->assertNull($row->last_error);
+            $this->assertNotNull($row->sent_at);
+        }
+
+        // Channels received only the cancellation message
+        $this->assertSame(1, $smsFake->count());
+        $this->assertSame(OutboxEventType::AppointmentCancelled, $smsFake->lastMessage()?->event_type);
+
+        $this->assertSame(1, $dmsFake->count());
+        $this->assertSame(OutboxEventType::AppointmentCancelled, $dmsFake->lastMessage()?->event_type);
+
+        Mail::assertSent(AppointmentNotification::class, function (AppointmentNotification $mail) {
+            return $mail->outboxMessage->event_type === OutboxEventType::AppointmentCancelled;
+        });
+        Mail::assertNotSent(AppointmentNotification::class, function (AppointmentNotification $mail) {
+            return $mail->outboxMessage->event_type === OutboxEventType::AppointmentConfirmed;
+        });
+    }
+
+    /**
+     * D-11.7: Booking rescheduled to a different time before confirmation is sent.
+     * The confirmation row is SKIPPED with reason START_TIME_CHANGED;
+     * The reschedule row is SENT.
+     */
+    public function test_AC_11_7_rescheduled_booking_skips_outdated_confirmation(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $customer->update(['phone' => '0901234567']);
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $bookingNow = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($bookingNow);
+
+        $desiredStart = '2026-11-02T09:00:00+07:00';
+        $key = (string) Str::uuid();
+
+        $bookingResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+            'customerId' => $customer->id,
+            'vehicleId' => $vehicle->id,
+            'serviceTypeId' => $service->id,
+            'desiredStart' => $desiredStart,
+        ], [
+            'Idempotency-Key' => $key,
+        ]);
+
+        $bookingResponse->assertStatus(201);
+        $apptId = $bookingResponse->json('id');
+        $this->assertNotNull($apptId);
+
+        // Advisor reschedules appointment to a different time (e.g. 10:00)
+        $rescheduleNow = CarbonImmutable::parse('2026-11-02 08:05:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($rescheduleNow);
+
+        $newStart = '2026-11-02T10:00:00+07:00';
+        $rescheduleResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$apptId}/reschedule", [
+            'newStart' => $newStart,
+            'keepTechnician' => true,
+        ], [
+            'If-Match' => '"1"',
+            'Idempotency-Key' => (string) Str::uuid(),
+        ]);
+        $rescheduleResponse->assertStatus(200);
+
+        // Set up recording fake channels for SMS & DMS, and Mail fake for EMAIL
+        $smsFake = new RecordingChannel;
+        $dmsFake = new RecordingChannel;
+
+        /** @var ChannelRegistryInterface $registry */
+        $registry = app(ChannelRegistryInterface::class);
+        $registry->register(OutboxChannel::SMS, $smsFake);
+        $registry->register(OutboxChannel::DMS, $dmsFake);
+        Mail::fake();
+
+        // Run relay runOnce
+        $relayNow = CarbonImmutable::parse('2026-11-02 08:05:10', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($relayNow);
+
+        /** @var OutboxRelayInterface $relay */
+        $relay = app(OutboxRelayInterface::class);
+        $result = $relay->runOnce($relayNow);
+
+        $this->assertSame(6, $result->claimed);
+        $this->assertSame(3, $result->sent);
+        $this->assertSame(0, $result->failed);
+        $this->assertSame(3, $result->skipped);
+
+        // Confirmation rows are SKIPPED with reason START_TIME_CHANGED
+        $updatedConfirmationRows = DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('event_type', OutboxEventType::AppointmentConfirmed->value)
+            ->get();
+        $this->assertCount(3, $updatedConfirmationRows);
+        foreach ($updatedConfirmationRows as $row) {
+            $this->assertSame('SKIPPED', $row->status);
+            $this->assertSame('START_TIME_CHANGED', $row->last_error);
+            $this->assertNull($row->sent_at);
+        }
+
+        // Reschedule rows are SENT
+        $updatedRescheduleRows = DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('event_type', OutboxEventType::AppointmentRescheduled->value)
+            ->get();
+        $this->assertCount(3, $updatedRescheduleRows);
+        foreach ($updatedRescheduleRows as $row) {
+            $this->assertSame('SENT', $row->status);
+            $this->assertNull($row->last_error);
+            $this->assertNotNull($row->sent_at);
+        }
+
+        // Channels received only the reschedule message
+        $this->assertSame(1, $smsFake->count());
+        $this->assertSame(OutboxEventType::AppointmentRescheduled, $smsFake->lastMessage()?->event_type);
+
+        $this->assertSame(1, $dmsFake->count());
+        $this->assertSame(OutboxEventType::AppointmentRescheduled, $dmsFake->lastMessage()?->event_type);
+
+        Mail::assertSent(AppointmentNotification::class, function (AppointmentNotification $mail) {
+            return $mail->outboxMessage->event_type === OutboxEventType::AppointmentRescheduled;
+        });
+        Mail::assertNotSent(AppointmentNotification::class, function (AppointmentNotification $mail) {
+            return $mail->outboxMessage->event_type === OutboxEventType::AppointmentConfirmed;
+        });
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Domain\Notifications\Services;
 
+use App\Domain\Booking\AppointmentStatus;
+use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
 use App\Domain\Monitoring\Repositories\ApiEventRepositoryInterface;
 use App\Domain\Notifications\Channels\ChannelRegistryInterface;
 use App\Domain\Notifications\Exceptions\DeliveryFailed;
@@ -9,6 +11,7 @@ use App\Domain\Notifications\OutboxChannel;
 use App\Domain\Notifications\OutboxEventType;
 use App\Domain\Notifications\RecipientResolverInterface;
 use App\Domain\Notifications\Repositories\OutboxMessageRepositoryInterface;
+use App\Models\Appointment;
 use App\Models\OutboxMessage;
 use App\Support\Logging\RedactPersonalData;
 use Carbon\CarbonImmutable;
@@ -22,6 +25,7 @@ class OutboxRelay implements OutboxRelayInterface
         private readonly ChannelRegistryInterface $channelRegistry,
         private readonly RecipientResolverInterface $recipientResolver,
         private readonly ApiEventRepositoryInterface $apiEventRepository,
+        private readonly AppointmentRepositoryInterface $appointmentRepository,
     ) {}
 
     public function runOnce(CarbonImmutable $now, int $batch = 50): RelayResult
@@ -40,7 +44,20 @@ class OutboxRelay implements OutboxRelayInterface
         $failedCount = $abandonedMessages->count();
         $skippedCount = 0;
 
+        /** @var array<string, ?Appointment> $appointmentCache */
+        $appointmentCache = [];
+
         foreach ($claimedMessages as $message) {
+            // Step 2.1: Relevance check (D-11.7)
+            $skipReason = $this->checkRelevance($message, $appointmentCache);
+            if ($skipReason !== null) {
+                $this->outboxRepository->markSkipped($message->id, $skipReason, $now);
+                $skippedCount++;
+
+                continue;
+            }
+
+            // Step 2.2: Recipient resolution (D-11.4)
             $recipient = $this->recipientResolver->resolve($message);
             if ($recipient === null) {
                 $this->outboxRepository->markSkipped($message->id, 'NO_RECIPIENT', $now);
@@ -127,5 +144,52 @@ class OutboxRelay implements OutboxRelayInterface
         } catch (Throwable $e) {
             Log::warning('Failed to record DELIVERY_FAILED event: '.$e->getMessage());
         }
+    }
+
+    /**
+     * D-11.7: Before sending, check relevance:
+     * AppointmentConfirmed, AppointmentRescheduled, AppointmentReminder for a booking
+     * that is no longer CONFIRMED, or whose start differs from the payload (e.g. rescheduled
+     * to a different time), are marked SKIPPED (not sent, with appropriate reason e.g.
+     * 'NO_LONGER_CONFIRMED' or 'START_TIME_CHANGED').
+     * AppointmentCancelled and AppointmentReassigned are always sent.
+     *
+     * @param  array<string, ?Appointment>  $appointmentCache
+     */
+    private function checkRelevance(OutboxMessage $message, array &$appointmentCache): ?string
+    {
+        if (! in_array($message->event_type, [
+            OutboxEventType::AppointmentConfirmed,
+            OutboxEventType::AppointmentRescheduled,
+            OutboxEventType::AppointmentReminder,
+        ], true)) {
+            return null;
+        }
+
+        $appointmentId = $message->appointment_id ?? ($message->payload['appointmentId'] ?? null);
+        if ($appointmentId === null) {
+            return 'NO_LONGER_CONFIRMED';
+        }
+
+        $appointmentId = (string) $appointmentId;
+        if (! array_key_exists($appointmentId, $appointmentCache)) {
+            $appointmentCache[$appointmentId] = $this->appointmentRepository->find($appointmentId);
+        }
+
+        $appointment = $appointmentCache[$appointmentId];
+        if ($appointment === null || $appointment->status !== AppointmentStatus::CONFIRMED) {
+            return 'NO_LONGER_CONFIRMED';
+        }
+
+        $payload = $message->payload;
+        if (isset($payload['start'])) {
+            $payloadStart = CarbonImmutable::parse((string) $payload['start']);
+            $appointmentStart = CarbonImmutable::parse($appointment->start_at);
+            if ($payloadStart->ne($appointmentStart)) {
+                return 'START_TIME_CHANGED';
+            }
+        }
+
+        return null;
     }
 }
