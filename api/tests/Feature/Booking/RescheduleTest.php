@@ -18,6 +18,7 @@ use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\AssertsNoOverlap;
 use Tests\Support\World;
 use Tests\TestCase;
@@ -952,6 +953,292 @@ class RescheduleTest extends TestCase
             $this->assertSame(2, $replayResponse->json('version'));
             $this->assertSame($slot1400, $replayResponse->json('start'));
             $this->assertSame($appointmentId, $replayResponse->json('id'));
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * TC-09-09 (AC-09.7; Integration): given Bookings in HELD, CHECKED_IN, CANCELLED, COMPLETED;
+     * when Reschedule each; then 422 INVALID_STATUS_TRANSITION with extra member currentStatus matching the status.
+     */
+    #[DataProvider('nonConfirmedStatuses')]
+    public function test_AC_09_7_only_confirmed_moves(AppointmentStatus $status): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-03T09:00:00+07:00';
+            $slot1400 = '2026-11-03T14:00:00+07:00';
+
+            // Given: Booking created
+            $bookResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookResponse->assertStatus(201);
+            $appointmentId = $bookResponse->json('id');
+
+            // Force appointment into non-CONFIRMED status and increment version to satisfy PostgreSQL trigger
+            $updateData = [
+                'status' => $status->value,
+                'version' => 2,
+            ];
+            if ($status === AppointmentStatus::HELD) {
+                $updateData['expires_at'] = $now->addMinutes(15);
+            }
+
+            DB::table('appointments')
+                ->where('id', $appointmentId)
+                ->update($updateData);
+
+            // When: Reschedule appointment
+            $rescheduleResponse = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointmentId}/reschedule",
+                [
+                    'newStart' => $slot1400,
+                    'keepTechnician' => true,
+                ],
+                [
+                    'If-Match' => '"2"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ],
+            );
+
+            // Then: 422 INVALID_STATUS_TRANSITION with currentStatus matching the status
+            $rescheduleResponse->assertStatus(422);
+            $rescheduleResponse->assertJson([
+                'code' => 'INVALID_STATUS_TRANSITION',
+                'currentStatus' => $status->value,
+            ]);
+
+            // Booking remains in its status with version 2
+            /** @var Appointment $rowAfter */
+            $rowAfter = Appointment::findOrFail($appointmentId);
+            $this->assertSame($status, $rowAfter->status);
+            $this->assertSame(2, $rowAfter->version);
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * @return array<string, array{AppointmentStatus}>
+     */
+    public static function nonConfirmedStatuses(): array
+    {
+        return [
+            'HELD' => [AppointmentStatus::HELD],
+            'CHECKED_IN' => [AppointmentStatus::CHECKED_IN],
+            'CANCELLED' => [AppointmentStatus::CANCELLED],
+            'COMPLETED' => [AppointmentStatus::COMPLETED],
+        ];
+    }
+
+    /**
+     * TC-09-11 (AC-09.9; Integration): given X at 09:00+07:00;
+     * when newStart = 2026-11-02T02:00:00Z (same instant in UTC); then 422 RESCHEDULE_SAME_TIME.
+     */
+    public function test_AC_09_9_same_time_is_rejected(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-01 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-02T09:00:00+07:00';
+
+            // Given: X at 09:00+07:00
+            $bookResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookResponse->assertStatus(201);
+            $appointmentId = $bookResponse->json('id');
+            $this->assertSame(1, $bookResponse->json('version'));
+
+            /** @var Appointment $rowBefore */
+            $rowBefore = Appointment::findOrFail($appointmentId);
+
+            // When: newStart = 2026-11-02T02:00:00Z (exact same instant in UTC: 02:00Z == 09:00+07:00)
+            $rescheduleResponse = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointmentId}/reschedule",
+                [
+                    'newStart' => '2026-11-02T02:00:00Z',
+                    'keepTechnician' => true,
+                ],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ],
+            );
+
+            // Then: 422 RESCHEDULE_SAME_TIME
+            $rescheduleResponse->assertStatus(422);
+            $rescheduleResponse->assertJson([
+                'code' => 'RESCHEDULE_SAME_TIME',
+            ]);
+
+            // X is unchanged
+            /** @var Appointment $rowAfter */
+            $rowAfter = Appointment::findOrFail($appointmentId);
+            $this->assertSame(1, $rowAfter->version);
+            $this->assertSame(AppointmentStatus::CONFIRMED, $rowAfter->status);
+            $this->assertSame($rowBefore->start_at->toIso8601String(), $rowAfter->start_at->toIso8601String());
+            $this->assertSame($rowBefore->technician_id, $rowAfter->technician_id);
+            $this->assertSame($rowBefore->bay_id, $rowAfter->bay_id);
+
+            // Edge case D-09.5: Displaced booking (no active allocations) may keep its own time
+            DB::table('resource_allocations')
+                ->where('appointment_id', $appointmentId)
+                ->update([
+                    'active' => false,
+                    'deactivated_at' => $now,
+                ]);
+
+            $displacedRescheduleResponse = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointmentId}/reschedule",
+                [
+                    'newStart' => '2026-11-02T02:00:00Z',
+                    'keepTechnician' => true,
+                ],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ],
+            );
+
+            // Succeeded because it had no active allocations
+            $displacedRescheduleResponse->assertStatus(200);
+            $this->assertSame(2, $displacedRescheduleResponse->json('version'));
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * TC-09-13 (INV-09.7; Integration): when newStart in the past; Sunday; 91 days ahead; 16:30 for 60 min;
+     * then 422 START_IN_PAST, OUTSIDE_OPENING_HOURS, START_TOO_FAR_AHEAD, OUTSIDE_OPENING_HOURS.
+     */
+    public function test_INV_09_7_time_rules_apply(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE'); // 60 minutes duration
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh'); // Monday
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-03T09:00:00+07:00'; // Tuesday
+
+            // Create initial confirmed booking X (v1)
+            $bookResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookResponse->assertStatus(201);
+            $appointmentId = $bookResponse->json('id');
+            $this->assertSame(1, $bookResponse->json('version'));
+
+            // 1. newStart in the past (yesterday 2026-11-01) -> 422 START_IN_PAST
+            $resPast = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointmentId}/reschedule",
+                [
+                    'newStart' => '2026-11-01T09:00:00+07:00',
+                    'keepTechnician' => true,
+                ],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ],
+            );
+            $resPast->assertStatus(422);
+            $resPast->assertJsonPath('code', 'START_IN_PAST');
+
+            // 2. Sunday (closed day) -> 422 OUTSIDE_OPENING_HOURS
+            $resSunday = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointmentId}/reschedule",
+                [
+                    'newStart' => '2026-11-08T09:00:00+07:00',
+                    'keepTechnician' => true,
+                ],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ],
+            );
+            $resSunday->assertStatus(422);
+            $resSunday->assertJsonPath('code', 'OUTSIDE_OPENING_HOURS');
+
+            // 3. 91 days ahead (2027-02-01, max allowed is 2027-01-31) -> 422 START_TOO_FAR_AHEAD
+            $resFarAhead = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointmentId}/reschedule",
+                [
+                    'newStart' => '2027-02-01T09:00:00+07:00',
+                    'keepTechnician' => true,
+                ],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ],
+            );
+            $resFarAhead->assertStatus(422);
+            $resFarAhead->assertJsonPath('code', 'START_TOO_FAR_AHEAD');
+            $resFarAhead->assertJsonPath('maxDate', '2027-01-31');
+
+            // 4. 16:30 for a 60-min service (dealership closes at 17:00) -> 422 OUTSIDE_OPENING_HOURS
+            $resLate = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointmentId}/reschedule",
+                [
+                    'newStart' => '2026-11-04T16:30:00+07:00',
+                    'keepTechnician' => true,
+                ],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ],
+            );
+            $resLate->assertStatus(422);
+            $resLate->assertJsonPath('code', 'OUTSIDE_OPENING_HOURS');
+            $resLate->assertJsonPath('closesAt', '17:00');
+            $resLate->assertJsonPath('latestStart', '2026-11-04T16:00:00+07:00');
+
+            // Verify X is still at version 1 and unchanged
+            /** @var Appointment $rowAfter */
+            $rowAfter = Appointment::findOrFail($appointmentId);
+            $this->assertSame(1, $rowAfter->version);
+            $this->assertSame(AppointmentStatus::CONFIRMED, $rowAfter->status);
+            $this->assertTrue(CarbonImmutable::parse($slot0900)->equalTo($rowAfter->start_at));
 
             $this->assertNoOverlappingAllocations();
         } finally {
