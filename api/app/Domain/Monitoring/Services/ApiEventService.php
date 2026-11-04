@@ -5,6 +5,7 @@ namespace App\Domain\Monitoring\Services;
 use App\Domain\Monitoring\Repositories\ApiEventRepositoryInterface;
 use App\Models\ApiEvent;
 use App\Support\Logging\RedactPersonalData;
+use Carbon\CarbonImmutable;
 
 class ApiEventService implements ApiEventServiceInterface
 {
@@ -21,5 +22,15 @@ class ApiEventService implements ApiEventServiceInterface
         }
 
         return $this->repository->record($data);
+    }
+
+    public function pruneOlderThan(CarbonImmutable $cutoff): int
+    {
+        return $this->repository->pruneOlderThan($cutoff);
+    }
+
+    public function prune(int|CarbonImmutable $cutoffOrDays = 7): int
+    {
+        return $this->repository->prune($cutoffOrDays);
     }
 }

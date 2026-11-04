@@ -216,4 +216,20 @@ class ApiEventRepository implements ApiEventRepositoryInterface
             ];
         }
     }
+
+    public function pruneOlderThan(CarbonImmutable $cutoff): int
+    {
+        return DB::table('api_events')
+            ->where('occurred_at', '<', $cutoff)
+            ->delete();
+    }
+
+    public function prune(int|CarbonImmutable $cutoffOrDays = 7): int
+    {
+        $cutoff = $cutoffOrDays instanceof CarbonImmutable
+            ? $cutoffOrDays
+            : CarbonImmutable::now()->subDays($cutoffOrDays);
+
+        return $this->pruneOlderThan($cutoff);
+    }
 }

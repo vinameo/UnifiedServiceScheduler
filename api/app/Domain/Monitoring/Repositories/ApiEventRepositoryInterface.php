@@ -67,4 +67,14 @@ interface ApiEventRepositoryInterface
      * }
      */
     public function getOutboxHealth(): array;
+
+    /**
+     * Delete API events that occurred before the given cutoff date/time.
+     */
+    public function pruneOlderThan(CarbonImmutable $cutoff): int;
+
+    /**
+     * Delete API events older than the given cutoff date/time or number of days (default 7 days).
+     */
+    public function prune(int|CarbonImmutable $cutoffOrDays = 7): int;
 }
