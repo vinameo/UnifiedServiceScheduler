@@ -4,7 +4,7 @@
 
 **Blocked by:** [03-cancel-rules-for-staff](03-cancel-rules-for-staff.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/07-cancel-appointment`
 
@@ -12,8 +12,8 @@
 
 **Test cases:** TC-07-11, TC-07-12, TC-07-14, TC-07-19
 
-- [ ] TC-07-11 (AC-07.11; Integration): given Booking v2 `CONFIRMED`; when Cancel with `"1"`; cancel without `If-Match`; then 412, body `appointment.version 2`, `ETag "2"`; 428. Test: `…::test_AC_07_11_stale_and_missing_if_match`.
-- [ ] TC-07-12 (INV-07.2; Integration): given Bookings in `CHECKED_IN`, `IN_PROGRESS`, `NO_SHOW`, `EXPIRED`; when Cancel; then 422 each. Test: `…::test_INV_07_2_non_cancellable_statuses` (data provider).
-- [ ] TC-07-14 (F04 + F07; Integration): given Cancel with K → 200; when Resend K (the booking is now v2); then The saved 200, `Idempotent-Replayed: true`. Test: `…::test_retry_with_same_key_replays`.
-- [ ] TC-07-19 (WEB-07.1, 412; Web component): given Fake API: cancel 412 with a rescheduled booking; when Confirm the cancel; then `AppointmentModifiedAlert` "Time: 09:00–10:00 → 14:00–15:00"; no automatic resend. Test: `CancelAppointmentModal.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-07-11 (AC-07.11; Integration): given Booking v2 `CONFIRMED`; when Cancel with `"1"`; cancel without `If-Match`; then 412, body `appointment.version 2`, `ETag "2"`; 428. Test: `…::test_AC_07_11_stale_and_missing_if_match`.
+- [x] TC-07-12 (INV-07.2; Integration): given Bookings in `CHECKED_IN`, `IN_PROGRESS`, `NO_SHOW`, `EXPIRED`; when Cancel; then 422 each. Test: `…::test_INV_07_2_non_cancellable_statuses` (data provider).
+- [x] TC-07-14 (F04 + F07; Integration): given Cancel with K → 200; when Resend K (the booking is now v2); then The saved 200, `Idempotent-Replayed: true`. Test: `…::test_retry_with_same_key_replays`.
+- [x] TC-07-19 (WEB-07.1, 412; Web component): given Fake API: cancel 412 with a rescheduled booking; when Confirm the cancel; then `AppointmentModifiedAlert` "Time: 09:00–10:00 → 14:00–15:00"; no automatic resend. Test: `CancelAppointmentModal.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

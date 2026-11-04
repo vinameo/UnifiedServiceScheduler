@@ -186,4 +186,62 @@ describe('CancelAppointmentModal (TC-07-15, AC-07.12, WEB-07.2)', () => {
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cancel appointment' })).not.toBeInTheDocument()
   })
+
+  it('TC-07-19: given cancel 412 with modified booking, shows AppointmentModifiedAlert with time diff without automatic resend', async () => {
+    apiMock.get(`/appointments/${appointmentId}`, [
+      200,
+      baseAppointment,
+      { etag: '"1"' },
+    ])
+    apiMock.get(`/appointments/${appointmentId}/history`, [200, []])
+
+    let postCount = 0
+    apiMock.post(`/appointments/${appointmentId}/cancel`, () => {
+      postCount++
+      return [
+        412,
+        {
+          code: 'APPOINTMENT_MODIFIED',
+          title: 'This appointment was modified by another request.',
+          appointment: {
+            ...baseAppointment,
+            version: 2,
+            start: '2026-11-02T14:00:00+07:00',
+            end: '2026-11-02T15:00:00+07:00',
+          },
+        },
+        { etag: '"2"' },
+      ]
+    })
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderRoute(`/staff/appointments/${appointmentId}`)
+
+    await waitFor(() => {
+      expect(screen.getByText('Confirmed')).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'Cancel appointment' }))
+
+    const dialog = await screen.findByRole('dialog')
+    const reasonInput = within(dialog).getByPlaceholderText('Reason')
+    await user.click(reasonInput)
+    const option = await screen.findByRole('option', { name: 'Customer is busy', hidden: true })
+    await user.click(option)
+
+    const confirmBtn = within(dialog).getByRole('button', { name: 'Cancel appointment' })
+    await user.click(confirmBtn)
+
+    // 412 triggers AppointmentModifiedAlert inside the modal
+    await waitFor(() => {
+      expect(
+        within(dialog).getByText('This appointment was changed by someone else'),
+      ).toBeInTheDocument()
+    })
+    expect(
+      within(dialog).getByText(/Time: 09:00 - 10:00 → 14:00 - 15:00/),
+    ).toBeInTheDocument()
+
+    // No automatic resend
+    expect(postCount).toBe(1)
+  })
 })

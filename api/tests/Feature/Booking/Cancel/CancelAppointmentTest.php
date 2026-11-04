@@ -9,6 +9,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\AssertsNoOverlap;
 use Tests\Support\World;
 use Tests\TestCase;
@@ -368,6 +369,189 @@ class CancelAppointmentTest extends TestCase
                 'If-Match' => '"1"',
             ]);
             $adminResponse->assertStatus(403);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_07_11_stale_and_missing_if_match(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Toyota', 'model' => 'Vios', 'plate_key' => '51H12345', 'licence_plate' => '51H-123.45']
+        );
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $tomorrow = '2026-11-03T09:00:00+07:00';
+            $createResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $tomorrow,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $createResponse->assertStatus(201);
+            $appointmentId = $createResponse->json('id');
+
+            // Bump version to 2
+            DB::table('appointments')->where('id', $appointmentId)->update(['version' => 2]);
+
+            // Stale If-Match "1"
+            $staleResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentId}/cancel", [
+                'reason' => CancelReason::CUSTOMER_BUSY->value,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+                'If-Match' => '"1"',
+            ]);
+
+            $staleResponse->assertStatus(412);
+            $staleResponse->assertHeader('ETag', '"2"');
+            $staleResponse->assertJson([
+                'code' => 'APPOINTMENT_MODIFIED',
+                'appointment' => [
+                    'version' => 2,
+                ],
+            ]);
+
+            // Missing If-Match -> 428
+            $missingResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentId}/cancel", [
+                'reason' => CancelReason::CUSTOMER_BUSY->value,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            $missingResponse->assertStatus(428);
+            $missingResponse->assertJson(['code' => 'PRECONDITION_REQUIRED']);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    #[DataProvider('nonCancellableStatuses')]
+    public function test_INV_07_2_non_cancellable_statuses(AppointmentStatus $status): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Toyota', 'model' => 'Vios', 'plate_key' => '51H12345', 'licence_plate' => '51H-123.45']
+        );
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $tomorrow = '2026-11-03T09:00:00+07:00';
+            $createResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $tomorrow,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $createResponse->assertStatus(201);
+            $appointmentId = $createResponse->json('id');
+
+            DB::table('appointments')
+                ->where('id', $appointmentId)
+                ->update([
+                    'status' => $status->value,
+                    'version' => 2,
+                ]);
+
+            $cancelResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentId}/cancel", [
+                'reason' => CancelReason::CUSTOMER_BUSY->value,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+                'If-Match' => '"2"',
+            ]);
+
+            $cancelResponse->assertStatus(422);
+            $cancelResponse->assertJson([
+                'code' => 'INVALID_STATUS_TRANSITION',
+                'currentStatus' => $status->value,
+            ]);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * @return array<string, array{AppointmentStatus}>
+     */
+    public static function nonCancellableStatuses(): array
+    {
+        return [
+            'CHECKED_IN' => [AppointmentStatus::CHECKED_IN],
+            'IN_PROGRESS' => [AppointmentStatus::IN_PROGRESS],
+            'NO_SHOW' => [AppointmentStatus::NO_SHOW],
+            'EXPIRED' => [AppointmentStatus::EXPIRED],
+        ];
+    }
+
+    public function test_retry_with_same_key_replays(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Toyota', 'model' => 'Vios', 'plate_key' => '51H12345', 'licence_plate' => '51H-123.45']
+        );
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $tomorrow = '2026-11-03T09:00:00+07:00';
+            $createResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $tomorrow,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $createResponse->assertStatus(201);
+            $appointmentId = $createResponse->json('id');
+
+            $key = (string) Str::uuid();
+
+            // Cancel first time
+            $cancel1 = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentId}/cancel", [
+                'reason' => CancelReason::CUSTOMER_BUSY->value,
+            ], [
+                'Idempotency-Key' => $key,
+                'If-Match' => '"1"',
+            ]);
+
+            $cancel1->assertStatus(200);
+            $cancel1->assertHeader('ETag', '"2"');
+            $this->assertSame(AppointmentStatus::CANCELLED->value, $cancel1->json('status'));
+            $this->assertSame(2, $cancel1->json('version'));
+
+            // Resend with same key K
+            $cancel2 = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentId}/cancel", [
+                'reason' => CancelReason::CUSTOMER_BUSY->value,
+            ], [
+                'Idempotency-Key' => $key,
+                'If-Match' => '"1"',
+            ]);
+
+            $cancel2->assertStatus(200);
+            $cancel2->assertHeader('Idempotent-Replayed', 'true');
+            $cancel2->assertHeader('ETag', '"2"');
+            $this->assertSame(AppointmentStatus::CANCELLED->value, $cancel2->json('status'));
+            $this->assertSame(2, $cancel2->json('version'));
         } finally {
             CarbonImmutable::setTestNow();
         }
