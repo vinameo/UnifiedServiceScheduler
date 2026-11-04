@@ -488,38 +488,38 @@ final readonly class BookingService implements BookingServiceInterface
         // 5. Transaction: updateVersioned(status CONFIRMED, vehicle_id, reminder_opt_in, expires_at NULL) (0 rows → 412)
         // -> if the vehicle allocation is missing or for another vehicle: deactivate it and insert VEHICLE with the same period
         // (23P01 → rollback, 409 VEHICLE_ALREADY_BOOKED) → history CONFIRMED → outbox AppointmentConfirmed → commit.
-        return DB::transaction(function () use (
-            $appointment,
-            $expectedVersion,
-            $vehicle,
-            $reminderOptIn,
-            $now,
-            $actor,
-        ): Appointment {
-            $newVersion = $this->appointmentRepository->updateVersioned(
-                id: $appointment->id,
-                expectedVersion: $expectedVersion,
-                changes: [
-                    'status' => AppointmentStatus::CONFIRMED->value,
-                    'vehicle_id' => $vehicle->id,
-                    'reminder_opt_in' => $reminderOptIn,
-                    'expires_at' => null,
-                ],
-                now: $now,
-            );
+        try {
+            return DB::transaction(function () use (
+                $appointment,
+                $expectedVersion,
+                $vehicle,
+                $reminderOptIn,
+                $now,
+                $actor,
+            ): Appointment {
+                $newVersion = $this->appointmentRepository->updateVersioned(
+                    id: $appointment->id,
+                    expectedVersion: $expectedVersion,
+                    changes: [
+                        'status' => AppointmentStatus::CONFIRMED->value,
+                        'vehicle_id' => $vehicle->id,
+                        'reminder_opt_in' => $reminderOptIn,
+                        'expires_at' => null,
+                    ],
+                    now: $now,
+                );
 
-            $existingVehicleAlloc = DB::table('resource_allocations')
-                ->where('appointment_id', $appointment->id)
-                ->where('resource_type', ResourceType::VEHICLE->value)
-                ->where('active', true)
-                ->first();
+                $existingVehicleAlloc = DB::table('resource_allocations')
+                    ->where('appointment_id', $appointment->id)
+                    ->where('resource_type', ResourceType::VEHICLE->value)
+                    ->where('active', true)
+                    ->first();
 
-            if ($existingVehicleAlloc === null || $existingVehicleAlloc->resource_id !== $vehicle->id) {
-                if ($existingVehicleAlloc !== null) {
-                    $this->allocationRepository->deactivateType($appointment->id, ResourceType::VEHICLE, $now);
-                }
+                if ($existingVehicleAlloc === null || $existingVehicleAlloc->resource_id !== $vehicle->id) {
+                    if ($existingVehicleAlloc !== null) {
+                        $this->allocationRepository->deactivateType($appointment->id, ResourceType::VEHICLE, $now);
+                    }
 
-                try {
                     $this->allocationRepository->insertFor(
                         $appointment->id,
                         (string) $appointment->dealership_id,
@@ -533,74 +533,74 @@ final readonly class BookingService implements BookingServiceInterface
                         ],
                         $now,
                     );
-                } catch (QueryException $e) {
-                    if ($e->getCode() === '23P01') {
-                        $clashType = ExclusionViolationParser::parse($e);
-                        if ($clashType === ResourceType::VEHICLE) {
-                            $conflicting = DB::table('resource_allocations')
-                                ->where('resource_type', ResourceType::VEHICLE->value)
-                                ->where('resource_id', $vehicle->id)
-                                ->where('active', true)
-                                ->whereRaw('period && tstzrange(?, ?, \'[)\')', [
-                                    $appointment->start_at->toIso8601String(),
-                                    $appointment->end_at->toIso8601String(),
-                                ])
-                                ->first();
+                }
 
-                            $existing = null;
-                            if ($conflicting !== null) {
-                                $existing = ['id' => (string) $conflicting->appointment_id];
-                                $conflictingAppt = DB::table('appointments')->where('id', $conflicting->appointment_id)->first();
-                                if ($conflictingAppt !== null) {
-                                    $existing['reference'] = (string) $conflictingAppt->reference;
-                                    $existing['start'] = (string) $conflictingAppt->start_at;
-                                    $existing['end'] = (string) $conflictingAppt->end_at;
-                                    $existing['status'] = (string) $conflictingAppt->status;
-                                }
-                            }
+                $actorRole = $actor->role instanceof Role ? $actor->role->value : ($actor->role ? (string) $actor->role : 'CUSTOMER');
 
-                            throw new VehicleAlreadyBooked($existing);
+                $this->eventRecorder->record(
+                    appointmentId: $appointment->id,
+                    dealershipId: (string) $appointment->dealership_id,
+                    type: AppointmentEventType::CONFIRMED,
+                    version: $newVersion,
+                    occurredAt: $now,
+                    fromStatus: AppointmentStatus::HELD,
+                    toStatus: AppointmentStatus::CONFIRMED,
+                    actorUserId: $actor->id,
+                    actorRole: $actorRole,
+                    data: [
+                        'vehicleId' => $vehicle->id,
+                        'reminderOptIn' => $reminderOptIn,
+                    ],
+                );
+
+                $this->outboxWriter->append(
+                    dealershipId: (string) $appointment->dealership_id,
+                    appointmentId: $appointment->id,
+                    eventType: OutboxEventType::AppointmentConfirmed,
+                    payload: [
+                        'appointmentId' => $appointment->id,
+                        'reference' => $appointment->reference,
+                        'customerId' => $appointment->customer_id,
+                        'vehicleId' => $vehicle->id,
+                        'serviceTypeId' => $appointment->service_type_id,
+                        'start' => CarbonImmutable::parse($appointment->start_at)->toIso8601String(),
+                        'end' => CarbonImmutable::parse($appointment->end_at)->toIso8601String(),
+                    ],
+                    now: $now,
+                );
+
+                return $this->appointmentRepository->find($appointment->id) ?? throw new AppointmentNotFound($appointment->id);
+            });
+        } catch (QueryException $e) {
+            if ($e->getCode() === '23P01') {
+                $clashType = ExclusionViolationParser::parse($e);
+                if ($clashType === ResourceType::VEHICLE) {
+                    $conflicting = DB::table('resource_allocations')
+                        ->where('resource_type', ResourceType::VEHICLE->value)
+                        ->where('resource_id', $vehicle->id)
+                        ->where('active', true)
+                        ->whereRaw('period && tstzrange(?, ?, \'[)\')', [
+                            CarbonImmutable::parse($appointment->start_at)->toIso8601String(),
+                            CarbonImmutable::parse($appointment->end_at)->toIso8601String(),
+                        ])
+                        ->first();
+
+                    $existing = null;
+                    if ($conflicting !== null) {
+                        $existing = ['id' => (string) $conflicting->appointment_id];
+                        $conflictingAppt = DB::table('appointments')->where('id', $conflicting->appointment_id)->first();
+                        if ($conflictingAppt !== null) {
+                            $existing['reference'] = (string) $conflictingAppt->reference;
+                            $existing['start'] = (string) $conflictingAppt->start_at;
+                            $existing['end'] = (string) $conflictingAppt->end_at;
+                            $existing['status'] = (string) $conflictingAppt->status;
                         }
                     }
-                    throw $e;
+
+                    throw new VehicleAlreadyBooked($existing);
                 }
             }
-
-            $actorRole = $actor->role instanceof Role ? $actor->role->value : ($actor->role ? (string) $actor->role : 'CUSTOMER');
-
-            $this->eventRecorder->record(
-                appointmentId: $appointment->id,
-                dealershipId: (string) $appointment->dealership_id,
-                type: AppointmentEventType::CONFIRMED,
-                version: $newVersion,
-                occurredAt: $now,
-                fromStatus: AppointmentStatus::HELD,
-                toStatus: AppointmentStatus::CONFIRMED,
-                actorUserId: $actor->id,
-                actorRole: $actorRole,
-                data: [
-                    'vehicleId' => $vehicle->id,
-                    'reminderOptIn' => $reminderOptIn,
-                ],
-            );
-
-            $this->outboxWriter->append(
-                dealershipId: (string) $appointment->dealership_id,
-                appointmentId: $appointment->id,
-                eventType: OutboxEventType::AppointmentConfirmed,
-                payload: [
-                    'appointmentId' => $appointment->id,
-                    'reference' => $appointment->reference,
-                    'customerId' => $appointment->customer_id,
-                    'vehicleId' => $vehicle->id,
-                    'serviceTypeId' => $appointment->service_type_id,
-                    'start' => CarbonImmutable::parse($appointment->start_at)->toIso8601String(),
-                    'end' => CarbonImmutable::parse($appointment->end_at)->toIso8601String(),
-                ],
-                now: $now,
-            );
-
-            return $this->appointmentRepository->find($appointment->id) ?? throw new AppointmentNotFound($appointment->id);
-        });
+            throw $e;
+        }
     }
 }
