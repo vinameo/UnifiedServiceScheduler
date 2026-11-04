@@ -14,34 +14,50 @@ use App\Domain\Booking\BookingTimeRules;
 use App\Domain\Booking\CancelReason;
 use App\Domain\Booking\CreateBookingInput;
 use App\Domain\Booking\CustomerChangePolicy;
+use App\Domain\Booking\Events\AppointmentModifiedDetected;
 use App\Domain\Booking\Exceptions\AppointmentModified;
+use App\Domain\Booking\Exceptions\AppointmentNotFound;
 use App\Domain\Booking\Exceptions\CustomerNotFound;
+use App\Domain\Booking\Exceptions\HoldExpired;
+use App\Domain\Booking\Exceptions\HoldNotAllowed;
 use App\Domain\Booking\Exceptions\InvalidStatusTransition;
 use App\Domain\Booking\Exceptions\NoAvailability;
 use App\Domain\Booking\Exceptions\RescheduleSameTime;
 use App\Domain\Booking\Exceptions\TooLateToCancel;
 use App\Domain\Booking\Exceptions\TooLateToReschedule;
+use App\Domain\Booking\Exceptions\VehicleAlreadyBooked;
 use App\Domain\Booking\Exceptions\VehicleNotFound;
 use App\Domain\Booking\Exceptions\VehicleNotOwnedByCustomer;
 use App\Domain\Booking\NewAppointment;
 use App\Domain\Booking\Repositories\AllocationSnapshotRepositoryInterface;
 use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
+use App\Domain\Booking\Repositories\ResourceAllocationRepositoryInterface;
 use App\Domain\Booking\Repositories\VehicleRepositoryInterface;
+use App\Domain\Booking\ResourceType;
 use App\Domain\MasterData\Exceptions\DealershipNotFound;
 use App\Domain\MasterData\Exceptions\ServiceTypeNotFound;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\Notifications\OutboxEventType;
+use App\Domain\Notifications\Services\OutboxWriterInterface;
 use App\Models\Appointment;
 use App\Models\User;
 use App\Support\Tracing\Tracer;
 use Carbon\CarbonImmutable;
 use DateTimeZone;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 
 final readonly class BookingService implements BookingServiceInterface
 {
     private AppointmentRepositoryInterface $appointmentRepository;
 
     private AppointmentTransitionInterface $appointmentTransition;
+
+    private ResourceAllocationRepositoryInterface $allocationRepository;
+
+    private AppointmentEventRecorderInterface $eventRecorder;
+
+    private OutboxWriterInterface $outboxWriter;
 
     private Tracer $tracer;
 
@@ -55,10 +71,16 @@ final readonly class BookingService implements BookingServiceInterface
         private ?AvailabilityServiceInterface $availabilityService = null,
         ?AppointmentRepositoryInterface $appointmentRepository = null,
         ?AppointmentTransitionInterface $appointmentTransition = null,
+        ?ResourceAllocationRepositoryInterface $allocationRepository = null,
+        ?AppointmentEventRecorderInterface $eventRecorder = null,
+        ?OutboxWriterInterface $outboxWriter = null,
         ?Tracer $tracer = null,
     ) {
         $this->appointmentRepository = $appointmentRepository ?? app(AppointmentRepositoryInterface::class);
         $this->appointmentTransition = $appointmentTransition ?? app(AppointmentTransitionInterface::class);
+        $this->allocationRepository = $allocationRepository ?? app(ResourceAllocationRepositoryInterface::class);
+        $this->eventRecorder = $eventRecorder ?? app(AppointmentEventRecorderInterface::class);
+        $this->outboxWriter = $outboxWriter ?? app(OutboxWriterInterface::class);
         $this->tracer = $tracer ?? app(Tracer::class);
     }
 
@@ -66,6 +88,10 @@ final readonly class BookingService implements BookingServiceInterface
     {
         $role = $actor->role instanceof Role ? $actor->role : Role::tryFrom((string) $actor->role);
         $isCustomer = $role === Role::CUSTOMER;
+
+        if ($input->mode === 'HOLD' && ! $isCustomer) {
+            throw new HoldNotAllowed;
+        }
 
         [$dealership, $serviceType, $customer, $vehicle, $range, $now] = $this->tracer->span('booking.validate', function () use ($input, $actor, $isCustomer) {
             // 1. Dealership
@@ -102,16 +128,21 @@ final readonly class BookingService implements BookingServiceInterface
             }
 
             // 4. Vehicle
-            $vehicle = $this->vehicleRepository->find($input->vehicleId);
-            if ($vehicle === null) {
-                throw new VehicleNotFound;
-            }
-
-            if ($vehicle->customer_id !== $customer->id) {
-                if ($isCustomer) {
+            $vehicle = null;
+            if ($input->vehicleId !== null) {
+                $vehicle = $this->vehicleRepository->find($input->vehicleId);
+                if ($vehicle === null) {
                     throw new VehicleNotFound;
                 }
-                throw new VehicleNotOwnedByCustomer;
+
+                if ($vehicle->customer_id !== $customer->id) {
+                    if ($isCustomer) {
+                        throw new VehicleNotFound;
+                    }
+                    throw new VehicleNotOwnedByCustomer;
+                }
+            } elseif ($input->mode !== 'HOLD') {
+                throw new VehicleNotFound;
             }
 
             // 5. BookingTimeRules
@@ -160,14 +191,19 @@ final readonly class BookingService implements BookingServiceInterface
 
             // 7. Write appointment
             $source = $isCustomer ? 'CUSTOMER' : 'STAFF';
+            $isHold = $input->mode === 'HOLD';
+            $status = $isHold ? AppointmentStatus::HELD : AppointmentStatus::CONFIRMED;
+            $holdMinutes = (int) (config('app.hold_minutes') ?? 5);
+            $expiresAt = $isHold ? $now->addMinutes($holdMinutes) : null;
+
             $newAppointment = new NewAppointment(
                 dealershipId: $dealershipId,
                 customerId: $customer->id,
-                vehicleId: $vehicle->id,
+                vehicleId: $vehicle?->id,
                 serviceTypeId: $serviceType->id,
                 range: $range,
-                status: AppointmentStatus::CONFIRMED,
-                expiresAt: null,
+                status: $status,
+                expiresAt: $expiresAt,
                 reminderOptIn: $input->reminderOptIn,
                 source: $source,
                 createdByUserId: $actor->id,
@@ -399,5 +435,172 @@ final readonly class BookingService implements BookingServiceInterface
                 alternatives: $formattedAlternatives,
             );
         }
+    }
+
+    public function confirmHold(
+        User $actor,
+        string $appointmentId,
+        int $expectedVersion,
+        string $vehicleId,
+        bool $reminderOptIn,
+        CarbonImmutable $now,
+    ): Appointment {
+        $appointment = $this->appointmentRepository->findVisibleTo($actor, $appointmentId);
+
+        // 2. status ≠ HELD: version ≠ expected → 412; else 422 INVALID_STATUS_TRANSITION.
+        if ($appointment->status !== AppointmentStatus::HELD) {
+            if ($appointment->version !== $expectedVersion) {
+                AppointmentModifiedDetected::dispatch($appointmentId, $expectedVersion);
+                throw new AppointmentModified($appointmentId, $appointment);
+            }
+            throw new InvalidStatusTransition($appointment->status, AppointmentStatus::CONFIRMED);
+        }
+
+        // 3. expires_at <= now → TransitionAppointment(EXPIRED, expected); success or AppointmentModified with status EXPIRED → 410 HOLD_EXPIRED; other 412 → rethrow.
+        if ($appointment->expires_at !== null && CarbonImmutable::parse($appointment->expires_at)->lessThanOrEqualTo($now)) {
+            try {
+                $this->appointmentTransition->transition(
+                    id: $appointmentId,
+                    expectedVersion: $expectedVersion,
+                    to: AppointmentStatus::EXPIRED,
+                    changes: [],
+                    outbox: null,
+                    actor: null,
+                    now: $now,
+                );
+                throw new HoldExpired;
+            } catch (AppointmentModified $e) {
+                $latest = $this->appointmentRepository->find($appointmentId);
+                if ($latest?->status === AppointmentStatus::EXPIRED) {
+                    throw new HoldExpired;
+                }
+                throw $e;
+            }
+        }
+
+        // 4. Vehicle must belong to the customer → else 404 VEHICLE_NOT_FOUND.
+        $customer = $actor->customer ?? $this->customerRepository->findByUserId($actor->id);
+        $vehicle = $this->vehicleRepository->find($vehicleId);
+        if ($vehicle === null || $customer === null || $vehicle->customer_id !== $customer->id) {
+            throw new VehicleNotFound;
+        }
+
+        // 5. Transaction: updateVersioned(status CONFIRMED, vehicle_id, reminder_opt_in, expires_at NULL) (0 rows → 412)
+        // -> if the vehicle allocation is missing or for another vehicle: deactivate it and insert VEHICLE with the same period
+        // (23P01 → rollback, 409 VEHICLE_ALREADY_BOOKED) → history CONFIRMED → outbox AppointmentConfirmed → commit.
+        return DB::transaction(function () use (
+            $appointment,
+            $expectedVersion,
+            $vehicle,
+            $reminderOptIn,
+            $now,
+            $actor,
+        ): Appointment {
+            $newVersion = $this->appointmentRepository->updateVersioned(
+                id: $appointment->id,
+                expectedVersion: $expectedVersion,
+                changes: [
+                    'status' => AppointmentStatus::CONFIRMED->value,
+                    'vehicle_id' => $vehicle->id,
+                    'reminder_opt_in' => $reminderOptIn,
+                    'expires_at' => null,
+                ],
+                now: $now,
+            );
+
+            $existingVehicleAlloc = DB::table('resource_allocations')
+                ->where('appointment_id', $appointment->id)
+                ->where('resource_type', ResourceType::VEHICLE->value)
+                ->where('active', true)
+                ->first();
+
+            if ($existingVehicleAlloc === null || $existingVehicleAlloc->resource_id !== $vehicle->id) {
+                if ($existingVehicleAlloc !== null) {
+                    $this->allocationRepository->deactivateType($appointment->id, ResourceType::VEHICLE, $now);
+                }
+
+                try {
+                    $this->allocationRepository->insertFor(
+                        $appointment->id,
+                        (string) $appointment->dealership_id,
+                        [
+                            [
+                                'resource_type' => ResourceType::VEHICLE,
+                                'resource_id' => $vehicle->id,
+                                'start_at' => $appointment->start_at,
+                                'end_at' => $appointment->end_at,
+                            ],
+                        ],
+                        $now,
+                    );
+                } catch (QueryException $e) {
+                    if ($e->getCode() === '23P01') {
+                        $clashType = ExclusionViolationParser::parse($e);
+                        if ($clashType === ResourceType::VEHICLE) {
+                            $conflicting = DB::table('resource_allocations')
+                                ->where('resource_type', ResourceType::VEHICLE->value)
+                                ->where('resource_id', $vehicle->id)
+                                ->where('active', true)
+                                ->whereRaw('period && tstzrange(?, ?, \'[)\')', [
+                                    $appointment->start_at->toIso8601String(),
+                                    $appointment->end_at->toIso8601String(),
+                                ])
+                                ->first();
+
+                            $existing = null;
+                            if ($conflicting !== null) {
+                                $existing = ['id' => (string) $conflicting->appointment_id];
+                                $conflictingAppt = DB::table('appointments')->where('id', $conflicting->appointment_id)->first();
+                                if ($conflictingAppt !== null) {
+                                    $existing['reference'] = (string) $conflictingAppt->reference;
+                                    $existing['start'] = (string) $conflictingAppt->start_at;
+                                    $existing['end'] = (string) $conflictingAppt->end_at;
+                                    $existing['status'] = (string) $conflictingAppt->status;
+                                }
+                            }
+
+                            throw new VehicleAlreadyBooked($existing);
+                        }
+                    }
+                    throw $e;
+                }
+            }
+
+            $actorRole = $actor->role instanceof Role ? $actor->role->value : ($actor->role ? (string) $actor->role : 'CUSTOMER');
+
+            $this->eventRecorder->record(
+                appointmentId: $appointment->id,
+                dealershipId: (string) $appointment->dealership_id,
+                type: AppointmentEventType::CONFIRMED,
+                version: $newVersion,
+                occurredAt: $now,
+                fromStatus: AppointmentStatus::HELD,
+                toStatus: AppointmentStatus::CONFIRMED,
+                actorUserId: $actor->id,
+                actorRole: $actorRole,
+                data: [
+                    'vehicleId' => $vehicle->id,
+                    'reminderOptIn' => $reminderOptIn,
+                ],
+            );
+
+            $this->outboxWriter->append(
+                dealershipId: (string) $appointment->dealership_id,
+                appointmentId: $appointment->id,
+                eventType: OutboxEventType::AppointmentConfirmed,
+                payload: [
+                    'appointmentId' => $appointment->id,
+                    'reference' => $appointment->reference,
+                    'customerId' => $appointment->customer_id,
+                    'vehicleId' => $vehicle->id,
+                    'serviceTypeId' => $appointment->service_type_id,
+                    'start' => CarbonImmutable::parse($appointment->start_at)->toIso8601String(),
+                    'end' => CarbonImmutable::parse($appointment->end_at)->toIso8601String(),
+                ],
+                now: $now,
+            );
+
+            return $this->appointmentRepository->find($appointment->id) ?? throw new AppointmentNotFound($appointment->id);
+        });
     }
 }

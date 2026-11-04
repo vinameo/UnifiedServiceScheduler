@@ -140,4 +140,88 @@ class AppointmentFactory
             end: $end,
         );
     }
+
+    public static function hold(
+        Customer $customer,
+        CarbonImmutable $start,
+        ?CarbonImmutable $expiresAt = null,
+        ?Vehicle $vehicle = null,
+        ?Dealership $dealership = null,
+        ?Technician $technician = null,
+        ?Bay $bay = null,
+        ?ServiceType $serviceType = null,
+    ): Appointment {
+        $dealership = $dealership ?? Dealership::firstOrFail();
+        $technician = $technician ?? Technician::where('dealership_id', $dealership->id)->where('active', true)->firstOrFail();
+        $bay = $bay ?? Bay::where('dealership_id', $dealership->id)->firstOrFail();
+        $serviceType = $serviceType ?? ServiceType::where('dealership_id', $dealership->id)->firstOrFail();
+        $end = $start->addMinutes($serviceType->duration_minutes);
+
+        $now = CarbonImmutable::now();
+        $tz = $dealership->timezone;
+        $startInLocalTz = $start->setTimezone($tz);
+
+        /** @var list<object{seq: int}> $seqResult */
+        $seqResult = DB::select("SELECT nextval('appointment_reference_seq') AS seq");
+        $seq = $seqResult[0]->seq;
+        $reference = sprintf('APT-%s-%04d', $startInLocalTz->format('Ymd'), $seq);
+
+        $id = (string) Str::uuid();
+        $startUtc = $start->setTimezone('UTC');
+        $endUtc = $end->setTimezone('UTC');
+
+        DB::table('appointments')->insert([
+            'id' => $id,
+            'reference' => $reference,
+            'dealership_id' => $dealership->id,
+            'customer_id' => $customer->id,
+            'vehicle_id' => $vehicle?->id,
+            'service_type_id' => $serviceType->id,
+            'technician_id' => $technician->id,
+            'bay_id' => $bay->id,
+            'status' => AppointmentStatus::HELD->value,
+            'start_at' => $startUtc,
+            'end_at' => $endUtc,
+            'expires_at' => $expiresAt ?? $now->addMinutes(5),
+            'version' => 1,
+            'source' => 'CUSTOMER',
+            'reminder_opt_in' => true,
+            'created_by_user_id' => $customer->user_id,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        $allocations = [
+            [
+                'resource_type' => ResourceType::TECHNICIAN,
+                'resource_id' => $technician->id,
+                'start_at' => $startUtc,
+                'end_at' => $endUtc,
+            ],
+            [
+                'resource_type' => ResourceType::BAY,
+                'resource_id' => $bay->id,
+                'start_at' => $startUtc,
+                'end_at' => $endUtc,
+            ],
+        ];
+
+        if ($vehicle !== null) {
+            $allocations[] = [
+                'resource_type' => ResourceType::VEHICLE,
+                'resource_id' => $vehicle->id,
+                'start_at' => $startUtc,
+                'end_at' => $endUtc,
+            ];
+        }
+
+        app(ResourceAllocationRepositoryInterface::class)->insertFor(
+            $id,
+            $dealership->id,
+            $allocations,
+            $now,
+        );
+
+        return Appointment::findOrFail($id);
+    }
 }

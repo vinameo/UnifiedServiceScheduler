@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\ExpectedVersion;
 use App\Http\Requests\Booking\CreateAppointmentRequest;
 use App\Http\Requests\CancelAppointmentRequest;
+use App\Http\Requests\ConfirmHoldRequest;
 use App\Http\Requests\RescheduleAppointmentRequest;
 use App\Http\Resources\AppointmentEventResource;
 use App\Models\Appointment;
@@ -92,5 +93,26 @@ class AppointmentController extends Controller
         );
 
         return AppointmentResponder::ok($rescheduled);
+    }
+
+    public function confirm(ConfirmHoldRequest $request, Appointment $appointment): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $expectedVersion = ExpectedVersion::from($request);
+
+        $vehicleId = (string) $request->validated('vehicleId');
+        $reminderOptIn = $request->has('reminderOptIn') ? (bool) $request->validated('reminderOptIn') : true;
+
+        $confirmed = $this->bookingService->confirmHold(
+            actor: $user,
+            appointmentId: $appointment->id,
+            expectedVersion: $expectedVersion,
+            vehicleId: $vehicleId,
+            reminderOptIn: $reminderOptIn,
+            now: CarbonImmutable::now(),
+        );
+
+        return AppointmentResponder::ok($confirmed);
     }
 }

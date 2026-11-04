@@ -1,10 +1,10 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, Navigate } from 'react-router'
 import { CustomerHomePage } from './customer/CustomerHomePage'
 import { SignUpPage } from './customer/auth/SignUpPage'
 import { SignInPage } from './customer/auth/SignInPage'
 import { ChooseServicePage } from './customer/booking/ChooseServicePage'
 import { ChooseTimePage } from './customer/booking/ChooseTimePage'
-import { ContactDetailsPage } from './customer/booking/ContactDetailsPage'
+import { HoldPage } from './customer/booking/HoldPage'
 import { CustomerBookingConfirmedPage } from './customer/booking/CustomerBookingConfirmedPage'
 import { CustomerBookingLayout } from './customer/booking/CustomerBookingLayout'
 import { MyBookingsPage } from './customer/bookings/MyBookingsPage'
@@ -35,7 +35,8 @@ export const routes = [
     children: [
       { index: true, element: <ChooseServicePage /> },
       { path: 'time', element: <ChooseTimePage /> },
-      { path: 'details', element: <ContactDetailsPage /> },
+      { path: 'hold/:id', element: <HoldPage /> },
+      { path: 'details', element: <Navigate to="/book/time" replace /> },
       { path: 'confirmed/:id', element: <CustomerBookingConfirmedPage /> },
     ],
   },

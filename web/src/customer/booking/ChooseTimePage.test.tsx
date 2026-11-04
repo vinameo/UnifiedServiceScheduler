@@ -218,7 +218,7 @@ describe('ChooseTimePage (TC-06-15)', () => {
     })
 
     // Continue button is now enabled
-    const continueBtn = screen.getByRole('button', { name: 'Continue' })
+    const continueBtn = screen.getByRole('button', { name: /Hold and continue|Continue/i })
     expect(continueBtn).not.toBeDisabled()
 
     // Verify draft stored in sessionStorage
@@ -334,7 +334,7 @@ describe('ChooseTimePage (TC-06-15)', () => {
     await user.click(slot0800)
 
     expect(screen.getByText('Your choice Mon 2 Nov, 08:00')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Continue' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /Hold and continue|Continue/i })).not.toBeDisabled()
   })
 
   it('drops selected time if it is no longer available on date/service refresh', async () => {
@@ -384,7 +384,7 @@ describe('ChooseTimePage (TC-06-15)', () => {
 
     await waitFor(() => {
       // Continue button should be disabled because 08:00 was dropped
-      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Hold and continue|Continue/i })).toBeDisabled()
       expect(screen.getByText('Choose a time to continue')).toBeInTheDocument()
     })
   })

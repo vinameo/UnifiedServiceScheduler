@@ -11,7 +11,10 @@ import {
 import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAvailability } from '../../shared/api/availability'
+import { useCreateHold } from '../../shared/api/appointments'
 import { useDealership, useServiceTypes } from '../../shared/api/masterData'
+import { toProblem } from '../../shared/api/problem'
+import { useIdempotencyKey } from '../../shared/idempotency/useIdempotencyKey'
 import { BookingErrorCard } from '../../shared/booking/BookingErrorCard'
 import { SlotGrid } from '../../shared/booking/SlotGrid'
 import { formatInZone, getTimezoneOffsetLabel, todayInZone } from '../../shared/format/time'
@@ -27,7 +30,7 @@ function formatDuration(minutes: number): string {
 
 export function ChooseTimePage() {
   const navigate = useNavigate()
-  const { draft, updateDraft, availabilityError } = useBookingDraft()
+  const { draft, updateDraft, availabilityError, setAvailabilityError } = useBookingDraft()
 
   useEffect(() => {
     if (!draft.dealershipId || !draft.serviceTypeId) {
@@ -109,9 +112,36 @@ export function ChooseTimePage() {
     })
   }
 
-  const handleContinue = () => {
-    if (effectiveStart) {
-      navigate('/book/details')
+  const holdActionInput = {
+    dealershipId: draft.dealershipId,
+    serviceTypeId: draft.serviceTypeId,
+    start: effectiveStart,
+    mode: 'HOLD',
+  }
+  const { key: holdIdempotencyKey, reset: resetHoldKey } = useIdempotencyKey(holdActionInput)
+  const createHoldMutation = useCreateHold()
+
+  const handleContinue = async () => {
+    if (!effectiveStart || !draft.dealershipId || !draft.serviceTypeId) {
+      return
+    }
+
+    try {
+      await createHoldMutation.mutateAsync({
+        payload: {
+          dealershipId: draft.dealershipId,
+          serviceTypeId: draft.serviceTypeId,
+          desiredStart: effectiveStart,
+        },
+        idempotencyKey: holdIdempotencyKey,
+      })
+      resetHoldKey()
+    } catch (err) {
+      const problem = toProblem(err)
+      if (problem?.code === 'NO_AVAILABILITY' || problem?.code === 'START_IN_PAST') {
+        setAvailabilityError(problem)
+        updateDraft({ start: null })
+      }
     }
   }
 
@@ -266,9 +296,18 @@ export function ChooseTimePage() {
                 </Text>
               )}
             </Box>
-            <Button onClick={handleContinue} disabled={!effectiveStart}>
-              Continue
-            </Button>
+            <Box style={{ textAlign: 'right' }}>
+              <Button
+                onClick={handleContinue}
+                disabled={!effectiveStart || createHoldMutation.isPending}
+                loading={createHoldMutation.isPending}
+              >
+                Hold and continue
+              </Button>
+              <Text size="xs" c="dimmed" mt={4}>
+                We hold this slot for you for 5 minutes.
+              </Text>
+            </Box>
           </Group>
         </Container>
       </Box>

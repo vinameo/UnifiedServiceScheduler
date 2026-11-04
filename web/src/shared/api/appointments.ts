@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router'
 import { api } from './client'
 import { useMe } from '../auth/useMe'
 import { setAppointment, withIfMatch } from './appointmentQuery'
@@ -6,7 +7,7 @@ import { setAppointment, withIfMatch } from './appointmentQuery'
 export interface CreateAppointmentPayload {
   dealershipId?: string
   customerId?: string
-  vehicleId: string
+  vehicleId?: string | null
   serviceTypeId: string
   desiredStart: string
   reminderOptIn?: boolean
@@ -370,6 +371,124 @@ export function useRescheduleAppointment(appointmentId: string) {
       queryClient.invalidateQueries({ queryKey: ['availability'] })
       queryClient.invalidateQueries({ queryKey: ['appointmentHistory', appointmentId] })
     },
+  })
+}
+
+export interface CreateHoldPayload {
+  dealershipId: string
+  serviceTypeId: string
+  desiredStart: string
+}
+
+export async function createHold(
+  payload: CreateHoldPayload,
+  idempotencyKey: string,
+): Promise<{ data: Appointment; etag: string }> {
+  const response = await api.post<Appointment>(
+    '/appointments',
+    {
+      dealershipId: payload.dealershipId,
+      serviceTypeId: payload.serviceTypeId,
+      desiredStart: payload.desiredStart,
+      mode: 'HOLD',
+    },
+    {
+      headers: {
+        'Idempotency-Key': idempotencyKey,
+      },
+    },
+  )
+
+  const rawEtag = response.headers['etag']
+  const etag = typeof rawEtag === 'string' ? rawEtag : ''
+
+  return {
+    data: response.data,
+    etag,
+  }
+}
+
+export function useCreateHold(options?: {
+  onSuccess?: (result: { data: Appointment; etag: string }) => void
+  onError?: (error: unknown) => void
+}) {
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  return useMutation({
+    mutationFn: ({
+      payload,
+      idempotencyKey,
+    }: {
+      payload: CreateHoldPayload
+      idempotencyKey: string
+    }) => createHold(payload, idempotencyKey),
+    onSuccess: (result) => {
+      setAppointment(queryClient, result.data, result.etag)
+      options?.onSuccess?.(result)
+      navigate(`/book/hold/${result.data.id}`)
+    },
+    onError: options?.onError,
+  })
+}
+
+export interface ConfirmHoldPayload {
+  vehicleId: string
+  reminderOptIn?: boolean
+}
+
+export async function confirmHold(
+  id: string,
+  payload: ConfirmHoldPayload,
+  idempotencyKey: string,
+  etag: string,
+): Promise<{ data: Appointment; etag: string }> {
+  const response = await api.post<Appointment>(
+    `/appointments/${id}/confirm`,
+    payload,
+    {
+      headers: {
+        'Idempotency-Key': idempotencyKey,
+        ...withIfMatch(etag),
+      },
+    },
+  )
+
+  const rawEtag = response.headers['etag']
+  const newEtag = typeof rawEtag === 'string' ? rawEtag : ''
+  return { data: response.data, etag: newEtag }
+}
+
+export function useConfirmHold(
+  appointmentId: string,
+  options?: {
+    onSuccess?: (result: { data: Appointment; etag: string }) => void
+    onError?: (error: unknown) => void
+  },
+) {
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  return useMutation({
+    mutationFn: ({
+      payload,
+      idempotencyKey,
+      etag,
+    }: {
+      payload: ConfirmHoldPayload
+      idempotencyKey: string
+      etag: string
+    }) => confirmHold(appointmentId, payload, idempotencyKey, etag),
+    onSuccess: (result) => {
+      setAppointment(queryClient, result.data, result.etag)
+      queryClient.invalidateQueries({ queryKey: ['dealershipAppointments'] })
+      queryClient.invalidateQueries({ queryKey: ['myAppointments'] })
+      queryClient.invalidateQueries({ queryKey: ['availability'] })
+      queryClient.invalidateQueries({ queryKey: ['appointmentHistory', appointmentId] })
+      options?.onSuccess?.(result)
+      navigate(`/book/confirmed/${result.data.id}`, { state: result.data })
+    },
+    onError: options?.onError,
   })
 }
 
