@@ -3,7 +3,10 @@
 namespace App\Domain\Notifications\Repositories;
 
 use App\Models\OutboxMessage;
+use App\Support\Pagination\CursorPage;
+use App\Support\Pagination\CursorPaginator;
 use Carbon\CarbonImmutable;
+use DateTimeZone;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -193,5 +196,128 @@ class OutboxMessageRepository implements OutboxMessageRepositoryInterface
         ]);
 
         return $affected > 0;
+    }
+
+    /**
+     * @return CursorPage<OutboxMessage>
+     */
+    public function listForDealership(
+        string $dealershipId,
+        ?string $status = null,
+        ?string $channel = null,
+        ?string $eventType = null,
+        ?string $appointmentId = null,
+        ?string $cursor = null,
+        int $limit = 50,
+    ): CursorPage {
+        $baseQuery = OutboxMessage::query()->where('dealership_id', $dealershipId);
+
+        if ($status !== null && $status !== '') {
+            if ($status === 'PENDING') {
+                $baseQuery->where('status', 'PENDING')->where('attempts', 0);
+            } elseif ($status === 'RETRYING') {
+                $baseQuery->where('status', 'PENDING')->where('attempts', '>', 0);
+            } else {
+                $baseQuery->where('status', $status);
+            }
+        }
+
+        if ($channel !== null && $channel !== '') {
+            $baseQuery->where('channel', $channel);
+        }
+
+        if ($eventType !== null && $eventType !== '') {
+            $baseQuery->where('event_type', $eventType);
+        }
+
+        if ($appointmentId !== null && $appointmentId !== '') {
+            $baseQuery->where('appointment_id', $appointmentId);
+        }
+
+        $total = (clone $baseQuery)->count();
+
+        $dataQuery = clone $baseQuery;
+
+        if ($cursor !== null && $cursor !== '') {
+            $decoded = CursorPaginator::decode($cursor, ['created_at', 'id']);
+            $cursorCreatedAt = (string) $decoded['created_at'];
+            $cursorId = (string) $decoded['id'];
+
+            $dataQuery->where(function ($q) use ($cursorCreatedAt, $cursorId) {
+                $q->where('created_at', '<', $cursorCreatedAt)
+                    ->orWhere(function ($sub) use ($cursorCreatedAt, $cursorId) {
+                        $sub->where('created_at', '=', $cursorCreatedAt)
+                            ->where('id', '<', $cursorId);
+                    });
+            });
+        }
+
+        /** @var Collection<int, OutboxMessage> $items */
+        $items = $dataQuery
+            ->with(['dealership', 'appointment.customer'])
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->limit($limit + 1)
+            ->get();
+
+        if ($items->count() > $limit) {
+            $pageItems = $items->slice(0, $limit);
+            $lastItem = $pageItems->last();
+            $nextCursor = $lastItem !== null ? CursorPaginator::encode([
+                'created_at' => $lastItem->created_at,
+                'id' => $lastItem->id,
+            ]) : null;
+        } else {
+            $pageItems = $items;
+            $nextCursor = null;
+        }
+
+        return new CursorPage(
+            items: $pageItems->values(),
+            nextCursor: $nextCursor,
+            limit: $limit,
+            total: $total,
+        );
+    }
+
+    /**
+     * @return array{pending: int, retrying: int, failed: int, sentToday: int}
+     */
+    public function getSummary(string $dealershipId, string $timezone = 'UTC'): array
+    {
+        try {
+            $tz = new DateTimeZone($timezone);
+        } catch (\Throwable) {
+            $tz = new DateTimeZone('UTC');
+        }
+
+        $now = CarbonImmutable::now($tz);
+        $todayStart = $now->startOfDay()->utc();
+        $todayEnd = $now->endOfDay()->utc();
+
+        $row = DB::table('outbox_messages')
+            ->where('dealership_id', $dealershipId)
+            ->selectRaw(<<<'SQL'
+                COUNT(*) FILTER (WHERE status = 'PENDING' AND attempts = 0) AS pending,
+                COUNT(*) FILTER (WHERE status = 'PENDING' AND attempts > 0) AS retrying,
+                COUNT(*) FILTER (WHERE status = 'FAILED') AS failed,
+                COUNT(*) FILTER (WHERE status = 'SENT' AND sent_at >= ? AND sent_at <= ?) AS sent_today
+            SQL, [$todayStart->toIso8601String(), $todayEnd->toIso8601String()])
+            ->first();
+
+        return [
+            'pending' => (int) ($row->pending ?? 0),
+            'retrying' => (int) ($row->retrying ?? 0),
+            'failed' => (int) ($row->failed ?? 0),
+            'sentToday' => (int) ($row->sent_today ?? 0),
+        ];
+    }
+
+    public function findForDealership(string $id, string $dealershipId): ?OutboxMessage
+    {
+        return OutboxMessage::query()
+            ->where('dealership_id', $dealershipId)
+            ->where('id', $id)
+            ->first();
     }
 }

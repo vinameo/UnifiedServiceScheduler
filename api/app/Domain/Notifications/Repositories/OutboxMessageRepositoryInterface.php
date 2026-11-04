@@ -3,6 +3,7 @@
 namespace App\Domain\Notifications\Repositories;
 
 use App\Models\OutboxMessage;
+use App\Support\Pagination\CursorPage;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -55,4 +56,31 @@ interface OutboxMessageRepositoryInterface
      * @param  array<string, mixed>  $attributes
      */
     public function insertIfAbsent(array $attributes): bool;
+
+    /**
+     * List outbox messages for a dealership with optional filters and cursor pagination.
+     *
+     * @return CursorPage<OutboxMessage>
+     */
+    public function listForDealership(
+        string $dealershipId,
+        ?string $status = null,
+        ?string $channel = null,
+        ?string $eventType = null,
+        ?string $appointmentId = null,
+        ?string $cursor = null,
+        int $limit = 50,
+    ): CursorPage;
+
+    /**
+     * Get summary counts for a dealership: pending, retrying, failed, sentToday.
+     *
+     * @return array{pending: int, retrying: int, failed: int, sentToday: int}
+     */
+    public function getSummary(string $dealershipId, string $timezone = 'UTC'): array;
+
+    /**
+     * Find a message by id scoped to dealership.
+     */
+    public function findForDealership(string $id, string $dealershipId): ?OutboxMessage;
 }

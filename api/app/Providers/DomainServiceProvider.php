@@ -69,6 +69,8 @@ use App\Domain\Notifications\Repositories\OutboxMessageRepository;
 use App\Domain\Notifications\Repositories\OutboxMessageRepositoryInterface;
 use App\Domain\Notifications\Services\OutboxRelay;
 use App\Domain\Notifications\Services\OutboxRelayInterface;
+use App\Domain\Notifications\Services\OutboxService;
+use App\Domain\Notifications\Services\OutboxServiceInterface;
 use App\Domain\Notifications\Services\OutboxWriter;
 use App\Domain\Notifications\Services\OutboxWriterInterface;
 use App\Domain\Notifications\Services\ReminderQueue;
@@ -124,6 +126,7 @@ class DomainServiceProvider extends ServiceProvider
         OutboxMessageRepositoryInterface::class => OutboxMessageRepository::class,
         OutboxRelayInterface::class => OutboxRelay::class,
         ReminderQueueInterface::class => ReminderQueue::class,
+        OutboxServiceInterface::class => OutboxService::class,
 
         // Monitoring (F08)
         MetricCounterRepositoryInterface::class => MetricCounterRepository::class,

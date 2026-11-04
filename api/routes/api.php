@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MonitoringController;
 use App\Http\Controllers\Api\V1\MyAppointmentController;
+use App\Http\Controllers\Api\V1\OutboxController;
 use App\Http\Controllers\Api\V1\ServiceTypeController;
 use App\Http\Controllers\Api\V1\TechnicianController;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -77,5 +78,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/monitoring/summary', [MonitoringController::class, 'summary'])
         ->middleware('can:admin');
     Route::get('/monitoring/errors', [MonitoringController::class, 'errors'])
+        ->middleware('can:admin');
+
+    // Notifications outbox (F11)
+    Route::get('/outbox', [OutboxController::class, 'index'])
+        ->middleware('can:admin');
+    Route::get('/outbox/summary', [OutboxController::class, 'summary'])
         ->middleware('can:admin');
 });

@@ -4,7 +4,7 @@
 
 **Blocked by:** [07-appointment-reminders](07-appointment-reminders.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/11-outbox-notifications`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-11-12
 
-- [ ] TC-11-12 (AC-11.9, INV-11.8; Integration): given Rows of D1 and D2; admin of D1; when List; summary; retry a D2 row; then Only D1 rows; counts by state (`retrying` = PENDING with attempts > 0); 404 `OUTBOX_MESSAGE_NOT_FOUND`. Test: `OutboxAdminTest::test_AC_11_9_admin_sees_own_dealership`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-11-12 (AC-11.9, INV-11.8; Integration): given Rows of D1 and D2; admin of D1; when List; summary; retry a D2 row; then Only D1 rows; counts by state (`retrying` = PENDING with attempts > 0); 404 `OUTBOX_MESSAGE_NOT_FOUND`. Test: `OutboxAdminTest::test_AC_11_9_admin_sees_own_dealership`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
