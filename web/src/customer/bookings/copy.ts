@@ -42,4 +42,18 @@ export const customerBookingsCopy = {
     byDealership: (phone: string) => `This appointment was cancelled by the dealership. Call ${phone} if you have questions.`,
     tooLate: (phone: string) => `It's less than 2 hours before your appointment. Please call ${phone} to cancel.`,
   },
+  reschedule: {
+    button: 'Change time',
+    title: 'Change appointment time',
+    current: 'Current time',
+    new: 'New time',
+    chooseDay: 'Choose a day',
+    chooseTime: 'Choose a time',
+    freeSlots: (n: number) => `${n} free slots`,
+    info: 'Your current booking is kept until the new time is secured. If someone takes the new time first, nothing changes.',
+    confirm: 'Confirm new time',
+    tooLate: (phone: string) => `It's less than 2 hours before your appointment. Please call ${phone} to change it.`,
+    submitting: 'Moving…',
+    done: (when: string) => `Appointment moved to ${when}`,
+  },
 }

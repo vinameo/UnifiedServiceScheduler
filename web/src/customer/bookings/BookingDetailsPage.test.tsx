@@ -129,7 +129,9 @@ describe('BookingDetailsPage', () => {
     const phoneLinks = screen.getAllByRole('link', { name: '028 3812 3456' })
     expect(phoneLinks[0]).toHaveAttribute('href', 'tel:02838123456')
 
-    // Cancel appointment button is available when >= 2 hours before
+    // Change time and Cancel appointment buttons are available when >= 2 hours before
+    const changeTimeButton = screen.getByRole('link', { name: 'Change time' })
+    expect(changeTimeButton).toHaveAttribute('href', `/my-bookings/${appointmentId}/change`)
     expect(screen.getByRole('button', { name: 'Cancel appointment' })).toBeInTheDocument()
 
     const newBookingButton = screen.getByRole('link', { name: 'New booking' })
@@ -156,7 +158,8 @@ describe('BookingDetailsPage', () => {
       expect(screen.getByRole('heading', { level: 3, name: 'Appointment details' })).toBeInTheDocument()
     })
 
-    // No Cancel button
+    // No Change time or Cancel button
+    expect(screen.queryByRole('link', { name: 'Change time' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cancel appointment' })).not.toBeInTheDocument()
 
     // "It's less than 2 hours before your appointment. Please call 028 3812 3456 to cancel."

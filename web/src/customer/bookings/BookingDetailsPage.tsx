@@ -237,15 +237,25 @@ export function BookingDetailsPage() {
         <Stack gap="sm" mt="xs">
           {appointment.status === 'CONFIRMED' && (
             canChange ? (
-              <Button
-                variant="outline"
-                color="red"
-                fullWidth
-                size="md"
-                onClick={() => setCancelSheetOpened(true)}
-              >
-                {customerBookingsCopy.cancel.button}
-              </Button>
+              <>
+                <Button
+                  component={Link}
+                  to={`/my-bookings/${appointment.id}/change`}
+                  fullWidth
+                  size="md"
+                >
+                  {customerBookingsCopy.reschedule.button}
+                </Button>
+                <Button
+                  variant="outline"
+                  color="red"
+                  fullWidth
+                  size="md"
+                  onClick={() => setCancelSheetOpened(true)}
+                >
+                  {customerBookingsCopy.cancel.button}
+                </Button>
+              </>
             ) : (
               <Text size="sm" c="dimmed" ta="center">
                 It's less than 2 hours before your appointment. Please call{' '}
@@ -257,12 +267,18 @@ export function BookingDetailsPage() {
                     {appointment.dealership.phone}
                   </Anchor>
                 ) : null}{' '}
-                to cancel.
+                to change or cancel.
               </Text>
             )
           )}
 
-          <Button component={Link} to="/book" fullWidth size="md">
+          <Button
+            component={Link}
+            to="/book"
+            variant={appointment.status === 'CONFIRMED' && canChange ? 'default' : 'filled'}
+            fullWidth
+            size="md"
+          >
             {customerBookingsCopy.details.newBooking}
           </Button>
         </Stack>
