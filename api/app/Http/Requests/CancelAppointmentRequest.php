@@ -42,4 +42,3 @@ class CancelAppointmentRequest extends FormRequest
         ];
     }
 }
-
