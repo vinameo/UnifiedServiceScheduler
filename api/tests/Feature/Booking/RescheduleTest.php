@@ -4,6 +4,7 @@ namespace Tests\Feature\Booking;
 
 use App\Domain\Allocation\ResourceSnapshot;
 use App\Domain\Booking\AppointmentStatus;
+use App\Domain\Booking\CancelReason;
 use App\Domain\Booking\Events\AllocationRetried;
 use App\Domain\Booking\Repositories\AllocationSnapshotRepositoryInterface;
 use App\Models\Appointment;
@@ -1239,6 +1240,263 @@ class RescheduleTest extends TestCase
             $this->assertSame(1, $rowAfter->version);
             $this->assertSame(AppointmentStatus::CONFIRMED, $rowAfter->status);
             $this->assertTrue(CarbonImmutable::parse($slot0900)->equalTo($rowAfter->start_at));
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * TC-09-03 (AC-09.3): Stale version after cancel returns 412 APPOINTMENT_MODIFIED with CANCELLED status.
+     */
+    public function test_AC_09_3_stale_version_after_cancel(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['user' => $customerUser, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-03T09:00:00+07:00';
+            $slot1400 = '2026-11-03T14:00:00+07:00';
+
+            // Given booking X
+            $bookResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookResponse->assertStatus(201);
+            $appointmentId = $bookResponse->json('id');
+
+            // Bump version to 3 (version guard requires increment by exactly 1)
+            DB::table('appointments')->where('id', $appointmentId)->update(['version' => 2]);
+            DB::table('appointments')->where('id', $appointmentId)->update(['version' => 3]);
+
+            // Advisor cancels it -> becomes version 4 and status CANCELLED
+            $cancelResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentId}/cancel", [
+                'reason' => CancelReason::CUSTOMER_BUSY->value,
+            ], [
+                'If-Match' => '"3"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $cancelResponse->assertStatus(200);
+            $this->assertSame(4, $cancelResponse->json('version'));
+            $this->assertSame('CANCELLED', $cancelResponse->json('status'));
+
+            // When Customer reschedules with If-Match "3"
+            $rescheduleResponse = $this->actingAs($customerUser)->postJson("/api/v1/appointments/{$appointmentId}/reschedule", [
+                'newStart' => $slot1400,
+            ], [
+                'If-Match' => '"3"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            // Then 412 APPOINTMENT_MODIFIED with the latest data showing status CANCELLED and ETag "4"
+            $rescheduleResponse->assertStatus(412);
+            $rescheduleResponse->assertHeader('ETag', '"4"');
+            $rescheduleResponse->assertJsonPath('code', 'APPOINTMENT_MODIFIED');
+            $rescheduleResponse->assertJsonPath('appointment.status', 'CANCELLED');
+            $rescheduleResponse->assertJsonPath('appointment.version', 4);
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * TC-09-10 (AC-09.8): Customer 2-hour rule rejects reschedules within 2 hours, allows at exactly 2 hours.
+     */
+    public function test_AC_09_8_customer_two_hour_rule(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+
+        ['user' => $customerUser, 'customer' => $customer, 'vehicle' => $vehicle1] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Toyota', 'model' => 'Vios', 'plate_key' => '51H11111', 'licence_plate' => '51H-111.11']
+        );
+        ['vehicle' => $vehicle2] = $world->customerWithVehicle(
+            $customerUser,
+            ['make' => 'Honda', 'model' => 'City', 'plate_key' => '51K22222', 'licence_plate' => '51K-222.22']
+        );
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        // Clock at 08:00
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-02T09:00:00+07:00'; // 1 hour away
+            $slot1000 = '2026-11-02T10:00:00+07:00'; // exactly 2 hours away
+            $targetSlot1 = '2026-11-02T14:00:00+07:00';
+            $targetSlot2 = '2026-11-02T15:00:00+07:00';
+
+            // 1. Create booking at 09:00 (1 hour away)
+            $resAppt1 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle1->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $resAppt1->assertStatus(201);
+            $appt1Id = $resAppt1->json('id');
+
+            // 2. Create booking at 10:00 (exactly 2 hours away)
+            $resAppt2 = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle2->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot1000,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $resAppt2->assertStatus(201);
+            $appt2Id = $resAppt2->json('id');
+
+            // When: Customer reschedules 09:00 booking (1 hour away)
+            $failResponse = $this->actingAs($customerUser)->postJson("/api/v1/appointments/{$appt1Id}/reschedule", [
+                'newStart' => $targetSlot1,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            // Then: 422 TOO_LATE_TO_RESCHEDULE with dealershipPhone
+            $failResponse->assertStatus(422);
+            $failResponse->assertJsonPath('code', 'TOO_LATE_TO_RESCHEDULE');
+            $failResponse->assertJsonPath('dealershipPhone', '028 3812 3456');
+
+            // 09:00 booking is untouched
+            /** @var Appointment $appt1Row */
+            $appt1Row = Appointment::findOrFail($appt1Id);
+            $this->assertSame(1, $appt1Row->version);
+            $this->assertSame(AppointmentStatus::CONFIRMED, $appt1Row->status);
+
+            // Advisors have no 2-hour limit (RQ §A4) and can reschedule the 09:00 booking
+            $advisorResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appt1Id}/reschedule", [
+                'newStart' => $targetSlot1,
+                'keepTechnician' => true,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $advisorResponse->assertStatus(200);
+            $this->assertSame(2, $advisorResponse->json('version'));
+
+            // When: Customer reschedules 10:00 booking (exactly 2 hours away)
+            $successResponse = $this->actingAs($customerUser)->postJson("/api/v1/appointments/{$appt2Id}/reschedule", [
+                'newStart' => $targetSlot2,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            // Then: 200 OK
+            $successResponse->assertStatus(200);
+            $successResponse->assertHeader('ETag', '"2"');
+            $this->assertSame(2, $successResponse->json('version'));
+            $this->assertSame($targetSlot2, $successResponse->json('start'));
+
+            /** @var Appointment $appt2Row */
+            $appt2Row = Appointment::findOrFail($appt2Id);
+            $this->assertSame(2, $appt2Row->version);
+            $this->assertSame('2026-11-02 15:00:00', $appt2Row->start_at->setTimezone('Asia/Ho_Chi_Minh')->format('Y-m-d H:i:s'));
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * TC-09-19 (D-09.2): Reschedule permissions.
+     * Foreman -> 403, Admin -> 403, Customer B -> 404 (scoped via findVisibleTo).
+     */
+    public function test_permissions(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        $foreman = $world->foreman();
+        $admin = $world->admin();
+
+        ['user' => $customerUserA, 'customer' => $customerA, 'vehicle' => $vehicleA] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Toyota', 'model' => 'Vios', 'plate_key' => '51H11111', 'licence_plate' => '51H-111.11']
+        );
+        ['user' => $customerUserB] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Honda', 'model' => 'City', 'plate_key' => '51K22222', 'licence_plate' => '51K-222.22']
+        );
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-03T09:00:00+07:00';
+            $newSlot = '2026-11-03T14:00:00+07:00';
+
+            // Given appointment of Customer A in dealership SGA-D7
+            $bookResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customerA->id,
+                'vehicleId' => $vehicleA->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookResponse->assertStatus(201);
+            $appointmentId = $bookResponse->json('id');
+
+            // Foreman of same dealership -> 403
+            $foremanResponse = $this->actingAs($foreman)->postJson("/api/v1/appointments/{$appointmentId}/reschedule", [
+                'newStart' => $newSlot,
+                'keepTechnician' => true,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $foremanResponse->assertStatus(403);
+
+            // Admin of same dealership -> 403
+            $adminResponse = $this->actingAs($admin)->postJson("/api/v1/appointments/{$appointmentId}/reschedule", [
+                'newStart' => $newSlot,
+                'keepTechnician' => true,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $adminResponse->assertStatus(403);
+
+            // Customer B -> 404 (scoped via findVisibleTo)
+            $customerBResponse = $this->actingAs($customerUserB)->postJson("/api/v1/appointments/{$appointmentId}/reschedule", [
+                'newStart' => $newSlot,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $customerBResponse->assertStatus(404);
+            $customerBResponse->assertJsonPath('code', 'APPOINTMENT_NOT_FOUND');
+
+            // Customer A can reschedule own booking -> 200
+            $customerAResponse = $this->actingAs($customerUserA)->postJson("/api/v1/appointments/{$appointmentId}/reschedule", [
+                'newStart' => $newSlot,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $customerAResponse->assertStatus(200);
 
             $this->assertNoOverlappingAllocations();
         } finally {
