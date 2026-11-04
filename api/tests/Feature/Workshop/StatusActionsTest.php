@@ -196,4 +196,103 @@ class StatusActionsTest extends TestCase
         $resCheckedIn->assertStatus(422)
             ->assertJsonPath('code', 'INVALID_STATUS_TRANSITION');
     }
+
+    public function test_AC_12_2_completed_cannot_check_in(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+
+        $tech = $world->technician('An');
+        $bay = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:30:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $completed = AppointmentFactory::create(
+                dealership: $world->dealership,
+                technician: $tech,
+                bay: $bay,
+                start: $now->subHours(2),
+                end: $now->subHour(),
+                serviceType: $service,
+                status: AppointmentStatus::COMPLETED,
+            );
+
+            $response = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$completed->id}/check-in",
+                [],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ]
+            );
+
+            $response->assertStatus(422)
+                ->assertJsonPath('code', 'INVALID_STATUS_TRANSITION');
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_12_5_check_in_only_on_service_day(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+
+        $tech = $world->technician('An');
+        $bay = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:30:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            // Tomorrow's booking
+            $tomorrow = $now->addDay();
+            $appointment = AppointmentFactory::create(
+                dealership: $world->dealership,
+                technician: $tech,
+                bay: $bay,
+                start: $tomorrow->setTime(9, 0),
+                end: $tomorrow->setTime(10, 0),
+                serviceType: $service,
+                status: AppointmentStatus::CONFIRMED,
+            );
+
+            // Attempt check-in today -> 422 NOT_SERVICE_DAY
+            $response = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointment->id}/check-in",
+                [],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ]
+            );
+
+            $response->assertStatus(422)
+                ->assertJsonPath('code', 'NOT_SERVICE_DAY');
+
+            // Travel to tomorrow (service day) -> check-in succeeds with 200
+            $serviceDay = $tomorrow->setTime(8, 45);
+            CarbonImmutable::setTestNow($serviceDay);
+
+            $successResponse = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointment->id}/check-in",
+                [],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ]
+            );
+
+            $successResponse->assertStatus(200)
+                ->assertHeader('ETag', '"2"')
+                ->assertJsonPath('status', 'CHECKED_IN')
+                ->assertJsonPath('version', 2);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
 }
