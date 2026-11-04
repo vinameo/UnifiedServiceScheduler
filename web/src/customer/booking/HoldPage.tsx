@@ -23,7 +23,7 @@ import { useMe } from '../../shared/auth/useMe'
 import { formatInZone } from '../../shared/format/time'
 import { useIdempotencyKey } from '../../shared/idempotency/useIdempotencyKey'
 import { useCountdown } from '../../shared/time/useCountdown'
-import { useBookingDraft, type NewVehicleDraft } from './BookingDraftContext'
+import { useBookingDraft, type BookingDraft, type NewVehicleDraft } from './BookingDraftContext'
 
 function formatDuration(minutes: number): string {
   if (minutes >= 120 && minutes % 60 === 0) {
@@ -42,18 +42,30 @@ export function HoldPage() {
   const appointment = appointmentData?.appointment
   const etag = appointmentData?.etag ?? ''
 
+  const [hasServerExpired, setHasServerExpired] = useState(false)
+  const countdown = useCountdown(appointment?.expiresAt)
+  const isExpired = hasServerExpired || countdown.expired
+  const isUnderOneMinute = !isExpired && countdown.totalSeconds < 60
+
   useEffect(() => {
     if (isNavigatingAway.current) return
+    if (isExpired) return
     if (isAppointmentLoading) return
     if (!id || isAppointmentError || (appointment && appointment.status !== 'HELD')) {
       navigate('/book/time', { replace: true })
     }
-  }, [id, appointment, isAppointmentLoading, isAppointmentError, navigate])
+  }, [id, appointment, isAppointmentLoading, isAppointmentError, isExpired, navigate])
 
   const { data: me } = useMe()
   const { data: vehicles = [] } = useMyVehicles()
 
-  const [selectedVehicleMode, setSelectedVehicleMode] = useState<string | null>(draft.vehicleId ?? null)
+  const [selectedVehicleMode, setSelectedVehicleMode] = useState<string | null>(() => {
+    if (draft.vehicleId) return draft.vehicleId
+    if (draft.newVehicle && (draft.newVehicle.licencePlate || draft.newVehicle.make || draft.newVehicle.model)) {
+      return 'new'
+    }
+    return null
+  })
   const currentVehicleMode = selectedVehicleMode ?? (vehicles.length > 0 ? vehicles[0].id : 'new')
 
   const [newVehicle, setNewVehicle] = useState<NewVehicleDraft>(() => ({
@@ -67,11 +79,6 @@ export function HoldPage() {
   const [plateError, setPlateError] = useState<string | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [hasServerExpired, setHasServerExpired] = useState(false)
-
-  const countdown = useCountdown(appointment?.expiresAt)
-  const isExpired = hasServerExpired || countdown.expired
-  const isUnderOneMinute = !isExpired && countdown.totalSeconds < 60
 
   // Idempotency keys
   const vehicleActionInput = { mode: 'vehicle', ...newVehicle }
@@ -92,7 +99,15 @@ export function HoldPage() {
 
   const handlePickAgain = () => {
     isNavigatingAway.current = true
-    updateDraft({ start: null })
+    const patch: Partial<BookingDraft> = { start: null }
+    if (currentVehicleMode === 'new') {
+      patch.vehicleId = null
+      patch.newVehicle = newVehicle
+    } else if (currentVehicleMode) {
+      patch.vehicleId = currentVehicleMode
+      patch.newVehicle = null
+    }
+    updateDraft(patch)
     navigate('/book/time')
   }
 
@@ -157,14 +172,16 @@ export function HoldPage() {
     } catch (err) {
       const problem = toProblem(err)
       if (problem?.code === 'HOLD_EXPIRED' || problem?.status === 410) {
+        setBookingError(null)
         setHasServerExpired(true)
         return
       }
 
       if (problem?.status === 412) {
-        const extra = problem.extra as Record<string, unknown> | undefined
-        const apptExtra = extra?.appointment as { status?: string } | undefined
-        if (apptExtra?.status === 'EXPIRED') {
+        const appt = ((problem as Record<string, unknown>).appointment ??
+          (problem.extra as Record<string, unknown> | undefined)?.appointment) as { status?: string } | undefined
+        if (appt?.status === 'EXPIRED') {
+          setBookingError(null)
           setHasServerExpired(true)
           return
         }
@@ -314,7 +331,10 @@ export function HoldPage() {
             value={currentVehicleMode}
             onChange={(val) => {
               setSelectedVehicleMode(val)
-              updateDraft({ vehicleId: val === 'new' ? null : val })
+              updateDraft({
+                vehicleId: val === 'new' ? null : val,
+                newVehicle: val === 'new' ? newVehicle : null,
+              })
             }}
           >
             <Stack gap="xs">
@@ -343,8 +363,9 @@ export function HoldPage() {
                 value={newVehicle.licencePlate}
                 onChange={(e) => {
                   const val = e.currentTarget.value
-                  setNewVehicle((prev) => ({ ...prev, licencePlate: val }))
-                  updateDraft({ newVehicle: { ...newVehicle, licencePlate: val } })
+                  const updated = { ...newVehicle, licencePlate: val }
+                  setNewVehicle(updated)
+                  updateDraft({ newVehicle: updated })
                 }}
                 error={plateError}
               />
@@ -356,8 +377,9 @@ export function HoldPage() {
                 value={newVehicle.make}
                 onChange={(e) => {
                   const val = e.currentTarget.value
-                  setNewVehicle((prev) => ({ ...prev, make: val }))
-                  updateDraft({ newVehicle: { ...newVehicle, make: val } })
+                  const updated = { ...newVehicle, make: val }
+                  setNewVehicle(updated)
+                  updateDraft({ newVehicle: updated })
                 }}
               />
               <TextInput
@@ -368,8 +390,9 @@ export function HoldPage() {
                 value={newVehicle.model}
                 onChange={(e) => {
                   const val = e.currentTarget.value
-                  setNewVehicle((prev) => ({ ...prev, model: val }))
-                  updateDraft({ newVehicle: { ...newVehicle, model: val } })
+                  const updated = { ...newVehicle, model: val }
+                  setNewVehicle(updated)
+                  updateDraft({ newVehicle: updated })
                 }}
               />
               <NumberInput
@@ -381,8 +404,9 @@ export function HoldPage() {
                 value={newVehicle.year ?? ''}
                 onChange={(val) => {
                   const numVal = typeof val === 'number' ? val : null
-                  setNewVehicle((prev) => ({ ...prev, year: numVal }))
-                  updateDraft({ newVehicle: { ...newVehicle, year: numVal } })
+                  const updated = { ...newVehicle, year: numVal }
+                  setNewVehicle(updated)
+                  updateDraft({ newVehicle: updated })
                 }}
               />
             </Stack>
