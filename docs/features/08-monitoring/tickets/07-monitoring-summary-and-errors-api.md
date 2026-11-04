@@ -4,7 +4,7 @@
 
 **Blocked by:** [06-api-events](06-api-events.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/08-monitoring`
 
@@ -12,8 +12,8 @@
 
 **Test cases:** TC-08-04, TC-08-09, TC-08-10, TC-08-17
 
-- [ ] TC-08-04 (AC-08.4; Integration): given Advisor, foreman, customer; when `GET /monitoring/summary?range=1h`; then 403 for all three; admin 200. Test: `MonitoringApiTest::test_AC_08_4_admin_only`.
-- [ ] TC-08-09 (AC-08.8, D-08.9–08.11; Integration): given Admin of D1; `api_events` of D1 (2), D2 (3), NULL (1); 2 PENDING outbox rows; when `summary?range=24h`; then `recentErrors` has 3 rows (D1 + NULL); `outbox.pending 2`; `database.status UP`, `connectionsMax > 0`. Test: `MonitoringApiTest::test_AC_08_8_summary_is_scoped`.
-- [ ] TC-08-10 (AC-08.9; Integration): given An error with correlation X; when `errors?correlationId=X`; then 1 row. Test: `…::test_AC_08_9_search_by_correlation_id`.
-- [ ] TC-08-17 (API §B4; Integration): when Each row of the adversarial input table; then As the table. Test: `MonitoringAdversarialInputTest`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-08-04 (AC-08.4; Integration): given Advisor, foreman, customer; when `GET /monitoring/summary?range=1h`; then 403 for all three; admin 200. Test: `MonitoringApiTest::test_AC_08_4_admin_only`.
+- [x] TC-08-09 (AC-08.8, D-08.9–08.11; Integration): given Admin of D1; `api_events` of D1 (2), D2 (3), NULL (1); 2 PENDING outbox rows; when `summary?range=24h`; then `recentErrors` has 3 rows (D1 + NULL); `outbox.pending 2`; `database.status UP`, `connectionsMax > 0`. Test: `MonitoringApiTest::test_AC_08_8_summary_is_scoped`.
+- [x] TC-08-10 (AC-08.9; Integration): given An error with correlation X; when `errors?correlationId=X`; then 1 row. Test: `…::test_AC_08_9_search_by_correlation_id`.
+- [x] TC-08-17 (API §B4; Integration): when Each row of the adversarial input table; then As the table. Test: `MonitoringAdversarialInputTest`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

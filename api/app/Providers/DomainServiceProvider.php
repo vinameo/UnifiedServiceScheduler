@@ -56,6 +56,8 @@ use App\Domain\Monitoring\Services\ApiEventService;
 use App\Domain\Monitoring\Services\ApiEventServiceInterface;
 use App\Domain\Monitoring\Services\MetricCounterService;
 use App\Domain\Monitoring\Services\MetricCounterServiceInterface;
+use App\Domain\Monitoring\Services\MonitoringService;
+use App\Domain\Monitoring\Services\MonitoringServiceInterface;
 use App\Domain\Monitoring\Services\RequestMetrics;
 use App\Domain\Notifications\Services\OutboxWriter;
 use App\Domain\Notifications\Services\OutboxWriterInterface;
@@ -111,6 +113,7 @@ class DomainServiceProvider extends ServiceProvider
         MetricCounterServiceInterface::class => MetricCounterService::class,
         ApiEventRepositoryInterface::class => ApiEventRepository::class,
         ApiEventServiceInterface::class => ApiEventService::class,
+        MonitoringServiceInterface::class => MonitoringService::class,
     ];
 
     public function register(): void
