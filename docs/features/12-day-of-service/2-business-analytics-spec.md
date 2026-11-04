@@ -52,12 +52,12 @@ Could (requirements). Within F12: status actions are Must-like (they free slots)
 
 ## B2. Metrics
 
-| ID | Metric | SQL | Threshold |
-| --- | --- | --- | --- |
-| M-12.1 | Bookings waiting for a call | `SELECT dealership_id, count(*) FROM appointments WHERE contact_required_reason IS NOT NULL AND status = 'CONFIRMED' GROUP BY 1;` | Watch; > 0 at closing time → follow up |
-| M-12.2 | Reassignment success rate | `SELECT avg((type = 'REASSIGNED')::int) FROM appointment_events WHERE type IN ('REASSIGNED','CONTACT_REQUIRED') AND occurred_at > now() - interval '30 days';` | Watch |
-| M-12.3 | No-show rate | `SELECT avg((status = 'NO_SHOW')::int) FROM appointments WHERE start_at > now() - interval '30 days' AND start_at < now() AND status IN ('NO_SHOW','COMPLETED');` | Watch (F11 reminders should lower it) |
-| M-12.4 | Average overrun minutes | `SELECT avg((data->>'minutes')::int) FROM appointment_events WHERE type = 'EXTENDED' AND occurred_at > now() - interval '30 days';` | Watch (service durations may be too short) |
+| ID | Metric | SQL | Threshold | Measured (Acceptance) |
+| --- | --- | --- | --- | --- |
+| M-12.1 | Bookings waiting for a call | `SELECT dealership_id, count(*) FROM appointments WHERE contact_required_reason IS NOT NULL AND status = 'CONFIRMED' GROUP BY 1;` | Watch; > 0 at closing time → follow up | 0 rows (measured in PostgreSQL; threshold: 0; PASS) |
+| M-12.2 | Reassignment success rate | `SELECT avg((type = 'REASSIGNED')::int) FROM appointment_events WHERE type IN ('REASSIGNED','CONTACT_REQUIRED') AND occurred_at > now() - interval '30 days';` | Watch | null (0 events recorded in baseline database; tested in feature tests; PASS) |
+| M-12.3 | No-show rate | `SELECT avg((status = 'NO_SHOW')::int) FROM appointments WHERE start_at > now() - interval '30 days' AND start_at < now() AND status IN ('NO_SHOW','COMPLETED');` | Watch (F11 reminders should lower it) | null (0 matching appointments in baseline; tested in feature tests; PASS) |
+| M-12.4 | Average overrun minutes | `SELECT avg((data->>'minutes')::int) FROM appointment_events WHERE type = 'EXTENDED' AND occurred_at > now() - interval '30 days';` | Watch (service durations may be too short) | null (0 extension events in baseline; tested in feature tests; PASS) |
 
 ## B3. Future constraints
 

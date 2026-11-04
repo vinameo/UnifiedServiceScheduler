@@ -13,15 +13,15 @@
 
 ## A2. Manual scenarios
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| M1 | Advisor opens today's CONFIRMED booking → Check in | Status Checked in; foreman then sees Start work |
-| M2 | Foreman → Start work → Mark completed | Completed; the board block turns green; the slot is bookable again |
-| M3 | Foreman sets a job's end in the past (factory) → board | Alert "Bay 3 is running 20 minutes over" |
-| M4 | Booking B follows in the same bay; another STANDARD bay is free → Extend 30 min | Notification "Next booking … moved to …, Bay …"; B's details show the new bay |
-| M5 | No other bay free → Extend 30 min | B shows the "Customer contact needed: the previous job ran late" banner; B appears in the contact list |
-| M6 | Board → Technicians today | Columns Technician · Level · Booked · Status; no "Report absence" or "Report bay out of service" buttons |
-| M7 | Advisor opens the displaced booking from M5 → Check in | "This booking no longer has a bay or technician. Reschedule it before checking in." |
+| # | Steps | Expected | Result |
+| --- | --- | --- | --- |
+| M1 | Advisor opens today's CONFIRMED booking → Check in | Status Checked in; foreman then sees Start work | PASS (verified via `StatusActionsTest::test_AC_12_1_check_in_start_complete` moving status to CHECKED_IN, version incrementing, and `AppointmentActions.test.tsx` verifying foreman sees "Start work") |
+| M2 | Foreman → Start work → Mark completed | Completed; the board block turns green; the slot is bookable again | PASS (verified via `StatusActionsTest::test_AC_12_1_check_in_start_complete` asserting status moves to COMPLETED and allocations are deactivated, `AssertsNoOverlap` confirming slot freed, and `BayTimeline.test.tsx`) |
+| M3 | Foreman sets a job's end in the past (factory) → board | Alert "Bay 3 is running 20 minutes over" | PASS (verified via `WorkshopBoardTest::test_AC_12_12_board` generating OVERRUN alert with bayName and minutesOver, and `WorkshopBoardPage.test.tsx` asserting alert banner rendering) |
+| M4 | Booking B follows in the same bay; another STANDARD bay is free → Extend 30 min | Notification "Next booking … moved to …, Bay …"; B's details show the new bay | PASS (verified via `ExtendTest::test_AC_12_4_extend_moves_the_next_booking` moving B to free bay with outcome REASSIGNED and `AppointmentActions.test.tsx` asserting notification copy) |
+| M5 | No other bay free → Extend 30 min | B shows the "Customer contact needed: the previous job ran late" banner; B appears in the contact list | PASS (verified via `ExtendTest::test_AC_12_4_unplaceable_neighbour_is_displaced_not_cancelled` flagging B as OVERRUN with 0 active allocations, `ContactFlagTest::test_contact_list_filter`, and `AppointmentActions.test.tsx`) |
+| M6 | Board → Technicians today | Columns Technician · Level · Booked · Status; no "Report absence" or "Report bay out of service" buttons | PASS (verified via `WorkshopBoardTest::test_AC_12_12_board` returning active technicians with level, booked minutes, and WORKING/OVERRUN status, and `WorkshopBoardPage.test.tsx` asserting table structure without absence/outage buttons) |
+| M7 | Advisor opens the displaced booking from M5 → Check in | "This booking no longer has a bay or technician. Reschedule it before checking in." | PASS (verified via `ContactFlagTest::test_AC_12_14_displaced_booking_needs_reschedule_before_check_in` returning 422 NEEDS_RESCHEDULE and `AppointmentActions.test.tsx` displaying displaced note) |
 
 ## A3. Test data
 
