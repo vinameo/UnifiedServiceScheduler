@@ -22,6 +22,10 @@ use App\Domain\Workshop\Exceptions\NeedsReschedule;
 use App\Domain\Workshop\Exceptions\NoShowBeforeStart;
 use App\Domain\Workshop\Exceptions\NotServiceDay;
 use App\Models\Appointment;
+use App\Models\Bay;
+use App\Models\Dealership;
+use App\Models\DealershipOpeningHour;
+use App\Models\Technician;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use DateTimeZone;
@@ -358,5 +362,197 @@ class WorkshopService implements WorkshopServiceInterface
                 throw $e;
             }
         }
+    }
+
+    public function board(Dealership $dealership, string $date, CarbonImmutable $now): WorkshopBoardData
+    {
+        $tz = new DateTimeZone($dealership->timezone ?: 'UTC');
+        $fromLocal = CarbonImmutable::parse($date.' 00:00:00', $tz);
+        $toLocal = $fromLocal->addDay();
+        $fromUtc = $fromLocal->utc();
+        $toUtc = $toLocal->utc();
+
+        $weekday = (int) $fromLocal->isoWeekday();
+        $oh = DealershipOpeningHour::query()
+            ->where('dealership_id', $dealership->id)
+            ->where('weekday', $weekday)
+            ->first();
+
+        $opensAt = $oh !== null ? substr((string) $oh->opens_at, 0, 5) : '08:00';
+        $closesAt = $oh !== null ? substr((string) $oh->closes_at, 0, 5) : '17:00';
+
+        $bays = Bay::query()
+            ->where('dealership_id', $dealership->id)
+            ->where('active', true)
+            ->orderBy('code')
+            ->get();
+
+        $technicians = Technician::query()
+            ->where('dealership_id', $dealership->id)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
+
+        $appointments = Appointment::query()
+            ->where('dealership_id', $dealership->id)
+            ->where('start_at', '>=', $fromUtc)
+            ->where('start_at', '<', $toUtc)
+            ->with(['customer', 'serviceType', 'technician', 'bay'])
+            ->orderBy('start_at', 'asc')
+            ->get();
+
+        /** @var array<string, list<array<string, mixed>>> $baysBlocks */
+        $baysBlocks = [];
+        /** @var list<array<string, mixed>> $displaced */
+        $displaced = [];
+        /** @var list<array<string, mixed>> $alerts */
+        $alerts = [];
+        /** @var array<string, int> $technicianBookedMinutes */
+        $technicianBookedMinutes = [];
+        /** @var array<string, bool> $technicianHasOverrun */
+        $technicianHasOverrun = [];
+
+        foreach ($appointments as $apt) {
+            // Cancelled and no-show appointments are hidden from the board (D-12.13)
+            if ($apt->status === AppointmentStatus::CANCELLED || $apt->status === AppointmentStatus::NO_SHOW) {
+                continue;
+            }
+
+            // Expired holds are hidden
+            if ($apt->status === AppointmentStatus::HELD && $apt->expires_at !== null) {
+                if (CarbonImmutable::parse($apt->expires_at)->isBefore($now)) {
+                    continue;
+                }
+            }
+
+            $startLocal = CarbonImmutable::parse($apt->start_at)->setTimezone($tz);
+            $endLocal = CarbonImmutable::parse($apt->end_at)->setTimezone($tz);
+            $durationMinutes = (int) CarbonImmutable::parse($apt->start_at)->diffInMinutes(CarbonImmutable::parse($apt->end_at));
+
+            // Displaced bookings (D-12.9, D-12.13)
+            if ($apt->contact_required_reason !== null) {
+                $displaced[] = [
+                    'appointmentId' => $apt->id,
+                    'reference' => $apt->reference,
+                    'start' => $startLocal->toIso8601String(),
+                    'end' => $endLocal->toIso8601String(),
+                    'reason' => (string) $apt->contact_required_reason,
+                ];
+
+                continue;
+            }
+
+            $endUtc = CarbonImmutable::parse($apt->end_at);
+            $isOverrun = $apt->status === AppointmentStatus::IN_PROGRESS && $endUtc->isBefore($now);
+            $overrunMinutes = $isOverrun ? (int) $endUtc->diffInMinutes($now) : 0;
+
+            $block = [
+                'appointmentId' => $apt->id,
+                'version' => $apt->version,
+                'reference' => $apt->reference,
+                'status' => $apt->status->value,
+                'start' => $startLocal->toIso8601String(),
+                'end' => $endLocal->toIso8601String(),
+                'customerName' => $apt->customer !== null ? $apt->customer->full_name : '',
+                'serviceName' => $apt->serviceType !== null ? $apt->serviceType->name : '',
+                'technicianName' => $apt->technician !== null ? $apt->technician->name : '',
+                'overrunMinutes' => $isOverrun ? $overrunMinutes : 0,
+            ];
+
+            if ($apt->bay_id !== '') {
+                $baysBlocks[$apt->bay_id][] = $block;
+            }
+
+            if ($isOverrun) {
+                $nextBooking = $this->findNextBooking($dealership->id, $apt, $toUtc, $tz);
+
+                $alerts[] = [
+                    'type' => 'OVERRUN',
+                    'appointmentId' => $apt->id,
+                    'version' => $apt->version,
+                    'bayName' => $apt->bay !== null ? $apt->bay->name : '',
+                    'minutesOver' => $overrunMinutes,
+                    'customerName' => $apt->customer !== null ? $apt->customer->full_name : '',
+                    'serviceName' => $apt->serviceType !== null ? $apt->serviceType->name : '',
+                    'technicianName' => $apt->technician !== null ? $apt->technician->name : '',
+                    'nextBooking' => $nextBooking,
+                ];
+            }
+
+            if ($apt->technician_id !== '') {
+                $techId = $apt->technician_id;
+                $technicianBookedMinutes[$techId] = ($technicianBookedMinutes[$techId] ?? 0) + $durationMinutes;
+                if ($isOverrun) {
+                    $technicianHasOverrun[$techId] = true;
+                }
+            }
+        }
+
+        $bayList = [];
+        foreach ($bays as $bay) {
+            $bayList[] = [
+                'id' => $bay->id,
+                'code' => $bay->code,
+                'name' => $bay->name,
+                'bayType' => $bay->bay_type->value,
+                'blocks' => $baysBlocks[$bay->id] ?? [],
+            ];
+        }
+
+        $techList = [];
+        foreach ($technicians as $tech) {
+            $techId = (string) $tech->id;
+            $hasOverrun = $technicianHasOverrun[$techId] ?? false;
+
+            $techList[] = [
+                'id' => $tech->id,
+                'name' => $tech->name,
+                'level' => $tech->level,
+                'bookedMinutes' => $technicianBookedMinutes[$techId] ?? 0,
+                'status' => $hasOverrun ? 'OVERRUN' : 'WORKING',
+            ];
+        }
+
+        return new WorkshopBoardData(
+            date: $date,
+            now: $now->setTimezone($tz)->toIso8601String(),
+            opensAt: $opensAt,
+            closesAt: $closesAt,
+            bays: $bayList,
+            displaced: $displaced,
+            technicians: $techList,
+            alerts: $alerts,
+        );
+    }
+
+    /**
+     * @return array{appointmentId: string, start: string, status: string}|null
+     */
+    private function findNextBooking(string $dealershipId, Appointment $current, CarbonImmutable $toUtc, DateTimeZone $tz): ?array
+    {
+        /** @var Appointment|null $next */
+        $next = Appointment::query()
+            ->where('dealership_id', $dealershipId)
+            ->where('id', '!=', $current->id)
+            ->where(function ($query) use ($current) {
+                $query->where('bay_id', $current->bay_id);
+                if ($current->technician_id !== '') {
+                    $query->orWhere('technician_id', $current->technician_id);
+                }
+            })
+            ->where('start_at', '>=', $current->end_at)
+            ->where('start_at', '<', $toUtc)
+            ->orderBy('start_at', 'asc')
+            ->first();
+
+        if ($next === null) {
+            return null;
+        }
+
+        return [
+            'appointmentId' => $next->id,
+            'start' => CarbonImmutable::parse($next->start_at)->setTimezone($tz)->toIso8601String(),
+            'status' => $next->status->value,
+        ];
     }
 }
