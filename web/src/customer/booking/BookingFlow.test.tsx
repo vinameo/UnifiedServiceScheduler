@@ -3,7 +3,6 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderRoute } from '../../test/render'
 import { apiMock } from '../../test/apiMock'
-import type { CreateAppointmentPayload } from '../../shared/api/appointments'
 import type { CreateVehiclePayload } from '../../shared/api/vehicles'
 
 describe('BookingFlow (TC-02-27, TC-02-32)', () => {
@@ -137,7 +136,8 @@ describe('BookingFlow (TC-02-27, TC-02-32)', () => {
     const newVehicleId = '0192d444-0000-7000-8000-000000000004'
     const newAppointmentId = '0192d555-0000-7000-8000-000000000005'
     let addedVehiclePayload: CreateVehiclePayload | null = null
-    let appointmentPayload: CreateAppointmentPayload | null = null
+    let holdPayload: Record<string, unknown> | null = null
+    let confirmPayload: Record<string, unknown> | null = null
 
     apiMock.get('/me/vehicles', [
       200,
@@ -159,51 +159,77 @@ describe('BookingFlow (TC-02-27, TC-02-32)', () => {
       ]
     })
 
+    const holdAppointment = {
+      id: newAppointmentId,
+      reference: 'APT-20261102-0088',
+      status: 'HELD',
+      start: '2026-11-02T09:00:00+07:00',
+      end: '2026-11-02T10:00:00+07:00',
+      expiresAt: '2026-11-02T08:05:00Z',
+      version: 1,
+      dealership: {
+        id: dealershipId,
+        name: 'Saigon Auto',
+        branchName: 'District 7',
+        timezone: 'Asia/Ho_Chi_Minh',
+        phone: '028 3812 3456',
+      },
+      serviceType: {
+        id: serviceId,
+        name: 'Oil change',
+        durationMinutes: 60,
+      },
+      vehicle: null,
+      customer: {
+        id: customerId,
+        fullName: 'Nguyễn Văn Hùng',
+        phone: '0903123218',
+      },
+      technician: {
+        id: 'tech-1',
+        name: 'Nguyễn Văn An',
+      },
+      bay: {
+        id: 'bay-1',
+        name: 'Bay 1',
+      },
+      reminderOptIn: true,
+      source: 'CUSTOMER',
+      createdAt: '2026-11-02T08:00:00+07:00',
+    }
+
+    apiMock.get(`/appointments/${newAppointmentId}`, [
+      200,
+      holdAppointment,
+      { etag: '"1"' },
+    ])
+
     apiMock.post('/appointments', (config) => {
-      appointmentPayload = JSON.parse(config.data as string)
+      holdPayload = JSON.parse(config.data as string)
       return [
         201,
+        holdAppointment,
+        { etag: '"1"', date: 'Mon, 02 Nov 2026 08:00:00 GMT' },
+      ]
+    })
+
+    apiMock.post(`/appointments/${newAppointmentId}/confirm`, (config) => {
+      confirmPayload = JSON.parse(config.data as string)
+      return [
+        200,
         {
-          id: newAppointmentId,
-          reference: 'APT-20261102-0088',
+          ...holdAppointment,
           status: 'CONFIRMED',
-          start: '2026-11-02T09:00:00+07:00',
-          end: '2026-11-02T10:00:00+07:00',
-          version: 1,
-          dealership: {
-            id: dealershipId,
-            name: 'Saigon Auto',
-            branchName: 'District 7',
-            timezone: 'Asia/Ho_Chi_Minh',
-            phone: '028 3812 3456',
-          },
-          serviceType: {
-            id: serviceId,
-            name: 'Oil change',
-            durationMinutes: 60,
-          },
+          expiresAt: null,
+          version: 2,
           vehicle: {
             id: newVehicleId,
             licencePlate: '51G-999.99',
             make: 'Honda',
             model: 'City',
           },
-          customer: {
-            id: customerId,
-            fullName: 'Nguyễn Văn Hùng',
-            phone: '0903123218',
-          },
-          technician: {
-            id: 'tech-1',
-            name: 'Nguyễn Văn An',
-          },
-          bay: {
-            id: 'bay-1',
-            name: 'Bay 1',
-          },
-          source: 'CUSTOMER',
-          createdAt: '2026-11-02T08:00:00+07:00',
         },
+        { etag: '"2"' },
       ]
     })
 
@@ -227,12 +253,13 @@ describe('BookingFlow (TC-02-27, TC-02-32)', () => {
     const slot0900 = await screen.findByRole('button', { name: '09:00' })
     await user.click(slot0900)
 
-    const step2Continue = screen.getByRole('button', { name: 'Continue' })
+    const step2Continue = screen.getByRole('button', { name: /Hold and continue/i })
     await user.click(step2Continue)
 
-    // STEP 3: Contact details & add vehicle
+    // STEP 3: Contact details & add vehicle (Hold page)
     await waitFor(() => {
       expect(screen.getByText('Step 3 of 3 · Contact details')).toBeInTheDocument()
+      expect(screen.getByText('Slot held for you')).toBeInTheDocument()
     })
 
     // Fill in new vehicle form
@@ -251,16 +278,19 @@ describe('BookingFlow (TC-02-27, TC-02-32)', () => {
     // Assert API calls
     await waitFor(() => {
       expect(addedVehiclePayload).not.toBeNull()
-      expect(appointmentPayload).not.toBeNull()
+      expect(holdPayload).not.toBeNull()
+      expect(confirmPayload).not.toBeNull()
     })
     expect(addedVehiclePayload!.licencePlate).toBe('51G-999.99')
     expect(addedVehiclePayload!.make).toBe('Honda')
     expect(addedVehiclePayload!.model).toBe('City')
 
-    expect(appointmentPayload!.dealershipId).toBe(dealershipId)
-    expect(appointmentPayload!.vehicleId).toBe(newVehicleId)
-    expect(appointmentPayload!.serviceTypeId).toBe(serviceId)
-    expect(appointmentPayload!.desiredStart).toBe('2026-11-02T09:00:00+07:00')
+    expect(holdPayload!.dealershipId).toBe(dealershipId)
+    expect(holdPayload!.serviceTypeId).toBe(serviceId)
+    expect(holdPayload!.desiredStart).toBe('2026-11-02T09:00:00+07:00')
+    expect(holdPayload!.mode).toBe('HOLD')
+
+    expect(confirmPayload!.vehicleId).toBe(newVehicleId)
 
     // Assert confirmed screen
     await waitFor(() => {
@@ -300,7 +330,7 @@ describe('BookingFlow (TC-02-27, TC-02-32)', () => {
       },
     ])
 
-    // Seed draft at step 3 in sessionStorage
+    // Seed draft at step 2 in sessionStorage
     sessionStorage.setItem(
       'customer_booking_draft',
       JSON.stringify({
@@ -313,39 +343,35 @@ describe('BookingFlow (TC-02-27, TC-02-32)', () => {
       })
     )
 
-    // Mount at /book/details
-    const { unmount } = renderRoute('/book/details')
+    // Mount at /book/time
+    const { unmount } = renderRoute('/book/time')
 
     await waitFor(() => {
-      expect(screen.getByText('Step 3 of 3 · Contact details')).toBeInTheDocument()
-      expect(screen.getByText('Toyota Vios · 51H-123.45')).toBeInTheDocument()
+      expect(screen.getByText('Step 2 of 3 · Choose date and time')).toBeInTheDocument()
+      expect(screen.getByText(/Your choice Mon 2 Nov, 09:00/)).toBeInTheDocument()
     })
 
     // Unmount and remount (simulating F5)
     unmount()
-    renderRoute('/book/details')
+    renderRoute('/book/time')
 
-    await waitFor(() => {
-      expect(screen.getByText('Step 3 of 3 · Contact details')).toBeInTheDocument()
-      expect(screen.getByText('Toyota Vios · 51H-123.45')).toBeInTheDocument()
-    })
-
-    // Click confirm appointment
-    const user = userEvent.setup()
-    const confirmBtn = screen.getByRole('button', { name: 'Confirm appointment' })
-    await user.click(confirmBtn)
-
-    // On 409 NO_AVAILABILITY: redirected back to /book/time with Alert and unselected time
     await waitFor(() => {
       expect(screen.getByText('Step 2 of 3 · Choose date and time')).toBeInTheDocument()
+      expect(screen.getByText(/Your choice Mon 2 Nov, 09:00/)).toBeInTheDocument()
     })
 
-    // Alert heading for NO_BAY_AVAILABLE
-    expect(screen.getByText(/slot was just taken/i)).toBeInTheDocument()
+    // Click Hold and continue
+    const user = userEvent.setup()
+    const holdBtn = screen.getByRole('button', { name: /Hold and continue/i })
+    await user.click(holdBtn)
 
-    // Continue button must be disabled (old time unselected)
-    const continueBtn = screen.getByRole('button', { name: 'Continue' })
-    expect(continueBtn).toBeDisabled()
+    // On 409 NO_AVAILABILITY: Alert shown and time unselected
+    await waitFor(() => {
+      expect(screen.getByText(/slot was just taken/i)).toBeInTheDocument()
+    })
+
+    // Hold and continue button must be disabled (old time unselected)
+    expect(screen.getByRole('button', { name: /Hold and continue/i })).toBeDisabled()
   })
 })
 

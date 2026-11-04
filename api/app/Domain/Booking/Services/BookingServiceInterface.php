@@ -29,4 +29,13 @@ interface BookingServiceInterface
         bool $keepTechnician,
         CarbonImmutable $now,
     ): Appointment;
+
+    public function confirmHold(
+        User $actor,
+        string $appointmentId,
+        int $expectedVersion,
+        string $vehicleId,
+        bool $reminderOptIn,
+        CarbonImmutable $now,
+    ): Appointment;
 }

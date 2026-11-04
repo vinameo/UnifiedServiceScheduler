@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\User;
+use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
@@ -27,6 +29,7 @@ class TestingRequest extends Command
                             {--header=* : Individual header in Key:Value format}
                             {--start-at= : Unix timestamp with microsecond precision to wait for}
                             {--wait-until= : Alias for --start-at}
+                            {--now= : ISO timestamp for app clock}
                             {--cache-store= : Cache store driver to use}';
 
     /**
@@ -52,6 +55,13 @@ class TestingRequest extends Command
         $cacheStore = $this->option('cache-store');
         if (is_string($cacheStore) && $cacheStore !== '') {
             config(['cache.default' => $cacheStore]);
+        }
+
+        $nowOption = $this->option('now');
+        if ($nowOption !== null && $nowOption !== '') {
+            $parsedNow = CarbonImmutable::parse((string) $nowOption);
+            CarbonImmutable::setTestNow($parsedNow);
+            Carbon::setTestNow($parsedNow);
         }
 
         $target = $this->option('start-at') ?: $this->option('wait-until');

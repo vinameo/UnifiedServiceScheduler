@@ -27,14 +27,16 @@ class CreateAppointmentRequest extends FormRequest
         $user = $this->user();
         $isCustomer = $user !== null && $user->role === Role::CUSTOMER;
 
+        $isHold = $this->input('mode') === 'HOLD';
+
         return [
             'customerId' => $isCustomer ? ['nullable'] : ['required', 'uuid'],
             'dealershipId' => $isCustomer ? ['required', 'uuid'] : ['nullable'],
-            'vehicleId' => ['required', 'uuid'],
+            'vehicleId' => $isHold ? ['nullable', 'uuid'] : ['required', 'uuid'],
             'serviceTypeId' => ['required', 'uuid'],
             'desiredStart' => ['required', 'string'],
             'reminderOptIn' => ['nullable', 'boolean'],
-            'mode' => ['nullable', 'in:CONFIRM'],
+            'mode' => ['nullable', 'in:CONFIRM,HOLD'],
         ];
     }
 
@@ -107,7 +109,7 @@ class CreateAppointmentRequest extends FormRequest
         return new CreateBookingInput(
             dealershipId: $isCustomer ? $this->input('dealershipId') : null,
             customerId: ! $isCustomer ? $this->input('customerId') : null,
-            vehicleId: (string) $this->input('vehicleId'),
+            vehicleId: $this->input('vehicleId') !== null ? (string) $this->input('vehicleId') : null,
             serviceTypeId: (string) $this->input('serviceTypeId'),
             desiredStart: $desiredStart,
             reminderOptIn: $this->has('reminderOptIn') ? (bool) $this->input('reminderOptIn') : true,

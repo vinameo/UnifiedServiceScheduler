@@ -4,7 +4,7 @@
 
 **Blocked by:** [04-confirm-rules](04-confirm-rules.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/10-temporary-hold`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-10-16
 
-- [ ] TC-10-16 (AC-10.12; Web component): given Fake timers; fake API confirm → 410; when Let the countdown reach 0; separately confirm and get 410; also 412 with `status EXPIRED`; then Expired state with the copy; "Pick a time again" → `/book/time` with the vehicle kept in the draft. Test: `…/HoldPage.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-10-16 (AC-10.12; Web component): given Fake timers; fake API confirm → 410; when Let the countdown reach 0; separately confirm and get 410; also 412 with `status EXPIRED`; then Expired state with the copy; "Pick a time again" → `/book/time` with the vehicle kept in the draft. Test: `…/HoldPage.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

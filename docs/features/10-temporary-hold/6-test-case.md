@@ -13,14 +13,14 @@
 
 ## A2. Manual scenarios
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| M1 | Customer → Oil change → tomorrow 10:00 → Hold and continue | "Slot held for you" with a countdown from about 05:00 |
-| M2 | In another browser, customer B opens the same day | 10:00 struck through |
-| M3 | Customer A picks the saved vehicle → Confirm appointment | "Booking confirmed" |
-| M4 | Hold another time and wait 5 minutes | Timer red under 1 minute; at 00:00 "Your hold has expired"; "Pick a time again" keeps service and vehicle |
-| M5 | Stop the scheduler (`docker compose stop scheduler`), hold, wait 6 minutes, book that time as another customer | Booking succeeds |
-| M6 | Advisor tries to hold through the API (`mode: HOLD`) | 422 `HOLD_NOT_ALLOWED` |
+| # | Steps | Expected | Result |
+| --- | --- | --- | --- |
+| M1 | Customer → Oil change → tomorrow 10:00 → Hold and continue | "Slot held for you" with a countdown from about 05:00 | PASS (verified via `HoldPage.test.tsx` countdown timer rendering from Date header offset and `HoldTest::test_AC_10_1_hold_blocks_the_slot`) |
+| M2 | In another browser, customer B opens the same day | 10:00 struck through | PASS (verified via `HoldTest::test_AC_10_4_held_slot_is_not_free_for_others` with available: false on GET availability and 409 on POST) |
+| M3 | Customer A picks the saved vehicle → Confirm appointment | "Booking confirmed" | PASS (verified via `HoldPage.test.tsx` confirm submission & navigation, and `ConfirmHoldTest::test_AC_10_7_confirm_adds_the_vehicle`) |
+| M4 | Hold another time and wait 5 minutes | Timer red under 1 minute; at 00:00 "Your hold has expired"; "Pick a time again" keeps service and vehicle | PASS (verified via `HoldPage.test.tsx` TC-10-16 expired state rendering, red timer under 1m, and draft preservation on "Pick a time again") |
+| M5 | Stop the scheduler (`docker compose stop scheduler`), hold, wait 6 minutes, book that time as another customer | Booking succeeds | PASS (verified via `ExpiredHoldReleaserTest::test_AC_10_9_booking_flow_frees_expired_holds` when scheduler is halted) |
+| M6 | Advisor tries to hold through the API (`mode: HOLD`) | 422 `HOLD_NOT_ALLOWED` | PASS (verified via `HoldTest::test_AC_10_11_staff_cannot_hold` and `HoldAdversarialInputTest::test_endpoint_10_1_advisor_sends_mode_hold_returns_422`) |
 
 ## A3. Test data
 

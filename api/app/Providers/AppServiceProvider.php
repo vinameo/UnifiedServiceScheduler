@@ -97,6 +97,22 @@ class AppServiceProvider extends ServiceProvider
             return false;
         });
 
+        Gate::define('confirm-hold', function (User $user, ?Appointment $appointment = null): bool {
+            $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
+
+            if ($role !== Role::CUSTOMER) {
+                return false;
+            }
+
+            if ($appointment === null) {
+                return true;
+            }
+
+            $customerId = $user->customer->id ?? $user->customer()->value('id');
+
+            return $customerId !== null && $appointment->customer_id === $customerId;
+        });
+
         Gate::define('search-customers', function (User $user): bool {
             $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
 

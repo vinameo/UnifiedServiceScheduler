@@ -125,4 +125,6 @@ return [
 
     'idempotency_ttl_hours' => (int) env('IDEMPOTENCY_TTL_HOURS', 24),
 
+    'hold_minutes' => (int) env('HOLD_MINUTES', 5),
+
 ];

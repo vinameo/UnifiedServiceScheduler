@@ -2,11 +2,13 @@
 
 namespace App\Domain\Booking\Repositories;
 
+use App\Domain\Allocation\TimeRange;
 use App\Domain\Auth\Role;
 use App\Domain\Booking\AppointmentStatus;
 use App\Domain\Booking\Events\AppointmentModifiedDetected;
 use App\Domain\Booking\Exceptions\AppointmentModified;
 use App\Domain\Booking\Exceptions\AppointmentNotFound;
+use App\Domain\Booking\ResourceType;
 use App\Models\Appointment;
 use App\Models\AppointmentEvent;
 use App\Models\Dealership;
@@ -336,5 +338,60 @@ class AppointmentRepository implements AppointmentRepositoryInterface
             ->where('appointment_id', $appointmentId)
             ->where('active', true)
             ->exists();
+    }
+
+    /**
+     * @return Collection<int, Appointment>
+     */
+    public function findExpiredHoldsBlocking(
+        string $dealershipId,
+        TimeRange $range,
+        ?string $vehicleId,
+        CarbonImmutable $now,
+    ): Collection {
+        $query = Appointment::query()
+            ->join('resource_allocations as ra', 'ra.appointment_id', '=', 'appointments.id')
+            ->where('ra.active', true)
+            ->whereRaw("ra.period && tstzrange(?, ?, '[)')", [
+                $range->start->toIso8601String(),
+                $range->end->toIso8601String(),
+            ])
+            ->where('appointments.status', AppointmentStatus::HELD->value)
+            ->where('appointments.expires_at', '<=', $now)
+            ->where(function ($q) use ($dealershipId, $vehicleId) {
+                $q->where('ra.dealership_id', $dealershipId);
+                if ($vehicleId !== null && $vehicleId !== '') {
+                    $q->orWhere(function ($sub) use ($vehicleId) {
+                        $sub->where('ra.resource_type', ResourceType::VEHICLE->value)
+                            ->where('ra.resource_id', $vehicleId);
+                    });
+                }
+            })
+            ->select('appointments.*')
+            ->distinct()
+            ->orderBy('appointments.expires_at', 'asc');
+
+        /** @var Collection<int, Appointment> $results */
+        $results = $query->get();
+
+        return $results;
+    }
+
+    /**
+     * @return Collection<int, Appointment>
+     */
+    public function findExpiredHolds(
+        CarbonImmutable $now,
+        int $limit = 500,
+    ): Collection {
+        /** @var Collection<int, Appointment> $results */
+        $results = Appointment::query()
+            ->where('status', AppointmentStatus::HELD->value)
+            ->where('expires_at', '<=', $now)
+            ->orderBy('expires_at', 'asc')
+            ->limit($limit)
+            ->get();
+
+        return $results;
     }
 }
