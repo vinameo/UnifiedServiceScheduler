@@ -12,6 +12,7 @@ import { BookingDetailsPage } from './customer/bookings/BookingDetailsPage'
 import { StaffLayout } from './staff/StaffLayout'
 import { StaffSignInPage } from './staff/auth/StaffSignInPage'
 import { MasterDataPage } from './staff/master-data/MasterDataPage'
+import { MonitoringPage } from './staff/monitoring/MonitoringPage'
 import { NewBookingPage } from './staff/booking/NewBookingPage'
 import { BookingConfirmedPage } from './staff/booking/BookingConfirmedPage'
 import { AppointmentListPage } from './staff/appointments/AppointmentListPage'
@@ -73,6 +74,14 @@ export const routes = [
         element: (
           <RequireRole roles={['ADMIN']} signInPath="/staff/sign-in">
             <MasterDataPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'monitoring',
+        element: (
+          <RequireRole roles={['ADMIN']} signInPath="/staff/sign-in">
+            <MonitoringPage />
           </RequireRole>
         ),
       },
