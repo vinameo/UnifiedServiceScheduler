@@ -82,4 +82,18 @@ interface AppointmentRepositoryInterface
      * @return Collection<int, Appointment>
      */
     public function findReminderCandidates(CarbonImmutable $from, CarbonImmutable $to): Collection;
+
+    /**
+     * Find active bookings on the given technician or bay whose period overlaps [startAt, endAt),
+     * excluding the given appointment. Ordered by id ASC (lock order).
+     *
+     * @return list<Appointment>
+     */
+    public function findActiveNeighbours(
+        string $appointmentId,
+        string $technicianId,
+        string $bayId,
+        CarbonImmutable $startAt,
+        CarbonImmutable $endAt,
+    ): array;
 }

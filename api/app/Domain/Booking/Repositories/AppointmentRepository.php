@@ -413,4 +413,49 @@ class AppointmentRepository implements AppointmentRepositoryInterface
 
         return $results;
     }
+
+    /**
+     * @return list<Appointment>
+     */
+    public function findActiveNeighbours(
+        string $appointmentId,
+        string $technicianId,
+        string $bayId,
+        CarbonImmutable $startAt,
+        CarbonImmutable $endAt,
+    ): array {
+        /** @var list<string> $ids */
+        $ids = DB::table('appointments as a')
+            ->join('resource_allocations as ra', 'ra.appointment_id', '=', 'a.id')
+            ->where('ra.active', true)
+            ->where(function ($query) use ($technicianId, $bayId): void {
+                $query->where(function ($q) use ($technicianId): void {
+                    $q->where('ra.resource_type', ResourceType::TECHNICIAN->value)
+                        ->where('ra.resource_id', $technicianId);
+                })->orWhere(function ($q) use ($bayId): void {
+                    $q->where('ra.resource_type', ResourceType::BAY->value)
+                        ->where('ra.resource_id', $bayId);
+                });
+            })
+            ->whereRaw("ra.period && tstzrange(?, ?, '[)')", [
+                $startAt->utc()->toIso8601String(),
+                $endAt->utc()->toIso8601String(),
+            ])
+            ->where('a.id', '<>', $appointmentId)
+            ->select('a.id')
+            ->distinct()
+            ->orderBy('a.id', 'asc')
+            ->pluck('id')
+            ->all();
+
+        if (empty($ids)) {
+            return [];
+        }
+
+        return array_values(Appointment::query()
+            ->whereIn('id', $ids)
+            ->orderBy('id', 'asc')
+            ->get()
+            ->all());
+    }
 }

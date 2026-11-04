@@ -4,6 +4,8 @@ namespace Tests\Feature\Workshop;
 
 use App\Domain\Booking\AppointmentEventType;
 use App\Domain\Booking\AppointmentStatus;
+use App\Domain\Workshop\Services\WorkshopService;
+use App\Models\Appointment;
 use App\Models\AppointmentEvent;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
@@ -21,6 +23,7 @@ class ExtendTest extends TestCase
 
     protected function tearDown(): void
     {
+        WorkshopService::$beforeAttemptHook = null;
         CarbonImmutable::setTestNow();
         parent::tearDown();
     }
@@ -314,5 +317,343 @@ class ExtendTest extends TestCase
             ]
         );
         $resConfirmed->assertStatus(422)->assertJsonPath('code', 'INVALID_STATUS_TRANSITION');
+    }
+
+    /**
+     * TC-12-04 (AC-12.4; Integration):
+     * given X IN_PROGRESS K1 09:00–10:00 (now 10:05); Y CONFIRMED K1 10:00–11:00 (Dũng); K2 free 10:00–11:30;
+     * when Extend X by 30;
+     * then 200; X ends 10:30 on K1; Y REASSIGNED to K2 same time; affected lists Y.
+     */
+    public function test_AC_12_4_extend_moves_the_next_booking(): void
+    {
+        $world = World::saigonD7();
+        $foreman = $world->foreman();
+
+        $techAn = $world->technician('An');
+        $techDung = $world->technician('Dũng');
+        $bayK1 = $world->bay('K1');
+        $bayK2 = $world->bay('K2');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $customerDataX = $world->customerWithVehicle();
+        $customerDataY = $world->customerWithVehicle();
+
+        $now = CarbonImmutable::parse('2026-11-02 10:05:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        $startX = CarbonImmutable::parse('2026-11-02 09:00:00', 'Asia/Ho_Chi_Minh');
+        $endX = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+        $expectedNewEndX = CarbonImmutable::parse('2026-11-02 10:30:00', 'Asia/Ho_Chi_Minh');
+
+        $appointmentX = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $techAn,
+            bay: $bayK1,
+            start: $startX,
+            end: $endX,
+            serviceType: $service,
+            customer: $customerDataX['customer'],
+            vehicle: $customerDataX['vehicle'],
+            status: AppointmentStatus::IN_PROGRESS,
+        );
+
+        $startY = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+        $endY = CarbonImmutable::parse('2026-11-02 11:00:00', 'Asia/Ho_Chi_Minh');
+
+        $appointmentY = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $techDung,
+            bay: $bayK1,
+            start: $startY,
+            end: $endY,
+            serviceType: $service,
+            customer: $customerDataY['customer'],
+            vehicle: $customerDataY['vehicle'],
+            status: AppointmentStatus::CONFIRMED,
+        );
+
+        $versionX = $appointmentX->version;
+        $versionY = $appointmentY->version;
+
+        $response = $this->actingAs($foreman)->postJson(
+            "/api/v1/appointments/{$appointmentX->id}/extend",
+            ['minutes' => 30],
+            [
+                'If-Match' => sprintf('"%d"', $versionX),
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]
+        );
+
+        $response->assertStatus(200);
+
+        $data = $response->json('data');
+        $this->assertNotNull($data);
+        $this->assertSame(
+            $expectedNewEndX->toIso8601String(),
+            CarbonImmutable::parse($data['appointment']['end'])->toIso8601String()
+        );
+
+        // Affected should list Y as REASSIGNED to K2 with technician Dũng
+        $this->assertCount(1, $data['affected']);
+        $affectedY = $data['affected'][0];
+        $this->assertSame($appointmentY->id, $affectedY['appointmentId']);
+        $this->assertSame($appointmentY->reference, $affectedY['reference']);
+        $this->assertSame('REASSIGNED', $affectedY['outcome']);
+        $this->assertSame($techDung->id, $affectedY['technician']['id']);
+        $this->assertSame($bayK2->id, $affectedY['bay']['id']);
+
+        // Check DB state for X: ends at 10:30 on K1
+        $appointmentX->refresh();
+        $this->assertSame($versionX + 1, $appointmentX->version);
+        $this->assertSame($bayK1->id, $appointmentX->bay_id);
+        $this->assertSame(
+            $expectedNewEndX->utc()->toIso8601String(),
+            CarbonImmutable::parse($appointmentX->end_at)->utc()->toIso8601String()
+        );
+
+        // Check DB state for Y: same time, moved to bay K2
+        $appointmentY->refresh();
+        $this->assertSame($versionY + 1, $appointmentY->version);
+        $this->assertSame(AppointmentStatus::CONFIRMED, $appointmentY->status);
+        $this->assertSame($techDung->id, $appointmentY->technician_id);
+        $this->assertSame($bayK2->id, $appointmentY->bay_id);
+        $this->assertSame(
+            $startY->utc()->toIso8601String(),
+            CarbonImmutable::parse($appointmentY->start_at)->utc()->toIso8601String()
+        );
+        $this->assertSame(
+            $endY->utc()->toIso8601String(),
+            CarbonImmutable::parse($appointmentY->end_at)->utc()->toIso8601String()
+        );
+
+        // Active allocations: Y has 3 active allocations on (Dũng, K2, vehicle)
+        $allocationsY = DB::table('resource_allocations')
+            ->where('appointment_id', $appointmentY->id)
+            ->where('active', true)
+            ->get();
+        $this->assertCount(3, $allocationsY);
+        $bayAllocY = $allocationsY->firstWhere('resource_type', 'BAY');
+        $this->assertNotNull($bayAllocY);
+        $this->assertSame($bayK2->id, $bayAllocY->resource_id);
+
+        // REASSIGNED event recorded for Y
+        $reassignedEvents = AppointmentEvent::where('appointment_id', $appointmentY->id)
+            ->where('type', AppointmentEventType::REASSIGNED->value)
+            ->get();
+        $this->assertCount(1, $reassignedEvents);
+
+        $this->assertNoOverlappingAllocations();
+        $this->assertM042Passes();
+    }
+
+    /**
+     * TC-12-09 (AC-12.4, D-12.9; Integration):
+     * given As TC-12-04 but no other QUICK bay free;
+     * when Extend X by 30;
+     * then 200; Y still CONFIRMED, contact_required_reason OVERRUN, 0 active allocations;
+     * X holds K1 to 10:30; M-04.2 (with exception) 0 rows.
+     */
+    public function test_AC_12_4_unplaceable_neighbour_is_displaced_not_cancelled(): void
+    {
+        $world = World::saigonD7();
+        // Deactivate all bays except K1, K3, K4 (so no other QUICK bay is available)
+        $world->onlyBays(['K1', 'K3', 'K4']);
+
+        $foreman = $world->foreman();
+
+        $techAn = $world->technician('An');
+        $techDung = $world->technician('Dũng');
+        $bayK1 = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $customerDataX = $world->customerWithVehicle();
+        $customerDataY = $world->customerWithVehicle();
+
+        $now = CarbonImmutable::parse('2026-11-02 10:05:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        $startX = CarbonImmutable::parse('2026-11-02 09:00:00', 'Asia/Ho_Chi_Minh');
+        $endX = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+        $expectedNewEndX = CarbonImmutable::parse('2026-11-02 10:30:00', 'Asia/Ho_Chi_Minh');
+
+        $appointmentX = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $techAn,
+            bay: $bayK1,
+            start: $startX,
+            end: $endX,
+            serviceType: $service,
+            customer: $customerDataX['customer'],
+            vehicle: $customerDataX['vehicle'],
+            status: AppointmentStatus::IN_PROGRESS,
+        );
+
+        $startY = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+        $endY = CarbonImmutable::parse('2026-11-02 11:00:00', 'Asia/Ho_Chi_Minh');
+
+        $appointmentY = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $techDung,
+            bay: $bayK1,
+            start: $startY,
+            end: $endY,
+            serviceType: $service,
+            customer: $customerDataY['customer'],
+            vehicle: $customerDataY['vehicle'],
+            status: AppointmentStatus::CONFIRMED,
+        );
+
+        $versionX = $appointmentX->version;
+        $versionY = $appointmentY->version;
+
+        $response = $this->actingAs($foreman)->postJson(
+            "/api/v1/appointments/{$appointmentX->id}/extend",
+            ['minutes' => 30],
+            [
+                'If-Match' => sprintf('"%d"', $versionX),
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]
+        );
+
+        $response->assertStatus(200);
+
+        $data = $response->json('data');
+        $this->assertNotNull($data);
+        $this->assertSame(
+            $expectedNewEndX->toIso8601String(),
+            CarbonImmutable::parse($data['appointment']['end'])->toIso8601String()
+        );
+
+        // Affected should list Y as CONTACT_REQUIRED
+        $this->assertCount(1, $data['affected']);
+        $affectedY = $data['affected'][0];
+        $this->assertSame($appointmentY->id, $affectedY['appointmentId']);
+        $this->assertSame($appointmentY->reference, $affectedY['reference']);
+        $this->assertSame('CONTACT_REQUIRED', $affectedY['outcome']);
+        $this->assertArrayNotHasKey('technician', $affectedY);
+        $this->assertArrayNotHasKey('bay', $affectedY);
+
+        // Check DB state for X: holds K1 to 10:30
+        $appointmentX->refresh();
+        $this->assertSame($versionX + 1, $appointmentX->version);
+        $this->assertSame(
+            $expectedNewEndX->utc()->toIso8601String(),
+            CarbonImmutable::parse($appointmentX->end_at)->utc()->toIso8601String()
+        );
+
+        // Check DB state for Y: still CONFIRMED, contact_required_reason OVERRUN, 0 active allocations
+        $appointmentY->refresh();
+        $this->assertSame($versionY + 1, $appointmentY->version);
+        $this->assertSame(AppointmentStatus::CONFIRMED, $appointmentY->status);
+        $this->assertSame('OVERRUN', $appointmentY->contact_required_reason);
+
+        $activeAllocationsYCount = DB::table('resource_allocations')
+            ->where('appointment_id', $appointmentY->id)
+            ->where('active', true)
+            ->count();
+        $this->assertSame(0, $activeAllocationsYCount);
+
+        // CONTACT_REQUIRED event recorded for Y
+        $contactEvents = AppointmentEvent::where('appointment_id', $appointmentY->id)
+            ->where('type', AppointmentEventType::CONTACT_REQUIRED->value)
+            ->get();
+        $this->assertCount(1, $contactEvents);
+        /** @var AppointmentEvent $contactEvent */
+        $contactEvent = $contactEvents->first();
+        $this->assertSame('OVERRUN', $contactEvent->data['reason'] ?? null);
+
+        $this->assertNoOverlappingAllocations();
+        $this->assertM042Passes();
+    }
+
+    /**
+     * TC-12-10 (AC-12.8, INV-12.4; Integration):
+     * given As TC-12-04; a test hook changes Y (version bump) right after the neighbour read on the first attempt;
+     * when Extend;
+     * then Attempt 2 succeeds with fresh data (200); never a state where X is extended but Y still holds K1.
+     */
+    public function test_AC_12_8_neighbour_change_triggers_one_retry(): void
+    {
+        $world = World::saigonD7();
+        $foreman = $world->foreman();
+
+        $techAn = $world->technician('An');
+        $techDung = $world->technician('Dũng');
+        $bayK1 = $world->bay('K1');
+        $bayK2 = $world->bay('K2');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $customerDataX = $world->customerWithVehicle();
+        $customerDataY = $world->customerWithVehicle();
+
+        $now = CarbonImmutable::parse('2026-11-02 10:05:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        $startX = CarbonImmutable::parse('2026-11-02 09:00:00', 'Asia/Ho_Chi_Minh');
+        $endX = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+
+        $appointmentX = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $techAn,
+            bay: $bayK1,
+            start: $startX,
+            end: $endX,
+            serviceType: $service,
+            customer: $customerDataX['customer'],
+            vehicle: $customerDataX['vehicle'],
+            status: AppointmentStatus::IN_PROGRESS,
+        );
+
+        $startY = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+        $endY = CarbonImmutable::parse('2026-11-02 11:00:00', 'Asia/Ho_Chi_Minh');
+
+        $appointmentY = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $techDung,
+            bay: $bayK1,
+            start: $startY,
+            end: $endY,
+            serviceType: $service,
+            customer: $customerDataY['customer'],
+            vehicle: $customerDataY['vehicle'],
+            status: AppointmentStatus::CONFIRMED,
+        );
+
+        $hookRunCount = 0;
+        WorkshopService::$beforeAttemptHook = function (int $attempt, Appointment $job, array $neighbours) use (&$hookRunCount, $appointmentY): void {
+            $hookRunCount++;
+            if ($attempt === 1 && ! empty($neighbours)) {
+                // Simulate concurrent change on neighbour Y before attempt 1's transaction
+                DB::table('appointments')
+                    ->where('id', $appointmentY->id)
+                    ->update([
+                        'version' => DB::raw('version + 1'),
+                        'updated_at' => CarbonImmutable::now(),
+                    ]);
+            }
+        };
+
+        $response = $this->actingAs($foreman)->postJson(
+            "/api/v1/appointments/{$appointmentX->id}/extend",
+            ['minutes' => 30],
+            [
+                'If-Match' => sprintf('"%d"', $appointmentX->version),
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]
+        );
+
+        $response->assertStatus(200);
+        $this->assertSame(2, $hookRunCount);
+
+        // Verify X and Y were both updated cleanly
+        $appointmentX->refresh();
+        $appointmentY->refresh();
+
+        $this->assertSame($bayK1->id, $appointmentX->bay_id);
+        $this->assertSame($bayK2->id, $appointmentY->bay_id);
+
+        $this->assertNoOverlappingAllocations();
+        $this->assertM042Passes();
     }
 }
