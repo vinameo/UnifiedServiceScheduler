@@ -36,7 +36,7 @@ class CreateAppointmentRequest extends FormRequest
             'serviceTypeId' => ['required', 'uuid'],
             'desiredStart' => ['required', 'string'],
             'reminderOptIn' => ['nullable', 'boolean'],
-            'mode' => $isCustomer ? ['nullable', 'in:CONFIRM,HOLD'] : ['nullable', 'in:CONFIRM'],
+            'mode' => ['nullable', 'in:CONFIRM,HOLD'],
         ];
     }
 

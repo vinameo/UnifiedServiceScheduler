@@ -202,9 +202,9 @@ class CreateBookingAdversarialInputTest extends TestCase
                 201,
                 null,
             ],
-            'mode HOLD before F10' => [
+            'mode invalid LOCK' => [
                 'ADVISOR',
-                ['mode' => 'HOLD'],
+                ['mode' => 'LOCK'],
                 [],
                 400,
                 'VALIDATION_ERROR',
