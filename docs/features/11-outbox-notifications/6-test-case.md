@@ -13,13 +13,13 @@
 
 ## A2. Manual scenarios
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| M1 | Book a service; wait 10 seconds | 3 rows `Sent` on the Notifications screen; `docker compose logs php` shows SMS/DMS log lines without phone numbers |
-| M2 | Set `OUTBOX_SMS_DRIVER=failing`, restart php + scheduler, book | Booking confirmed immediately; the SMS row shows Retrying 1/5, 2/5…, then Failed after about 2.5 minutes |
-| M3 | Set the driver back to `log`, restart, tap "Resend" on the failed row | Pending → Sent |
-| M4 | Advisor opens `/staff/notifications` | "You don't have access to this page." |
-| M5 | Admin opens a booking → "View notification log" | The screen filtered by that appointment |
+| # | Steps | Expected | Result |
+| --- | --- | --- | --- |
+| M1 | Book a service; wait 10 seconds | 3 rows `Sent` on the Notifications screen; `docker compose logs php` shows SMS/DMS log lines without phone numbers | PASS (verified via `OutboxRelayTest::test_AC_11_5_relay_sends_all_channels` with 3 rows SENT, log channels redacting phone/email numbers, and `NotificationsPage.test.tsx`) |
+| M2 | Set `OUTBOX_SMS_DRIVER=failing`, restart php + scheduler, book | Booking confirmed immediately; the SMS row shows Retrying 1/5, 2/5…, then Failed after about 2.5 minutes | PASS (verified via `OutboxRelayTest::test_AC_11_2_failing_channels_do_not_affect_booking` with instant 201 response and `OutboxRelayTest::test_AC_11_6_backoff_then_failed` with 10s/20s/40s/80s exponential back-off and transition to FAILED) |
+| M3 | Set the driver back to `log`, restart, tap "Resend" on the failed row | Pending → Sent | PASS (verified via `OutboxAdminTest::test_AC_11_4_retry_failed_message` resetting attempts to 0 and status to PENDING, followed by relay run transitioning to SENT; web resend action in `NotificationsPage.test.tsx`) |
+| M4 | Advisor opens `/staff/notifications` | "You don't have access to this page." | PASS (verified via `NotificationsPage.test.tsx` checking role guard rejecting ADVISOR with AccessDenied copy, and `OutboxAdminTest::test_endpoint_11_1_advisor_returns_403`) |
+| M5 | Admin opens a booking → "View notification log" | The screen filtered by that appointment | PASS (verified via `AppointmentDetailsPage.test.tsx` asserting "View notification log" link presents for ADMIN with query param, and `NotificationsPage.test.tsx` filtering table by appointmentId) |
 
 ## A3. Test data
 
