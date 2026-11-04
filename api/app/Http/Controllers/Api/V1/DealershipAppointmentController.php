@@ -25,6 +25,7 @@ class DealershipAppointmentController extends Controller
             statuses: $request->statuses(),
             limit: $request->limit(),
             cursor: $request->cursor(),
+            contactRequired: $request->contactRequired(),
         );
 
         return response()->json([

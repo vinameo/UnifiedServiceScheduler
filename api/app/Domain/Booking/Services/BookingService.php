@@ -330,6 +330,7 @@ final readonly class BookingService implements BookingServiceInterface
             'cancel_note' => $note !== null ? trim($note) : null,
             'cancelled_at' => $now,
             'cancelled_by_user_id' => $actor->id,
+            'contact_required_reason' => null,
         ];
 
         $outbox = $appointment->status === AppointmentStatus::CONFIRMED

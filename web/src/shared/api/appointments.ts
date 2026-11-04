@@ -213,7 +213,8 @@ export interface PaginatedAppointments {
 
 export interface DealershipAppointmentFilters {
   dealershipId?: string
-  date: string
+  date?: string
+  contactRequired?: boolean
   technicianId?: string
   bayId?: string
   status?: string
@@ -225,8 +226,12 @@ export async function getDealershipAppointments(
   filters: Omit<DealershipAppointmentFilters, 'dealershipId'>,
   cursor?: string | null,
 ): Promise<PaginatedAppointments> {
-  const params: Record<string, unknown> = {
-    date: filters.date,
+  const params: Record<string, unknown> = {}
+  if (filters.date) {
+    params.date = filters.date
+  }
+  if (filters.contactRequired) {
+    params.contactRequired = filters.contactRequired
   }
   if (filters.technicianId) {
     params.technicianId = filters.technicianId
@@ -262,7 +267,7 @@ export function useDealershipAppointments(filters: DealershipAppointmentFilters)
       getDealershipAppointments(dealershipId!, filters, pageParam),
     getNextPageParam: (lastPage) => lastPage.meta.nextCursor ?? undefined,
     refetchInterval: 60 * 1000,
-    enabled: Boolean(dealershipId && filters.date),
+    enabled: Boolean(dealershipId && (filters.date || filters.contactRequired)),
   })
 }
 

@@ -94,37 +94,55 @@ class AppointmentRepository implements AppointmentRepositoryInterface
      */
     public function listForDealershipDay(
         Dealership $dealership,
-        string $date,
+        ?string $date = null,
         ?string $technicianId = null,
         ?string $bayId = null,
         ?array $statuses = null,
         int $limit = 50,
         ?string $cursor = null,
+        bool $contactRequired = false,
     ): CursorPage {
         $tzName = $dealership->timezone ?? 'UTC';
         $tz = new DateTimeZone($tzName);
 
-        $fromLocal = CarbonImmutable::parse($date.' 00:00:00', $tz);
-        $toLocal = $fromLocal->addDay();
-        $fromUtc = $fromLocal->utc();
-        $toUtc = $toLocal->utc();
+        if ($contactRequired) {
+            $fromLocal = ($date !== null && $date !== '')
+                ? CarbonImmutable::parse($date.' 00:00:00', $tz)
+                : CarbonImmutable::now($tz)->startOfDay();
+            $fromUtc = $fromLocal->utc();
 
-        $defaultStatuses = [
-            AppointmentStatus::HELD->value,
-            AppointmentStatus::CONFIRMED->value,
-            AppointmentStatus::CHECKED_IN->value,
-            AppointmentStatus::IN_PROGRESS->value,
-            AppointmentStatus::COMPLETED->value,
-            AppointmentStatus::CANCELLED->value,
-            AppointmentStatus::NO_SHOW->value,
-        ];
-        $effectiveStatuses = ! empty($statuses) ? $statuses : $defaultStatuses;
+            $effectiveStatuses = ! empty($statuses)
+                ? $statuses
+                : [AppointmentStatus::CONFIRMED->value];
 
-        $baseQuery = Appointment::query()
-            ->where('dealership_id', $dealership->id)
-            ->where('start_at', '>=', $fromUtc)
-            ->where('start_at', '<', $toUtc)
-            ->whereIn('status', $effectiveStatuses);
+            $baseQuery = Appointment::query()
+                ->where('dealership_id', $dealership->id)
+                ->where('start_at', '>=', $fromUtc)
+                ->whereNotNull('contact_required_reason')
+                ->whereIn('status', $effectiveStatuses);
+        } else {
+            $fromLocal = CarbonImmutable::parse((string) $date.' 00:00:00', $tz);
+            $toLocal = $fromLocal->addDay();
+            $fromUtc = $fromLocal->utc();
+            $toUtc = $toLocal->utc();
+
+            $defaultStatuses = [
+                AppointmentStatus::HELD->value,
+                AppointmentStatus::CONFIRMED->value,
+                AppointmentStatus::CHECKED_IN->value,
+                AppointmentStatus::IN_PROGRESS->value,
+                AppointmentStatus::COMPLETED->value,
+                AppointmentStatus::CANCELLED->value,
+                AppointmentStatus::NO_SHOW->value,
+            ];
+            $effectiveStatuses = ! empty($statuses) ? $statuses : $defaultStatuses;
+
+            $baseQuery = Appointment::query()
+                ->where('dealership_id', $dealership->id)
+                ->where('start_at', '>=', $fromUtc)
+                ->where('start_at', '<', $toUtc)
+                ->whereIn('status', $effectiveStatuses);
+        }
 
         if ($technicianId !== null && $technicianId !== '') {
             $baseQuery->where('technician_id', $technicianId);

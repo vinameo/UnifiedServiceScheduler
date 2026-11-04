@@ -28,12 +28,13 @@ interface AppointmentRepositoryInterface
      */
     public function listForDealershipDay(
         Dealership $dealership,
-        string $date,
+        ?string $date = null,
         ?string $technicianId = null,
         ?string $bayId = null,
         ?array $statuses = null,
         int $limit = 50,
         ?string $cursor = null,
+        bool $contactRequired = false,
     ): CursorPage;
 
     /**
