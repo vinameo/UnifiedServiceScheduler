@@ -70,6 +70,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware(['can:run-workshop', 'idempotent', 'if-match']);
     Route::post('/appointments/{appointment}/complete', [WorkshopActionController::class, 'complete'])
         ->middleware(['can:run-workshop', 'idempotent', 'if-match']);
+    Route::post('/appointments/{appointment}/no-show', [WorkshopActionController::class, 'noShow'])
+        ->middleware(['can:check-in', 'idempotent', 'if-match']);
 
     // Customers (F02)
     Route::get('/customers', [CustomerController::class, 'index'])

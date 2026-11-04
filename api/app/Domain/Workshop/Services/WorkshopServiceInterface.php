@@ -13,4 +13,6 @@ interface WorkshopServiceInterface
     public function start(User $actor, string $appointmentId, int $expectedVersion, CarbonImmutable $now): Appointment;
 
     public function complete(User $actor, string $appointmentId, int $expectedVersion, CarbonImmutable $now): Appointment;
+
+    public function markNoShow(User $actor, string $appointmentId, int $expectedVersion, CarbonImmutable $now): Appointment;
 }

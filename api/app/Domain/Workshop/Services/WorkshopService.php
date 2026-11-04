@@ -10,6 +10,7 @@ use App\Domain\Booking\Exceptions\InvalidStatusTransition;
 use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
 use App\Domain\Booking\Services\AppointmentTransitionInterface;
 use App\Domain\Workshop\Exceptions\NeedsReschedule;
+use App\Domain\Workshop\Exceptions\NoShowBeforeStart;
 use App\Domain\Workshop\Exceptions\NotServiceDay;
 use App\Models\Appointment;
 use App\Models\User;
@@ -89,6 +90,39 @@ class WorkshopService implements WorkshopServiceInterface
             changes: [
                 'completed_at' => $now,
             ],
+            outbox: null,
+            actor: $actor,
+            now: $now,
+        );
+    }
+
+    public function markNoShow(User $actor, string $appointmentId, int $expectedVersion, CarbonImmutable $now): Appointment
+    {
+        $appointment = $this->appointmentRepository->find($appointmentId);
+        if ($appointment === null) {
+            throw new AppointmentNotFound($appointmentId);
+        }
+
+        // 412 beats 422: if version is stale, caller is looking at old data
+        if ($appointment->version !== $expectedVersion) {
+            AppointmentModifiedDetected::dispatch($appointmentId, $expectedVersion);
+            throw new AppointmentModified($appointmentId, $appointment);
+        }
+
+        if (! $appointment->status->canMoveTo(AppointmentStatus::NO_SHOW)) {
+            throw new InvalidStatusTransition($appointment->status, AppointmentStatus::NO_SHOW);
+        }
+
+        $startAt = CarbonImmutable::parse($appointment->start_at);
+        if ($now->isBefore($startAt)) {
+            throw new NoShowBeforeStart($startAt, $now);
+        }
+
+        return $this->transitionService->transition(
+            id: $appointmentId,
+            expectedVersion: $expectedVersion,
+            to: AppointmentStatus::NO_SHOW,
+            changes: [],
             outbox: null,
             actor: $actor,
             now: $now,

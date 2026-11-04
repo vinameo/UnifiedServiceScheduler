@@ -65,4 +65,20 @@ class WorkshopActionController extends Controller
 
         return AppointmentResponder::ok($result);
     }
+
+    public function noShow(Request $request, Appointment $appointment): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $expectedVersion = ExpectedVersion::from($request);
+
+        $result = $this->workshopService->markNoShow(
+            actor: $user,
+            appointmentId: $appointment->id,
+            expectedVersion: $expectedVersion,
+            now: CarbonImmutable::now(),
+        );
+
+        return AppointmentResponder::ok($result);
+    }
 }

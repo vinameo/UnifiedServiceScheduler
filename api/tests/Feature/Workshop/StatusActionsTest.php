@@ -295,4 +295,179 @@ class StatusActionsTest extends TestCase
             CarbonImmutable::setTestNow();
         }
     }
+
+    public function test_AC_12_6_no_show_only_after_start(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+
+        $tech = $world->technician('An');
+        $bay = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 10:50:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $appointment = AppointmentFactory::create(
+                dealership: $world->dealership,
+                technician: $tech,
+                bay: $bay,
+                start: CarbonImmutable::parse('2026-11-02 11:20:00', 'Asia/Ho_Chi_Minh'),
+                end: CarbonImmutable::parse('2026-11-02 12:20:00', 'Asia/Ho_Chi_Minh'),
+                serviceType: $service,
+                status: AppointmentStatus::CONFIRMED,
+            );
+
+            // Active allocations initially exist
+            $initialAllocations = DB::table('resource_allocations')
+                ->where('appointment_id', $appointment->id)
+                ->where('active', true)
+                ->count();
+            $this->assertSame(3, $initialAllocations);
+
+            // 1. Attempt no-show before start (now is 10:50, start is 11:20) -> 422 NO_SHOW_BEFORE_START
+            $earlyResponse = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointment->id}/no-show",
+                [],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ]
+            );
+
+            $earlyResponse->assertStatus(422)
+                ->assertJsonPath('code', 'NO_SHOW_BEFORE_START');
+
+            $fresh = $appointment->fresh();
+            $this->assertNotNull($fresh);
+            $this->assertSame(AppointmentStatus::CONFIRMED, $fresh->status);
+            $this->assertSame(1, $fresh->version);
+
+            // 2. Travel to 11:20:00 (start time) -> no-show succeeds with 200
+            $startTime = CarbonImmutable::parse('2026-11-02 11:20:00', 'Asia/Ho_Chi_Minh');
+            CarbonImmutable::setTestNow($startTime);
+
+            $successResponse = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointment->id}/no-show",
+                [],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ]
+            );
+
+            $successResponse->assertStatus(200)
+                ->assertHeader('ETag', '"2"')
+                ->assertJsonPath('status', 'NO_SHOW')
+                ->assertJsonPath('version', 2);
+
+            $updated = $appointment->fresh();
+            $this->assertNotNull($updated);
+            $this->assertSame(AppointmentStatus::NO_SHOW, $updated->status);
+            $this->assertSame(2, $updated->version);
+
+            // Active allocations become inactive (0 active)
+            $activeAllocations = DB::table('resource_allocations')
+                ->where('appointment_id', $appointment->id)
+                ->where('active', true)
+                ->count();
+            $this->assertSame(0, $activeAllocations);
+
+            // Event recorded
+            $events = AppointmentEvent::where('appointment_id', $appointment->id)
+                ->orderBy('version')
+                ->get();
+            $this->assertCount(1, $events);
+            /** @var AppointmentEvent $event */
+            $event = $events[0];
+            $this->assertSame(AppointmentEventType::NO_SHOW->value, $event->type);
+            $this->assertSame(2, $event->version);
+            $this->assertSame($advisor->id, $event->actor_user_id);
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_foreman_can_mark_no_show(): void
+    {
+        $world = World::saigonD7();
+        $foreman = $world->foreman();
+
+        $tech = $world->technician('An');
+        $bay = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $start = CarbonImmutable::parse('2026-11-02 11:20:00', 'Asia/Ho_Chi_Minh');
+        $now = $start->addMinutes(10);
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $appointment = AppointmentFactory::create(
+                dealership: $world->dealership,
+                technician: $tech,
+                bay: $bay,
+                start: $start,
+                end: $start->addHour(),
+                serviceType: $service,
+                status: AppointmentStatus::CONFIRMED,
+            );
+
+            $response = $this->actingAs($foreman)->postJson(
+                "/api/v1/appointments/{$appointment->id}/no-show",
+                [],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ]
+            );
+
+            $response->assertStatus(200)
+                ->assertJsonPath('status', 'NO_SHOW');
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_no_show_invalid_status_transition(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+
+        $tech = $world->technician('An');
+        $bay = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $start = CarbonImmutable::parse('2026-11-02 11:20:00', 'Asia/Ho_Chi_Minh');
+        $now = $start->addMinutes(10);
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $appointment = AppointmentFactory::create(
+                dealership: $world->dealership,
+                technician: $tech,
+                bay: $bay,
+                start: $start,
+                end: $start->addHour(),
+                serviceType: $service,
+                status: AppointmentStatus::COMPLETED,
+            );
+
+            $response = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointment->id}/no-show",
+                [],
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => (string) Str::uuid(),
+                ]
+            );
+
+            $response->assertStatus(422)
+                ->assertJsonPath('code', 'INVALID_STATUS_TRANSITION');
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
 }
