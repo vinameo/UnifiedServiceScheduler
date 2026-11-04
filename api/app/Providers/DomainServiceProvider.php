@@ -71,6 +71,8 @@ use App\Domain\Notifications\Services\OutboxRelay;
 use App\Domain\Notifications\Services\OutboxRelayInterface;
 use App\Domain\Notifications\Services\OutboxWriter;
 use App\Domain\Notifications\Services\OutboxWriterInterface;
+use App\Domain\Notifications\Services\ReminderQueue;
+use App\Domain\Notifications\Services\ReminderQueueInterface;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -121,6 +123,7 @@ class DomainServiceProvider extends ServiceProvider
         RecipientResolverInterface::class => RecipientResolver::class,
         OutboxMessageRepositoryInterface::class => OutboxMessageRepository::class,
         OutboxRelayInterface::class => OutboxRelay::class,
+        ReminderQueueInterface::class => ReminderQueue::class,
 
         // Monitoring (F08)
         MetricCounterRepositoryInterface::class => MetricCounterRepository::class,

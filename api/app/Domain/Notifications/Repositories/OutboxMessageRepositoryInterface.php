@@ -47,4 +47,12 @@ interface OutboxMessageRepositoryInterface
      * Find a message by id.
      */
     public function find(string $id): ?OutboxMessage;
+
+    /**
+     * Insert an outbox message row with ON CONFLICT (dedupe_key) DO NOTHING (D-11.6, INV-11.7).
+     * Returns true if row was inserted, false if ignored due to unique dedupe_key conflict.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function insertIfAbsent(array $attributes): bool;
 }

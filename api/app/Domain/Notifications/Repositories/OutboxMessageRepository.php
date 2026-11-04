@@ -157,4 +157,41 @@ class OutboxMessageRepository implements OutboxMessageRepositoryInterface
     {
         return OutboxMessage::query()->find($id);
     }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    public function insertIfAbsent(array $attributes): bool
+    {
+        $sql = <<<'SQL'
+            INSERT INTO outbox_messages (
+                id, event_id, dealership_id, appointment_id, event_type, channel,
+                payload, status, attempts, next_attempt_at, dedupe_key, created_at, updated_at
+            ) VALUES (
+                :id, :event_id, :dealership_id, :appointment_id, :event_type, :channel,
+                CAST(:payload AS jsonb), :status, :attempts, :next_attempt_at, :dedupe_key, :created_at, :updated_at
+            ) ON CONFLICT (dedupe_key) DO NOTHING
+        SQL;
+
+        $payload = $attributes['payload'];
+        $payloadJson = is_string($payload) ? $payload : json_encode($payload, JSON_THROW_ON_ERROR);
+
+        $affected = DB::affectingStatement($sql, [
+            'id' => $attributes['id'],
+            'event_id' => $attributes['event_id'],
+            'dealership_id' => $attributes['dealership_id'],
+            'appointment_id' => $attributes['appointment_id'] ?? null,
+            'event_type' => $attributes['event_type'],
+            'channel' => $attributes['channel'],
+            'payload' => $payloadJson,
+            'status' => $attributes['status'] ?? 'PENDING',
+            'attempts' => $attributes['attempts'] ?? 0,
+            'next_attempt_at' => $attributes['next_attempt_at'],
+            'dedupe_key' => $attributes['dedupe_key'] ?? null,
+            'created_at' => $attributes['created_at'],
+            'updated_at' => $attributes['updated_at'],
+        ]);
+
+        return $affected > 0;
+    }
 }

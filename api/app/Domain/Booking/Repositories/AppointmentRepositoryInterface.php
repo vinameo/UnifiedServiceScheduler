@@ -75,4 +75,11 @@ interface AppointmentRepositoryInterface
         CarbonImmutable $now,
         int $limit = 500,
     ): Collection;
+
+    /**
+     * Find confirmed appointments with reminder opt-in whose start_at is within [from, to) (D-11.6).
+     *
+     * @return Collection<int, Appointment>
+     */
+    public function findReminderCandidates(CarbonImmutable $from, CarbonImmutable $to): Collection;
 }
