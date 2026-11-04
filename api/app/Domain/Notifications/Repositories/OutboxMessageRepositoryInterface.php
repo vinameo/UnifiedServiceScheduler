@@ -2,6 +2,8 @@
 
 namespace App\Domain\Notifications\Repositories;
 
+use App\Domain\Notifications\Exceptions\OutboxMessageNotFound;
+use App\Domain\Notifications\Exceptions\OutboxNotRetryable;
 use App\Models\OutboxMessage;
 use App\Support\Pagination\CursorPage;
 use Carbon\CarbonImmutable;
@@ -83,4 +85,13 @@ interface OutboxMessageRepositoryInterface
      * Find a message by id scoped to dealership.
      */
     public function findForDealership(string $id, string $dealershipId): ?OutboxMessage;
+
+    /**
+     * Retry a failed outbox message, resetting its status to PENDING, attempts to 0,
+     * next_attempt_at to now, and clearing last_error (RQ §B7 Retry, D-11.8, INV-11.6).
+     *
+     * @throws OutboxMessageNotFound
+     * @throws OutboxNotRetryable
+     */
+    public function retry(string $dealershipId, string $messageId, CarbonImmutable $now): OutboxMessage;
 }

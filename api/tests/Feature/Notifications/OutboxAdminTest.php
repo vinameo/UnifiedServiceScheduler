@@ -5,7 +5,9 @@ namespace Tests\Feature\Notifications;
 use App\Domain\Booking\AppointmentStatus;
 use App\Domain\Notifications\OutboxChannel;
 use App\Domain\Notifications\OutboxEventType;
+use App\Domain\Notifications\Services\OutboxRelayInterface;
 use App\Models\Appointment;
+use App\Models\AppointmentEvent;
 use App\Models\Dealership;
 use App\Models\OutboxMessage;
 use App\Models\User;
@@ -319,6 +321,19 @@ class OutboxAdminTest extends TestCase
                 'sentToday' => 1,
             ],
         ]);
+
+        // When: D1 Admin retries a D2 failed row -> 404 OUTBOX_MESSAGE_NOT_FOUND
+        $d2Failed = OutboxMessage::query()
+            ->where('dealership_id', $d2->id)
+            ->where('status', 'FAILED')
+            ->firstOrFail();
+
+        $retryD2 = $this->actingAs($admin1)
+            ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("/api/v1/outbox/{$d2Failed->id}/retry");
+
+        $retryD2->assertStatus(404);
+        $this->assertSame('OUTBOX_MESSAGE_NOT_FOUND', $retryD2->json('code'));
     }
 
     /**
@@ -590,5 +605,231 @@ class OutboxAdminTest extends TestCase
         $this->actingAs($advisor)->getJson('/api/v1/outbox/summary')->assertStatus(403);
         $this->actingAs($foreman)->getJson('/api/v1/outbox/summary')->assertStatus(403);
         $this->actingAs($customer)->getJson('/api/v1/outbox/summary')->assertStatus(403);
+    }
+
+    /**
+     * TC-11-05 (AC-11.4, INV-11.6; Integration):
+     * given A FAILED row of a booking at version v;
+     * when Admin POST /outbox/{id}/retry;
+     * then runOnce with a working channel;
+     * then 200 PENDING, attempts 0; then SENT; the booking's version still v, no new history row.
+     */
+    public function test_AC_11_4_retry_failed_message(): void
+    {
+        $world = World::saigonD7();
+        $dealership = $world->dealership;
+        $admin = $world->admin();
+
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $customer->update(['phone' => '0901234567']);
+        $service = $world->serviceType('OIL_CHANGE');
+        $tech = $world->technician('Trần Minh An');
+        $bay = $world->bay('K1');
+
+        $now = CarbonImmutable::parse('2026-11-04 10:00:00', new DateTimeZone('Asia/Ho_Chi_Minh'));
+        CarbonImmutable::setTestNow($now);
+
+        $appt = Appointment::query()->create([
+            'id' => (string) Str::uuid(),
+            'reference' => 'APT-20261104-0010',
+            'dealership_id' => $dealership->id,
+            'customer_id' => $customer->id,
+            'vehicle_id' => $vehicle->id,
+            'service_type_id' => $service->id,
+            'technician_id' => $tech->id,
+            'bay_id' => $bay->id,
+            'status' => AppointmentStatus::CONFIRMED,
+            'start_at' => $now->addDay(),
+            'end_at' => $now->addDay()->addHour(),
+            'version' => 1,
+            'source' => 'CUSTOMER',
+            'reminder_opt_in' => true,
+            'created_by_user_id' => $user->id,
+        ]);
+
+        $initialVersion = $appt->version;
+        $initialHistoryCount = AppointmentEvent::query()->where('appointment_id', $appt->id)->count();
+
+        // Given: A FAILED row of the booking
+        $messageId = (string) Str::uuid();
+        $eventId = (string) Str::uuid();
+        $outboxMessage = OutboxMessage::query()->create([
+            'id' => $messageId,
+            'event_id' => $eventId,
+            'dealership_id' => $dealership->id,
+            'appointment_id' => $appt->id,
+            'event_type' => OutboxEventType::AppointmentConfirmed,
+            'channel' => OutboxChannel::SMS,
+            'payload' => [
+                'appointmentId' => $appt->id,
+                'reference' => $appt->reference,
+            ],
+            'status' => 'FAILED',
+            'attempts' => 5,
+            'next_attempt_at' => $now,
+            'last_error' => 'Connection timeout after 5 s',
+            'created_at' => $now->subMinutes(30),
+            'updated_at' => $now->subMinutes(5),
+        ]);
+
+        // When: Admin POST /outbox/{id}/retry
+        $idempotencyKey = (string) Str::uuid();
+        $response = $this->actingAs($admin)
+            ->withHeaders(['Idempotency-Key' => $idempotencyKey])
+            ->postJson("/api/v1/outbox/{$messageId}/retry");
+
+        // Then: 200 PENDING, attempts 0
+        $response->assertStatus(200);
+        $response->assertJson([
+            'data' => [
+                'id' => $messageId,
+                'status' => 'PENDING',
+                'displayStatus' => 'Pending',
+                'attempts' => 0,
+                'lastError' => null,
+            ],
+        ]);
+
+        $freshMessage = $outboxMessage->fresh();
+        $this->assertNotNull($freshMessage);
+        $this->assertSame('PENDING', $freshMessage->status);
+        $this->assertSame(0, $freshMessage->attempts);
+        $this->assertNull($freshMessage->last_error);
+
+        // Invariant INV-11.6: the booking's version still v, no new history row
+        $this->assertSame($initialVersion, $appt->fresh()?->version);
+        $this->assertSame($initialHistoryCount, AppointmentEvent::query()->where('appointment_id', $appt->id)->count());
+
+        // Then: runOnce with a working channel
+        /** @var OutboxRelayInterface $relay */
+        $relay = app(OutboxRelayInterface::class);
+        $result = $relay->runOnce($now);
+
+        $this->assertSame(1, $result->sent);
+
+        // Then: SENT; booking's version still v, no new history row
+        $freshMessage = $outboxMessage->fresh();
+        $this->assertNotNull($freshMessage);
+        $this->assertSame('SENT', $freshMessage->status);
+        $this->assertSame(1, $freshMessage->attempts);
+        $this->assertNotNull($freshMessage->sent_at);
+
+        $this->assertSame($initialVersion, $appt->fresh()->version);
+        $this->assertSame($initialHistoryCount, AppointmentEvent::query()->where('appointment_id', $appt->id)->count());
+    }
+
+    /**
+     * TC-11-13 (D-11.8; Integration):
+     * given A SENT row; a FAILED row;
+     * when Retry the SENT row; retry the FAILED row twice with the same key;
+     * then 422 OUTBOX_NOT_RETRYABLE; 200 then the saved 200.
+     */
+    public function test_only_failed_messages_retry(): void
+    {
+        $world = World::saigonD7();
+        $dealership = $world->dealership;
+        $admin = $world->admin();
+
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $service = $world->serviceType('OIL_CHANGE');
+        $tech = $world->technician('Trần Minh An');
+        $bay = $world->bay('K1');
+
+        $now = CarbonImmutable::parse('2026-11-04 10:00:00', new DateTimeZone('Asia/Ho_Chi_Minh'));
+        CarbonImmutable::setTestNow($now);
+
+        $appt = Appointment::query()->create([
+            'id' => (string) Str::uuid(),
+            'reference' => 'APT-20261104-0011',
+            'dealership_id' => $dealership->id,
+            'customer_id' => $customer->id,
+            'vehicle_id' => $vehicle->id,
+            'service_type_id' => $service->id,
+            'technician_id' => $tech->id,
+            'bay_id' => $bay->id,
+            'status' => AppointmentStatus::CONFIRMED,
+            'start_at' => $now->addDay(),
+            'end_at' => $now->addDay()->addHour(),
+            'version' => 1,
+            'source' => 'CUSTOMER',
+            'reminder_opt_in' => true,
+            'created_by_user_id' => $user->id,
+        ]);
+
+        // Given: A SENT row and a FAILED row
+        $sentMessage = OutboxMessage::query()->create([
+            'id' => (string) Str::uuid(),
+            'event_id' => (string) Str::uuid(),
+            'dealership_id' => $dealership->id,
+            'appointment_id' => $appt->id,
+            'event_type' => OutboxEventType::AppointmentConfirmed,
+            'channel' => OutboxChannel::SMS,
+            'payload' => ['appointmentId' => $appt->id],
+            'status' => 'SENT',
+            'attempts' => 1,
+            'next_attempt_at' => $now->subMinutes(10),
+            'sent_at' => $now->subMinutes(10),
+            'created_at' => $now->subMinutes(10),
+            'updated_at' => $now->subMinutes(10),
+        ]);
+
+        $failedMessage = OutboxMessage::query()->create([
+            'id' => (string) Str::uuid(),
+            'event_id' => (string) Str::uuid(),
+            'dealership_id' => $dealership->id,
+            'appointment_id' => $appt->id,
+            'event_type' => OutboxEventType::AppointmentConfirmed,
+            'channel' => OutboxChannel::EMAIL,
+            'payload' => ['appointmentId' => $appt->id],
+            'status' => 'FAILED',
+            'attempts' => 5,
+            'next_attempt_at' => $now->subMinutes(5),
+            'last_error' => 'SMTP timeout after 5 s',
+            'created_at' => $now->subMinutes(20),
+            'updated_at' => $now->subMinutes(5),
+        ]);
+
+        // When: Retry the SENT row -> 422 OUTBOX_NOT_RETRYABLE
+        $retrySent = $this->actingAs($admin)
+            ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+            ->postJson("/api/v1/outbox/{$sentMessage->id}/retry");
+
+        $retrySent->assertStatus(422);
+        $this->assertSame('OUTBOX_NOT_RETRYABLE', $retrySent->json('code'));
+        $sentMessage->refresh();
+        $this->assertSame('SENT', $sentMessage->status);
+
+        // When: Retry the FAILED row twice with the same key
+        $sharedKey = (string) Str::uuid();
+
+        $call1 = $this->actingAs($admin)
+            ->withHeaders(['Idempotency-Key' => $sharedKey])
+            ->postJson("/api/v1/outbox/{$failedMessage->id}/retry");
+
+        $call1->assertStatus(200);
+        $call1->assertJson([
+            'data' => [
+                'id' => $failedMessage->id,
+                'status' => 'PENDING',
+                'displayStatus' => 'Pending',
+                'attempts' => 0,
+            ],
+        ]);
+        $failedMessage->refresh();
+        $this->assertSame('PENDING', $failedMessage->status);
+        $this->assertSame(0, $failedMessage->attempts);
+
+        // Second call with same key -> saved 200 response
+        $call2 = $this->actingAs($admin)
+            ->withHeaders(['Idempotency-Key' => $sharedKey])
+            ->postJson("/api/v1/outbox/{$failedMessage->id}/retry");
+
+        $call2->assertStatus(200);
+        $this->assertSame($call1->json(), $call2->json());
+
+        // Verify status remains PENDING and attempts remain 0 (reset only once)
+        $failedMessage->refresh();
+        $this->assertSame('PENDING', $failedMessage->status);
+        $this->assertSame(0, $failedMessage->attempts);
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Domain\Notifications\Repositories;
 
+use App\Domain\Notifications\Exceptions\OutboxMessageNotFound;
+use App\Domain\Notifications\Exceptions\OutboxNotRetryable;
 use App\Models\OutboxMessage;
 use App\Support\Pagination\CursorPage;
 use App\Support\Pagination\CursorPaginator;
@@ -9,6 +11,7 @@ use Carbon\CarbonImmutable;
 use DateTimeZone;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class OutboxMessageRepository implements OutboxMessageRepositoryInterface
 {
@@ -319,5 +322,49 @@ class OutboxMessageRepository implements OutboxMessageRepositoryInterface
             ->where('dealership_id', $dealershipId)
             ->where('id', $id)
             ->first();
+    }
+
+    public function retry(string $dealershipId, string $messageId, CarbonImmutable $now): OutboxMessage
+    {
+        if (! Str::isUuid($messageId)) {
+            throw new OutboxMessageNotFound($messageId);
+        }
+
+        /** @var OutboxMessage|null $message */
+        $message = OutboxMessage::query()
+            ->where('dealership_id', $dealershipId)
+            ->where('id', $messageId)
+            ->first();
+
+        if ($message === null) {
+            throw new OutboxMessageNotFound($messageId);
+        }
+
+        if ($message->status !== 'FAILED') {
+            throw new OutboxNotRetryable("Message {$messageId} is not in FAILED status.");
+        }
+
+        $nowUtc = $now->utc();
+
+        $updated = DB::table('outbox_messages')
+            ->where('dealership_id', $dealershipId)
+            ->where('id', $messageId)
+            ->where('status', 'FAILED')
+            ->update([
+                'status' => 'PENDING',
+                'attempts' => 0,
+                'next_attempt_at' => $nowUtc->toIso8601String(),
+                'last_error' => null,
+                'updated_at' => $nowUtc->toIso8601String(),
+            ]);
+
+        if ($updated === 0) {
+            throw new OutboxNotRetryable("Message {$messageId} is no longer in FAILED status.");
+        }
+
+        $message->refresh();
+        $message->loadMissing(['dealership', 'appointment.customer']);
+
+        return $message;
     }
 }

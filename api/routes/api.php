@@ -85,4 +85,6 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:admin');
     Route::get('/outbox/summary', [OutboxController::class, 'summary'])
         ->middleware('can:admin');
+    Route::post('/outbox/{id}/retry', [OutboxController::class, 'retry'])
+        ->middleware(['can:admin', 'idempotent']);
 });

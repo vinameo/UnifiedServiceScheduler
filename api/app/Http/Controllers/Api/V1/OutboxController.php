@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ListOutboxMessagesRequest;
 use App\Http\Resources\OutboxMessageResource;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -50,6 +51,24 @@ class OutboxController extends Controller
 
         return response()->json([
             'data' => $summary,
+        ]);
+    }
+
+    public function retry(Request $request, string $id): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $messageId = (string) ($request->route('id') ?? $request->route('message') ?? $id);
+        $now = CarbonImmutable::now();
+
+        $message = $this->outboxService->retry(
+            dealershipId: (string) $user->dealership_id,
+            messageId: $messageId,
+            now: $now,
+        );
+
+        return response()->json([
+            'data' => new OutboxMessageResource($message),
         ]);
     }
 }

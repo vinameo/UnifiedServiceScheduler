@@ -6,6 +6,7 @@ use App\Domain\Notifications\Repositories\OutboxMessageRepositoryInterface;
 use App\Models\OutboxMessage;
 use App\Models\User;
 use App\Support\Pagination\CursorPage;
+use Carbon\CarbonImmutable;
 
 class OutboxService implements OutboxServiceInterface
 {
@@ -48,5 +49,14 @@ class OutboxService implements OutboxServiceInterface
         $tz = $dealership !== null ? $dealership->timezone : (string) config('app.timezone', 'UTC');
 
         return $this->outboxMessageRepository->getSummary($dealershipId, $tz);
+    }
+
+    public function retry(string $dealershipId, string $messageId, CarbonImmutable $now): OutboxMessage
+    {
+        return $this->outboxMessageRepository->retry(
+            dealershipId: $dealershipId,
+            messageId: $messageId,
+            now: $now,
+        );
     }
 }
