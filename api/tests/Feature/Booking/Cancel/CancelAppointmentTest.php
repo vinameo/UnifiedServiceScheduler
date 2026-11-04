@@ -5,11 +5,15 @@ namespace Tests\Feature\Booking\Cancel;
 use App\Domain\Booking\AppointmentStatus;
 use App\Domain\Booking\CancelReason;
 use App\Models\Appointment;
+use App\Models\Bay;
+use App\Models\Technician;
+use App\Models\Vehicle;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\AppointmentFactory;
 use Tests\Support\AssertsNoOverlap;
 use Tests\Support\World;
 use Tests\TestCase;
@@ -552,6 +556,308 @@ class CancelAppointmentTest extends TestCase
             $cancel2->assertHeader('ETag', '"2"');
             $this->assertSame(AppointmentStatus::CANCELLED->value, $cancel2->json('status'));
             $this->assertSame(2, $cancel2->json('version'));
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_07_4_customer_too_late(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Toyota', 'model' => 'Vios', 'plate_key' => '51H12345', 'licence_plate' => '51H-123.45']
+        );
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        // Clock 08:00, booking at 09:00 (1 hour left)
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $startAt = '2026-11-02T09:00:00+07:00';
+            $createResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $startAt,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $createResponse->assertStatus(201);
+            $appointmentId = $createResponse->json('id');
+
+            // Customer attempts to cancel in the app
+            $customerUser = $customer->user;
+            $cancelResponse = $this->actingAs($customerUser)->postJson("/api/v1/appointments/{$appointmentId}/cancel", [], [
+                'Idempotency-Key' => (string) Str::uuid(),
+                'If-Match' => '"1"',
+            ]);
+
+            $cancelResponse->assertStatus(422);
+            $cancelResponse->assertJson([
+                'code' => 'TOO_LATE_TO_CANCEL',
+                'dealershipPhone' => '028 3812 3456',
+            ]);
+
+            // Still CONFIRMED
+            /** @var Appointment $appointment */
+            $appointment = Appointment::findOrFail($appointmentId);
+            $this->assertSame(AppointmentStatus::CONFIRMED, $appointment->status);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_07_7_cannot_cancel_another_customers_booking(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customerA] = $world->customerWithVehicle();
+        ['customer' => $customerB, 'vehicle' => $vehicleB] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $tomorrow = '2026-11-03T09:00:00+07:00';
+            // Booking belongs to Customer B
+            $createResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customerB->id,
+                'vehicleId' => $vehicleB->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $tomorrow,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $createResponse->assertStatus(201);
+            $appointmentId = $createResponse->json('id');
+
+            // Customer A attempts to cancel Customer B's booking
+            $cancelResponse = $this->actingAs($customerA->user)->postJson("/api/v1/appointments/{$appointmentId}/cancel", [], [
+                'Idempotency-Key' => (string) Str::uuid(),
+                'If-Match' => '"1"',
+            ]);
+
+            $cancelResponse->assertStatus(404);
+            $cancelResponse->assertJson(['code' => 'APPOINTMENT_NOT_FOUND']);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_AC_07_10_outbox_only_for_confirmed(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE');
+        $technician = $world->technician('An');
+        $bay = $world->bay('K2');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $day1 = CarbonImmutable::parse('2026-11-03 09:00:00', 'Asia/Ho_Chi_Minh');
+            $day2 = CarbonImmutable::parse('2026-11-04 09:00:00', 'Asia/Ho_Chi_Minh');
+
+            // 1. Confirmed booking
+            $createResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $day1->toIso8601String(),
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $createResponse->assertStatus(201);
+            $confirmedId = $createResponse->json('id');
+
+            // 2. Held booking (using AppointmentFactory)
+            $heldAppointment = AppointmentFactory::create(
+                dealership: $world->dealership,
+                technician: $technician,
+                bay: $bay,
+                start: $day2,
+                end: $day2->addHour(),
+                serviceType: $serviceType,
+                customer: $customer,
+                vehicle: $vehicle,
+                status: AppointmentStatus::HELD,
+            );
+            $heldId = $heldAppointment->id;
+
+            // Customer cancels confirmed booking
+            $cancelConfirmed = $this->actingAs($customer->user)->postJson("/api/v1/appointments/{$confirmedId}/cancel", [], [
+                'Idempotency-Key' => (string) Str::uuid(),
+                'If-Match' => '"1"',
+            ]);
+            $cancelConfirmed->assertStatus(200);
+
+            // Customer cancels held booking
+            $cancelHeld = $this->actingAs($customer->user)->postJson("/api/v1/appointments/{$heldId}/cancel", [], [
+                'Idempotency-Key' => (string) Str::uuid(),
+                'If-Match' => '"1"',
+            ]);
+            $cancelHeld->assertStatus(200);
+
+            // Check outbox: CONFIRMED produced 1 event_id (3 channel rows), HELD produced 0
+            $confirmedOutbox = DB::table('outbox_messages')
+                ->where('appointment_id', $confirmedId)
+                ->where('event_type', 'AppointmentCancelled')
+                ->get();
+            $this->assertCount(3, $confirmedOutbox);
+            $distinctEventIds = $confirmedOutbox->pluck('event_id')->unique();
+            $this->assertCount(1, $distinctEventIds);
+
+            $heldOutbox = DB::table('outbox_messages')
+                ->where('appointment_id', $heldId)
+                ->count();
+            $this->assertSame(0, $heldOutbox);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_INV_07_3_two_hour_boundary(): void
+    {
+        $world = World::saigonD7();
+        ['customer' => $customer, 'vehicle' => $vehicle1] = $world->customerWithVehicle();
+        $vehicle2 = Vehicle::factory()->create(['customer_id' => $customer->id]);
+        $vehicle3 = Vehicle::factory()->create(['customer_id' => $customer->id]);
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $technicians = Technician::where('dealership_id', $world->dealership->id)->get();
+        $bays = Bay::where('dealership_id', $world->dealership->id)->get();
+
+        $tech1 = $technicians->get(0);
+        assert($tech1 instanceof Technician);
+        $tech2 = $technicians->get(1);
+        assert($tech2 instanceof Technician);
+        $tech3 = $technicians->get(2);
+        assert($tech3 instanceof Technician);
+
+        $bay1 = $bays->get(0);
+        assert($bay1 instanceof Bay);
+        $bay2 = $bays->get(1);
+        assert($bay2 instanceof Bay);
+        $bay3 = $bays->get(2);
+        assert($bay3 instanceof Bay);
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            // 1. Exactly 2 hours: 10:00:00
+            $startExact = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+            $exactApt = AppointmentFactory::create(
+                dealership: $world->dealership,
+                technician: $tech1,
+                bay: $bay1,
+                start: $startExact,
+                end: $startExact->addHour(),
+                serviceType: $serviceType,
+                customer: $customer,
+                vehicle: $vehicle1,
+                status: AppointmentStatus::CONFIRMED,
+            );
+
+            // 2. Less than 2 hours: 09:59:00
+            $startClose = CarbonImmutable::parse('2026-11-02 09:59:00', 'Asia/Ho_Chi_Minh');
+            $closeApt = AppointmentFactory::create(
+                dealership: $world->dealership,
+                technician: $tech2,
+                bay: $bay2,
+                start: $startClose,
+                end: $startClose->addHour(),
+                serviceType: $serviceType,
+                customer: $customer,
+                vehicle: $vehicle2,
+                status: AppointmentStatus::CONFIRMED,
+            );
+
+            // 3. Held at 08:30 (30 minutes left, but HELD has no 2-hour limit)
+            $startHeld = CarbonImmutable::parse('2026-11-02 08:30:00', 'Asia/Ho_Chi_Minh');
+            $heldApt = AppointmentFactory::create(
+                dealership: $world->dealership,
+                technician: $tech3,
+                bay: $bay3,
+                start: $startHeld,
+                end: $startHeld->addHour(),
+                serviceType: $serviceType,
+                customer: $customer,
+                vehicle: $vehicle3,
+                status: AppointmentStatus::HELD,
+            );
+
+            // Cancel exact 2 hours -> 200
+            $resExact = $this->actingAs($customer->user)->postJson("/api/v1/appointments/{$exactApt->id}/cancel", [], [
+                'Idempotency-Key' => (string) Str::uuid(),
+                'If-Match' => '"1"',
+            ]);
+            $resExact->assertStatus(200);
+
+            // Cancel 09:59 -> 422
+            $resClose = $this->actingAs($customer->user)->postJson("/api/v1/appointments/{$closeApt->id}/cancel", [], [
+                'Idempotency-Key' => (string) Str::uuid(),
+                'If-Match' => '"1"',
+            ]);
+            $resClose->assertStatus(422);
+            $resClose->assertJson(['code' => 'TOO_LATE_TO_CANCEL']);
+
+            // Cancel HELD at 08:30 -> 200
+            $resHeld = $this->actingAs($customer->user)->postJson("/api/v1/appointments/{$heldApt->id}/cancel", [], [
+                'Idempotency-Key' => (string) Str::uuid(),
+                'If-Match' => '"1"',
+            ]);
+            $resHeld->assertStatus(200);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_customer_does_not_see_staff_note(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $tomorrow = '2026-11-03T09:00:00+07:00';
+            $createResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $tomorrow,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $createResponse->assertStatus(201);
+            $appointmentId = $createResponse->json('id');
+
+            // Advisor cancels with note
+            $cancelResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentId}/cancel", [
+                'reason' => CancelReason::CUSTOMER_BUSY->value,
+                'note' => 'Internal sensitive note: customer was dissatisfied with pricing.',
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+                'If-Match' => '"1"',
+            ]);
+            $cancelResponse->assertStatus(200);
+
+            // Customer views the appointment (GET /appointments/{id})
+            $customerView = $this->actingAs($customer->user)->getJson("/api/v1/appointments/{$appointmentId}");
+            $customerView->assertStatus(200);
+            $customerView->assertJsonPath('cancellation.byRole', 'SERVICE_ADVISOR');
+            $customerView->assertJsonPath('cancellation.reason', null);
+            $customerView->assertJsonPath('cancellation.note', null);
         } finally {
             CarbonImmutable::setTestNow();
         }

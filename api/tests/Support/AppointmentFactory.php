@@ -73,7 +73,7 @@ class AppointmentFactory
             'status' => $status->value,
             'start_at' => $startUtc,
             'end_at' => $endUtc,
-            'expires_at' => null,
+            'expires_at' => $status === AppointmentStatus::HELD ? $now->addMinutes(5) : null,
             'version' => 1,
             'source' => 'STAFF',
             'reminder_opt_in' => false,
