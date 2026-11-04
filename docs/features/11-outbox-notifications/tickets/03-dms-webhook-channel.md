@@ -4,7 +4,7 @@
 
 **Blocked by:** [02-outbox-relay-sends-pending-messages](02-outbox-relay-sends-pending-messages.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/11-outbox-notifications`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-11-06
 
-- [ ] TC-11-06 (D-11.5, INV-11.5; Integration): given A DMS row; fake HTTP (`Http::fake`) with `DMS_WEBHOOK_URL` set; when `runOnce`; then The request has header `Idempotency-Key: {eventId}:DMS` and body with `eventId`; the stored `payload` has no phone/email keys. Test: `…::test_D_11_5_messages_carry_event_id`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-11-06 (D-11.5, INV-11.5; Integration): given A DMS row; fake HTTP (`Http::fake`) with `DMS_WEBHOOK_URL` set; when `runOnce`; then The request has header `Idempotency-Key: {eventId}:DMS` and body with `eventId`; the stored `payload` has no phone/email keys. Test: `…::test_D_11_5_messages_carry_event_id`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

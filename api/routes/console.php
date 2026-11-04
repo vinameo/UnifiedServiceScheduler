@@ -11,3 +11,5 @@ Artisan::command('inspire', function () {
 Schedule::command('idempotency:prune')->daily();
 Schedule::command('monitoring:prune')->daily();
 Schedule::command('holds:expire')->everyThirtySeconds()->withoutOverlapping();
+Schedule::command('outbox:relay')->everyTenSeconds()->withoutOverlapping();
+Schedule::command('outbox:queue-reminders')->hourly();

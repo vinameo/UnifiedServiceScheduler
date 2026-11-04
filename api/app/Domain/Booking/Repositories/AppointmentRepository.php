@@ -394,4 +394,23 @@ class AppointmentRepository implements AppointmentRepositoryInterface
 
         return $results;
     }
+
+    /**
+     * @return Collection<int, Appointment>
+     */
+    public function findReminderCandidates(
+        CarbonImmutable $from,
+        CarbonImmutable $to,
+    ): Collection {
+        /** @var Collection<int, Appointment> $results */
+        $results = Appointment::query()
+            ->where('status', AppointmentStatus::CONFIRMED->value)
+            ->where('reminder_opt_in', true)
+            ->where('start_at', '>=', $from->utc())
+            ->where('start_at', '<', $to->utc())
+            ->orderBy('start_at', 'asc')
+            ->get();
+
+        return $results;
+    }
 }

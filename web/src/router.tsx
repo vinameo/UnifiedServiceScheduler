@@ -14,6 +14,7 @@ import { StaffLayout } from './staff/StaffLayout'
 import { StaffSignInPage } from './staff/auth/StaffSignInPage'
 import { MasterDataPage } from './staff/master-data/MasterDataPage'
 import { MonitoringPage } from './staff/monitoring/MonitoringPage'
+import { NotificationsPage } from './staff/notifications/NotificationsPage'
 import { NewBookingPage } from './staff/booking/NewBookingPage'
 import { BookingConfirmedPage } from './staff/booking/BookingConfirmedPage'
 import { AppointmentListPage } from './staff/appointments/AppointmentListPage'
@@ -93,6 +94,14 @@ export const routes = [
         element: (
           <RequireRole roles={['ADMIN']} signInPath="/staff/sign-in">
             <MasterDataPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'notifications',
+        element: (
+          <RequireRole roles={['ADMIN']} signInPath="/staff/sign-in">
+            <NotificationsPage />
           </RequireRole>
         ),
       },

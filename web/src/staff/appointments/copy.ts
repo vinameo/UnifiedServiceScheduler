@@ -22,6 +22,7 @@ export const appointmentCopy = {
   notFound: "We couldn't find this appointment.",
   backToList: 'Back to appointments',
   viewAppointment: 'View appointment',
+  viewLog: 'View notification log',
   noHistory: 'No history available.',
   cancel: {
     button: 'Cancel appointment',

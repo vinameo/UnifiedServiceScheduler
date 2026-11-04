@@ -61,8 +61,20 @@ use App\Domain\Monitoring\Services\MetricCounterServiceInterface;
 use App\Domain\Monitoring\Services\MonitoringService;
 use App\Domain\Monitoring\Services\MonitoringServiceInterface;
 use App\Domain\Monitoring\Services\RequestMetrics;
+use App\Domain\Notifications\Channels\ChannelRegistry;
+use App\Domain\Notifications\Channels\ChannelRegistryInterface;
+use App\Domain\Notifications\RecipientResolver;
+use App\Domain\Notifications\RecipientResolverInterface;
+use App\Domain\Notifications\Repositories\OutboxMessageRepository;
+use App\Domain\Notifications\Repositories\OutboxMessageRepositoryInterface;
+use App\Domain\Notifications\Services\OutboxRelay;
+use App\Domain\Notifications\Services\OutboxRelayInterface;
+use App\Domain\Notifications\Services\OutboxService;
+use App\Domain\Notifications\Services\OutboxServiceInterface;
 use App\Domain\Notifications\Services\OutboxWriter;
 use App\Domain\Notifications\Services\OutboxWriterInterface;
+use App\Domain\Notifications\Services\ReminderQueue;
+use App\Domain\Notifications\Services\ReminderQueueInterface;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -110,6 +122,11 @@ class DomainServiceProvider extends ServiceProvider
 
         // Notifications (F04, F11)
         OutboxWriterInterface::class => OutboxWriter::class,
+        RecipientResolverInterface::class => RecipientResolver::class,
+        OutboxMessageRepositoryInterface::class => OutboxMessageRepository::class,
+        OutboxRelayInterface::class => OutboxRelay::class,
+        ReminderQueueInterface::class => ReminderQueue::class,
+        OutboxServiceInterface::class => OutboxService::class,
 
         // Monitoring (F08)
         MetricCounterRepositoryInterface::class => MetricCounterRepository::class,
@@ -117,6 +134,13 @@ class DomainServiceProvider extends ServiceProvider
         ApiEventRepositoryInterface::class => ApiEventRepository::class,
         ApiEventServiceInterface::class => ApiEventService::class,
         MonitoringServiceInterface::class => MonitoringService::class,
+    ];
+
+    /**
+     * @var array<class-string, class-string>
+     */
+    public array $singletons = [
+        ChannelRegistryInterface::class => ChannelRegistry::class,
     ];
 
     public function register(): void

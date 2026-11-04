@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { Box, Button, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { useAppointment } from '../../shared/api/appointmentQuery'
 import { useAppointmentHistory } from '../../shared/api/appointments'
@@ -42,32 +42,43 @@ export function AppointmentDetailsPage() {
   }
 
   const timeZone = data.appointment.dealership?.timezone ?? 'Asia/Ho_Chi_Minh'
+  const isAdmin = me?.role === 'ADMIN'
   const isAdvisor = me?.role === 'SERVICE_ADVISOR'
   const canReschedule = isAdvisor && data.appointment.status === 'CONFIRMED'
   const canCancel =
     isAdvisor &&
     (data.appointment.status === 'CONFIRMED' || data.appointment.status === 'HELD')
 
-  const actions = canCancel || canReschedule ? (
-    <Group>
-      {canReschedule && (
-        <Button
-          onClick={() => navigate(`/staff/appointments/${data.appointment.id}/reschedule`)}
-        >
-          {appointmentCopy.reschedule.button}
-        </Button>
-      )}
-      {canCancel && (
-        <Button
-          variant="outline"
-          color="red"
-          onClick={() => setCancelModalOpened(true)}
-        >
-          {appointmentCopy.cancel.button}
-        </Button>
-      )}
-    </Group>
-  ) : undefined
+  const actions =
+    canCancel || canReschedule || isAdmin ? (
+      <Group>
+        {canReschedule && (
+          <Button
+            onClick={() => navigate(`/staff/appointments/${data.appointment.id}/reschedule`)}
+          >
+            {appointmentCopy.reschedule.button}
+          </Button>
+        )}
+        {canCancel && (
+          <Button
+            variant="outline"
+            color="red"
+            onClick={() => setCancelModalOpened(true)}
+          >
+            {appointmentCopy.cancel.button}
+          </Button>
+        )}
+        {isAdmin && (
+          <Button
+            component={Link}
+            to={`/staff/notifications?appointmentId=${data.appointment.id}`}
+            variant="default"
+          >
+            {appointmentCopy.viewLog}
+          </Button>
+        )}
+      </Group>
+    ) : undefined
 
   return (
     <>
