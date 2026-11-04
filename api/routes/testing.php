@@ -16,3 +16,7 @@ Route::post('appointments/{id}/transition', [TestingAppointmentController::class
 
 Route::post('echo', [TestingEchoController::class, 'handle'])
     ->middleware(['auth:sanctum', 'idempotent']);
+
+Route::get('fail', function () {
+    throw new RuntimeException('Deliberate failure with user@example.com and phone 0903123218');
+});

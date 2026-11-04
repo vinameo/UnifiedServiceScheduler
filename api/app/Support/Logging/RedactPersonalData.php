@@ -2,22 +2,26 @@
 
 namespace App\Support\Logging;
 
+use JsonSerializable;
 use Monolog\LogRecord;
 use Monolog\Processor\ProcessorInterface;
+use Throwable;
 
 /**
- * Strips personal data (emails, phone numbers, passwords, tokens, secrets, cookies)
- * from Monolog log records and arbitrary context/strings (D-08.2).
+ * Strips personal data (emails, phone numbers, passwords, tokens, secrets, cookies, sessions)
+ * from Monolog log records, Throwables, and arbitrary context/strings (D-08.2).
  *
  * Reused as a shared seam in F11 (outbox last_error) and api_events.detail.
  */
 final class RedactPersonalData implements ProcessorInterface
 {
-    private const SENSITIVE_KEY_PATTERN = '/password|token|secret|authorization|cookie|phone|email/i';
+    private const SENSITIVE_KEY_PATTERN = '/password|token|secret|authorization|cookie|phone|email|session|xsrf/i';
 
     private const PHONE_PATTERN = '/(?<![\w-])\+?\d(?:[ .-]?\d){8,14}(?![\w-])/';
 
     private const EMAIL_PATTERN = '/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]+/';
+
+    private const COOKIE_TOKEN_PATTERN = '/(?:XSRF(?:-TOKEN)?|laravel_session)(?:=[^;\s]*)?/i';
 
     /**
      * @var list<string>
@@ -39,13 +43,14 @@ final class RedactPersonalData implements ProcessorInterface
     }
 
     /**
-     * Redacts email-like and phone-like patterns from a string.
+     * Redacts email-like, phone-like, and cookie/session patterns from a string.
      */
     public static function redactString(string $text): string
     {
         $text = (string) preg_replace(self::EMAIL_PATTERN, '[email]', $text);
+        $text = (string) preg_replace(self::PHONE_PATTERN, '[phone]', $text);
 
-        return (string) preg_replace(self::PHONE_PATTERN, '[phone]', $text);
+        return (string) preg_replace(self::COOKIE_TOKEN_PATTERN, '[cookie]', $text);
     }
 
     /**
@@ -71,12 +76,17 @@ final class RedactPersonalData implements ProcessorInterface
             $keyStr = (string) $key;
 
             if (preg_match(self::SENSITIVE_KEY_PATTERN, $keyStr) === 1) {
-                // Drop context key matching password|token|secret|authorization|cookie|phone|email
+                // Drop context key matching password|token|secret|authorization|cookie|phone|email|session|xsrf
                 continue;
             }
 
-            if (is_array($value)) {
+            if ($value instanceof Throwable) {
+                $result[$key] = self::redactThrowable($value);
+            } elseif (is_array($value)) {
                 $result[$key] = self::redactArray($value);
+            } elseif ($value instanceof JsonSerializable) {
+                $serialized = $value->jsonSerialize();
+                $result[$key] = is_array($serialized) ? self::redactArray($serialized) : $serialized;
             } elseif (is_string($value)) {
                 if (self::isPreservedKey($keyStr)) {
                     $result[$key] = $value;
@@ -100,6 +110,28 @@ final class RedactPersonalData implements ProcessorInterface
     public static function redactContext(array $context): array
     {
         return self::redactArray($context);
+    }
+
+    /**
+     * Normalizes and redacts a Throwable instance so exception messages
+     * never leak personal data.
+     *
+     * @return array<string, mixed>
+     */
+    public static function redactThrowable(Throwable $e): array
+    {
+        $normalized = [
+            'class' => get_class($e),
+            'message' => self::redactString($e->getMessage()),
+            'code' => $e->getCode(),
+            'file' => $e->getFile().':'.$e->getLine(),
+        ];
+
+        if ($e->getPrevious() !== null) {
+            $normalized['previous'] = self::redactThrowable($e->getPrevious());
+        }
+
+        return $normalized;
     }
 
     /**

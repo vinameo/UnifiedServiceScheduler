@@ -50,6 +50,14 @@ final class CorrelationId
             }
         }
 
+        foreach (['REQUEST_ID', 'X_REQUEST_ID'] as $serverKey) {
+            $value = $request->server->get($serverKey);
+
+            if (is_string($value) && preg_match(self::VALID, $value) === 1) {
+                return $value;
+            }
+        }
+
         return (string) Str::uuid();
     }
 }
