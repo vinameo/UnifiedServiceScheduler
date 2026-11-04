@@ -4,7 +4,7 @@
 
 **Blocked by:** [04-keep-metrics-internal](04-keep-metrics-internal.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/08-monitoring`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-08-03
 
-- [ ] TC-08-03 (AC-08.3; Integration): given The DB connection points at a host that does not exist (runtime config); when `GET /health/ready`; then 503, `checks.database = fail`. Test: `Feature/Platform/HealthTest::test_AC_08_3_ready_is_503_when_database_is_down`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-08-03 (AC-08.3; Integration): given The DB connection points at a host that does not exist (runtime config); when `GET /health/ready`; then 503, `checks.database = fail`. Test: `Feature/Platform/HealthTest::test_AC_08_3_ready_is_503_when_database_is_down`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
