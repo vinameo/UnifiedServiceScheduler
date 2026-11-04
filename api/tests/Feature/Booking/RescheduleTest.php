@@ -306,4 +306,376 @@ class RescheduleTest extends TestCase
             CarbonImmutable::setTestNow();
         }
     }
+
+    /**
+     * TC-09-04 (AC-09.4): Reschedule keeps the same technician when free, even if another is ranked first normally.
+     */
+    public function test_AC_09_4_keeps_the_same_technician(): void
+    {
+        $world = World::saigonD7();
+        $world->onlyTechnicians(['An', 'Dũng']);
+
+        $an = $world->technician('An');
+        $dung = $world->technician('Dũng');
+        $this->assertLessThan($dung->level, $an->level);
+
+        $advisor = $world->advisor();
+        ['customer' => $customerX, 'vehicle' => $vehicleX] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Toyota', 'model' => 'Vios', 'plate_key' => '51H11111', 'licence_plate' => '51H-111.11']
+        );
+        ['customer' => $customerY, 'vehicle' => $vehicleY] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Honda', 'model' => 'City', 'plate_key' => '51K22222', 'licence_plate' => '51K-222.22']
+        );
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-03T09:00:00+07:00';
+            $slot1400 = '2026-11-03T14:00:00+07:00';
+
+            // 1. Create booking Y at 09:00 (takes An because An is Level 2, lower than Dũng Level 3)
+            $bookY = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customerY->id,
+                'vehicleId' => $vehicleY->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookY->assertStatus(201);
+            $this->assertSame($an->id, $bookY->json('technician.id'));
+
+            // 2. Create booking X at 09:00 (takes Dũng because An is busy)
+            $bookX = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customerX->id,
+                'vehicleId' => $vehicleX->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookX->assertStatus(201);
+            $appointmentXId = $bookX->json('id');
+            $this->assertSame($dung->id, $bookX->json('technician.id'));
+
+            // 3. At 14:00, both An and Dũng are free. An would be ranked first normally (Level 2 < Level 3).
+            // When Reschedule X to 14:00 with keepTechnician = true:
+            $rescheduleResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentXId}/reschedule", [
+                'newStart' => $slot1400,
+                'keepTechnician' => true,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            // Then 200 with Dũng
+            $rescheduleResponse->assertStatus(200);
+            $this->assertSame($dung->id, $rescheduleResponse->json('technician.id'));
+
+            /** @var Appointment $row */
+            $row = Appointment::findOrFail($appointmentXId);
+            $this->assertSame($dung->id, $row->technician_id);
+            $this->assertSame(2, $row->version);
+
+            // Active TECHNICIAN allocation is Dũng
+            $activeTechAlloc = DB::table('resource_allocations')
+                ->where('appointment_id', $appointmentXId)
+                ->where('resource_type', 'TECHNICIAN')
+                ->where('active', true)
+                ->first();
+            $this->assertNotNull($activeTechAlloc);
+            $this->assertSame($dung->id, $activeTechAlloc->resource_id);
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * TC-09-05 (AC-09.5, D-09.6): Reschedule falls back to another qualified technician when preferred is busy.
+     */
+    public function test_AC_09_5_other_technician_when_preferred_is_busy(): void
+    {
+        $world = World::saigonD7();
+        $world->onlyTechnicians(['An', 'Dũng']);
+
+        $an = $world->technician('An');
+        $dung = $world->technician('Dũng');
+
+        $advisor = $world->advisor();
+        ['customer' => $customerX, 'vehicle' => $vehicleX] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Toyota', 'model' => 'Vios', 'plate_key' => '51H11111', 'licence_plate' => '51H-111.11']
+        );
+        ['customer' => $customerY, 'vehicle' => $vehicleY] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Honda', 'model' => 'City', 'plate_key' => '51K22222', 'licence_plate' => '51K-222.22']
+        );
+        ['customer' => $customerZ, 'vehicle' => $vehicleZ] = $world->customerWithVehicle(
+            null,
+            ['make' => 'Mazda', 'model' => '3', 'plate_key' => '51M33333', 'licence_plate' => '51M-333.33']
+        );
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-03T09:00:00+07:00';
+            $slot1400 = '2026-11-03T14:00:00+07:00';
+
+            // 1. Create booking Y at 09:00 (takes An)
+            $bookY = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customerY->id,
+                'vehicleId' => $vehicleY->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookY->assertStatus(201);
+            $this->assertSame($an->id, $bookY->json('technician.id'));
+
+            // 2. Create booking X at 09:00 (takes Dũng)
+            $bookX = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customerX->id,
+                'vehicleId' => $vehicleX->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookX->assertStatus(201);
+            $appointmentXId = $bookX->json('id');
+            $this->assertSame($dung->id, $bookX->json('technician.id'));
+
+            // 3. Make Dũng busy at 14:00 with another booking Z:
+            // Temporarily restrict to Dũng to book Z at 14:00
+            $world->onlyTechnicians(['Dũng']);
+            $bookZ = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customerZ->id,
+                'vehicleId' => $vehicleZ->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot1400,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookZ->assertStatus(201);
+            $this->assertSame($dung->id, $bookZ->json('technician.id'));
+
+            // Re-enable An so both An and Dũng are active, but Dũng is busy at 14:00 and An is free
+            $world->onlyTechnicians(['An', 'Dũng']);
+
+            // When Reschedule X to 14:00 (keepTechnician true by default or explicit)
+            $rescheduleResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentXId}/reschedule", [
+                'newStart' => $slot1400,
+                'keepTechnician' => true,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            // Then 200 with An (preferred Dũng is busy, An is free and qualified)
+            $rescheduleResponse->assertStatus(200);
+            $this->assertSame($an->id, $rescheduleResponse->json('technician.id'));
+
+            /** @var Appointment $row */
+            $row = Appointment::findOrFail($appointmentXId);
+            $this->assertSame($an->id, $row->technician_id);
+            $this->assertSame(2, $row->version);
+
+            // technician_id matches the active TECHNICIAN allocation
+            $activeTechAlloc = DB::table('resource_allocations')
+                ->where('appointment_id', $appointmentXId)
+                ->where('resource_type', 'TECHNICIAN')
+                ->where('active', true)
+                ->first();
+            $this->assertNotNull($activeTechAlloc);
+            $this->assertSame($an->id, $activeTechAlloc->resource_id);
+            $this->assertSame($row->technician_id, $activeTechAlloc->resource_id);
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * TC-09-06 (AC-09.6, D-09.10): Reschedule fails with 409 VEHICLE_ALREADY_BOOKED when the vehicle has another booking.
+     */
+    public function test_AC_09_6_vehicle_busy_at_new_time(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-03T09:00:00+07:00';
+            $slot1400 = '2026-11-03T14:00:00+07:00';
+
+            // 1. Create booking X for vehicle V at 09:00–10:00
+            $bookX = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookX->assertStatus(201);
+            $appointmentXId = $bookX->json('id');
+
+            // 2. Create booking Y for the SAME vehicle V at 14:00–15:00
+            $bookY = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot1400,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookY->assertStatus(201);
+            $appointmentYId = $bookY->json('id');
+            $referenceY = $bookY->json('reference');
+
+            // Record snapshot of X before reschedule
+            /** @var Appointment $rowBefore */
+            $rowBefore = Appointment::findOrFail($appointmentXId);
+            $allocationsBefore = DB::table('resource_allocations')
+                ->where('appointment_id', $appointmentXId)
+                ->where('active', true)
+                ->orderBy('resource_type')
+                ->get()
+                ->toArray();
+            $eventsCountBefore = DB::table('appointment_events')
+                ->where('appointment_id', $appointmentXId)
+                ->count();
+            $outboxCountBefore = DB::table('outbox_messages')
+                ->where('appointment_id', $appointmentXId)
+                ->count();
+
+            // When: Advisor reschedules X to 14:00 (where vehicle V is already booked by Y)
+            $rescheduleResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentXId}/reschedule", [
+                'newStart' => $slot1400,
+                'keepTechnician' => true,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            // Then: 409 VEHICLE_ALREADY_BOOKED
+            $rescheduleResponse->assertStatus(409);
+            $this->assertSame('VEHICLE_ALREADY_BOOKED', $rescheduleResponse->json('code'));
+            $this->assertSame($appointmentYId, $rescheduleResponse->json('existingAppointment.id'));
+            $this->assertSame($referenceY, $rescheduleResponse->json('existingAppointment.reference'));
+
+            // X is unchanged: status, start, end, technician, bay, version
+            /** @var Appointment $rowAfter */
+            $rowAfter = Appointment::findOrFail($appointmentXId);
+            $this->assertSame($rowBefore->start_at->toIso8601String(), $rowAfter->start_at->toIso8601String());
+            $this->assertSame($rowBefore->end_at->toIso8601String(), $rowAfter->end_at->toIso8601String());
+            $this->assertSame($rowBefore->technician_id, $rowAfter->technician_id);
+            $this->assertSame($rowBefore->bay_id, $rowAfter->bay_id);
+            $this->assertSame($rowBefore->version, $rowAfter->version);
+            $this->assertSame(AppointmentStatus::CONFIRMED, $rowAfter->status);
+
+            // Allocations for X unchanged and active
+            $allocationsAfter = DB::table('resource_allocations')
+                ->where('appointment_id', $appointmentXId)
+                ->where('active', true)
+                ->orderBy('resource_type')
+                ->get()
+                ->toArray();
+            $this->assertEquals($allocationsBefore, $allocationsAfter);
+
+            // No events or outbox messages written for failed move
+            $this->assertSame($eventsCountBefore, DB::table('appointment_events')->where('appointment_id', $appointmentXId)->count());
+            $this->assertSame($outboxCountBefore, DB::table('outbox_messages')->where('appointment_id', $appointmentXId)->count());
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * TC-09-08 (INV-09.3): Move earlier overlapping own slot succeeds and keeps bay if free.
+     */
+    public function test_move_earlier_overlapping_own_slot(): void
+    {
+        $world = World::saigonD7();
+        $world->onlyTechnicians(['An']);
+        $world->onlyBays(['K2']);
+
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot1000 = '2026-11-03T10:00:00+07:00';
+            $slot0930 = '2026-11-03T09:30:00+07:00';
+
+            // Given X 10:00–11:00 on K2
+            $bookResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot1000,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookResponse->assertStatus(201);
+            $appointmentId = $bookResponse->json('id');
+            $bayK2Id = $bookResponse->json('bay.id');
+
+            // When: Reschedule to 09:30 (overlaps own 10:00–11:00 start: 09:30–10:30 overlaps [10:00, 10:30))
+            $rescheduleResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentId}/reschedule", [
+                'newStart' => $slot0930,
+                'keepTechnician' => true,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            // Then: 200, X 09:30–10:30, still K2
+            $rescheduleResponse->assertStatus(200);
+            $rescheduleResponse->assertHeader('ETag', '"2"');
+            $this->assertSame(2, $rescheduleResponse->json('version'));
+            $this->assertSame('2026-11-03T09:30:00+07:00', $rescheduleResponse->json('start'));
+            $this->assertSame('2026-11-03T10:30:00+07:00', $rescheduleResponse->json('end'));
+            $this->assertSame($bayK2Id, $rescheduleResponse->json('bay.id'));
+
+            // Check DB
+            /** @var Appointment $row */
+            $row = Appointment::findOrFail($appointmentId);
+            $this->assertSame(2, $row->version);
+            $this->assertSame('2026-11-03 09:30:00', $row->start_at->setTimezone('Asia/Ho_Chi_Minh')->format('Y-m-d H:i:s'));
+            $this->assertSame('2026-11-03 10:30:00', $row->end_at->setTimezone('Asia/Ho_Chi_Minh')->format('Y-m-d H:i:s'));
+            $this->assertSame($bayK2Id, $row->bay_id);
+
+            // Active allocations count 3 and time matches 09:30–10:30
+            $activeAllocations = DB::table('resource_allocations')
+                ->where('appointment_id', $appointmentId)
+                ->where('active', true)
+                ->get();
+            $this->assertCount(3, $activeAllocations);
+
+            // Overlap query 0
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
 }
