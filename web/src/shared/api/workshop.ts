@@ -1,8 +1,9 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { notifications } from '@mantine/notifications'
 import { api } from './client'
 import { setAppointment, withIfMatch } from './appointmentQuery'
 import type { Appointment } from './appointments'
+import { useMe } from '../auth/useMe'
 import { appointmentCopy } from '../../staff/appointments/copy'
 
 export interface ExtendAffectedItem {
@@ -158,3 +159,93 @@ export function useExtend(
     onError: options?.onError,
   })
 }
+
+export interface WorkshopAlertNextBooking {
+  appointmentId: string
+  start: string
+  status: string
+}
+
+export interface WorkshopAlert {
+  type: 'OVERRUN'
+  appointmentId: string
+  version: number
+  bayName: string
+  minutesOver: number
+  customerName?: string
+  serviceName?: string
+  technicianName?: string
+  nextBooking?: WorkshopAlertNextBooking | null
+}
+
+export interface WorkshopBlock {
+  appointmentId: string
+  version: number
+  reference: string
+  status: string
+  start: string
+  end: string
+  customerName: string
+  serviceName: string
+  technicianName: string
+  overrunMinutes?: number
+}
+
+export interface WorkshopBay {
+  id: string
+  code: string
+  name: string
+  bayType: string
+  blocks: WorkshopBlock[]
+}
+
+export interface WorkshopDisplaced {
+  appointmentId: string
+  reference: string
+  start: string
+  end: string
+  reason: string
+}
+
+export interface WorkshopTechnician {
+  id: string
+  name: string
+  level: number
+  bookedMinutes: number
+  status: 'WORKING' | 'OVERRUN'
+}
+
+export interface WorkshopBoardData {
+  date: string
+  now: string
+  opensAt: string
+  closesAt: string
+  bays: WorkshopBay[]
+  displaced: WorkshopDisplaced[]
+  technicians: WorkshopTechnician[]
+  alerts: WorkshopAlert[]
+}
+
+export async function getWorkshopBoard(dealershipId: string, date?: string): Promise<WorkshopBoardData> {
+  const url = date
+    ? `/dealerships/${dealershipId}/workshop-board?date=${date}`
+    : `/dealerships/${dealershipId}/workshop-board`
+  const response = await api.get<{ data: WorkshopBoardData }>(url)
+  return response.data.data
+}
+
+export function useWorkshopBoard(date?: string) {
+  const { data: me } = useMe()
+  const dealershipId = me?.dealership?.id
+
+  return useQuery({
+    queryKey: ['workshopBoard', dealershipId, date],
+    queryFn: () => {
+      if (!dealershipId) throw new Error('No dealership')
+      return getWorkshopBoard(dealershipId, date)
+    },
+    enabled: !!dealershipId,
+    refetchInterval: 30_000,
+  })
+}
+

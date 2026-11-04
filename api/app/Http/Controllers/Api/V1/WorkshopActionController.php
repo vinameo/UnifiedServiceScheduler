@@ -6,6 +6,7 @@ use App\Domain\Workshop\Services\WorkshopServiceInterface;
 use App\Http\AppointmentResponder;
 use App\Http\Controllers\Controller;
 use App\Http\ExpectedVersion;
+use App\Http\Requests\ExtendAppointmentRequest;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
 use App\Models\User;
@@ -83,15 +84,25 @@ class WorkshopActionController extends Controller
         return AppointmentResponder::ok($result);
     }
 
-    public function extend(Request $request, Appointment $appointment): JsonResponse
+    public function extend(ExtendAppointmentRequest $request, Appointment $appointment): JsonResponse
     {
-        ExpectedVersion::from($request);
+        /** @var User $user */
+        $user = $request->user();
+        $expectedVersion = ExpectedVersion::from($request);
+
+        $result = $this->workshopService->extend(
+            actor: $user,
+            appointmentId: $appointment->id,
+            expectedVersion: $expectedVersion,
+            minutes: $request->minutes(),
+            now: CarbonImmutable::now(),
+        );
 
         return response()->json([
             'data' => [
-                'appointment' => new AppointmentResource($appointment),
-                'affected' => [],
+                'appointment' => new AppointmentResource($result->appointment),
+                'affected' => $result->affected,
             ],
-        ], 200)->header('ETag', sprintf('"%d"', $appointment->version));
+        ], 200)->header('ETag', sprintf('"%d"', $result->appointment->version));
     }
 }

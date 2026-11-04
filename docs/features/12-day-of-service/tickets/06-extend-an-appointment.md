@@ -4,7 +4,7 @@
 
 **Blocked by:** [05-permissions-per-workshop-action](05-permissions-per-workshop-action.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/12-day-of-service`
 
@@ -12,7 +12,7 @@
 
 **Test cases:** TC-12-08, TC-12-11, TC-12-28
 
-- [ ] TC-12-08 (AC-12.7; Integration): given X IN_PROGRESS, nothing after it; when Extend 30; then 200; `end` +30; X's 3 allocations have the new range; 1 `EXTENDED` history row with `minutes 30`. Test: `ExtendTest::test_AC_12_7_extend_without_neighbours`.
-- [ ] TC-12-11 (Stale job version; Integration): given X v3; someone completes X (v4); when Extend with `If-Match "3"`; then 412 with `status COMPLETED`; neighbours untouched. Test: `…::test_stale_job_version_changes_nothing`.
-- [ ] TC-12-28 (AC-12.15, D-12.15; Web component): given Fake API: board with an alert for X `version 3`; extend → 412 with X `COMPLETED` (v4); when Tap "Extend 30 min"; then The request has `If-Match: "3"`; the 412 alert shows "Status: In progress → Completed"; the board refetches. Test: `web/src/staff/workshop/WorkshopBoardPage.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-12-08 (AC-12.7; Integration): given X IN_PROGRESS, nothing after it; when Extend 30; then 200; `end` +30; X's 3 allocations have the new range; 1 `EXTENDED` history row with `minutes 30`. Test: `ExtendTest::test_AC_12_7_extend_without_neighbours`.
+- [x] TC-12-11 (Stale job version; Integration): given X v3; someone completes X (v4); when Extend with `If-Match "3"`; then 412 with `status COMPLETED`; neighbours untouched. Test: `…::test_stale_job_version_changes_nothing`.
+- [x] TC-12-28 (AC-12.15, D-12.15; Web component): given Fake API: board with an alert for X `version 3`; extend → 412 with X `COMPLETED` (v4); when Tap "Extend 30 min"; then The request has `If-Match: "3"`; the 412 alert shows "Status: In progress → Completed"; the board refetches. Test: `web/src/staff/workshop/WorkshopBoardPage.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

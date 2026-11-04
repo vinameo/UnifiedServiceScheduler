@@ -15,4 +15,6 @@ interface WorkshopServiceInterface
     public function complete(User $actor, string $appointmentId, int $expectedVersion, CarbonImmutable $now): Appointment;
 
     public function markNoShow(User $actor, string $appointmentId, int $expectedVersion, CarbonImmutable $now): Appointment;
+
+    public function extend(User $actor, string $appointmentId, int $expectedVersion, int $minutes, CarbonImmutable $now): ExtendResult;
 }

@@ -33,6 +33,8 @@ export function formatStatus(status: string | undefined): string {
       return 'Held'
     case 'COMPLETED':
       return 'Completed'
+    case 'IN_PROGRESS':
+      return 'In progress'
     case 'IN_SERVICE':
       return 'In service'
     case 'CHECKED_IN':
