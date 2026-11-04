@@ -4,7 +4,7 @@
 
 **Blocked by:** [08-holds-expire-job](08-holds-expire-job.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/10-temporary-hold`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-10-12
 
-- [ ] TC-10-12 (AC-10.9; Integration): given Expired hold (job not run) holding An, the only technician, 10:00; when Customer B books 10:00; then 201; the old hold `EXPIRED`. Test: `ExpiredHoldReleaserTest::test_AC_10_9_booking_flow_frees_expired_holds`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-10-12 (AC-10.9; Integration): given Expired hold (job not run) holding An, the only technician, 10:00; when Customer B books 10:00; then 201; the old hold `EXPIRED`. Test: `ExpiredHoldReleaserTest::test_AC_10_9_booking_flow_frees_expired_holds`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

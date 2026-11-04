@@ -61,6 +61,8 @@ final readonly class BookingService implements BookingServiceInterface
 
     private Tracer $tracer;
 
+    private ExpiredHoldReleaserInterface $expiredHoldReleaser;
+
     public function __construct(
         private MasterDataRepositoryInterface $masterDataRepository,
         private CustomerRepositoryInterface $customerRepository,
@@ -75,6 +77,7 @@ final readonly class BookingService implements BookingServiceInterface
         ?AppointmentEventRecorderInterface $eventRecorder = null,
         ?OutboxWriterInterface $outboxWriter = null,
         ?Tracer $tracer = null,
+        ?ExpiredHoldReleaserInterface $expiredHoldReleaser = null,
     ) {
         $this->appointmentRepository = $appointmentRepository ?? app(AppointmentRepositoryInterface::class);
         $this->appointmentTransition = $appointmentTransition ?? app(AppointmentTransitionInterface::class);
@@ -82,6 +85,7 @@ final readonly class BookingService implements BookingServiceInterface
         $this->eventRecorder = $eventRecorder ?? app(AppointmentEventRecorderInterface::class);
         $this->outboxWriter = $outboxWriter ?? app(OutboxWriterInterface::class);
         $this->tracer = $tracer ?? app(Tracer::class);
+        $this->expiredHoldReleaser = $expiredHoldReleaser ?? app(ExpiredHoldReleaserInterface::class);
     }
 
     public function create(CreateBookingInput $input, User $actor): Appointment
@@ -161,6 +165,13 @@ final readonly class BookingService implements BookingServiceInterface
 
             return [$dealership, $serviceType, $customer, $vehicle, $range, $now];
         });
+
+        $this->expiredHoldReleaser->releaseBlocking(
+            dealershipId: $dealership->id,
+            range: $range,
+            vehicleId: $vehicle?->id,
+            now: $now,
+        );
 
         // 6. Candidate finder
         $dealershipId = $dealership->id;
@@ -411,8 +422,16 @@ final readonly class BookingService implements BookingServiceInterface
         $openingHours = OpeningHours::fromWeekdayMap($openingHoursMap, $dealership->timezone);
         $newRange = BookingTimeRules::check($newStart, $serviceType->duration_minutes, $openingHours, $now);
 
-        // 6. Candidate search (RQ §B7 step 6, INV-09.4)
         $dealershipId = $dealership->id;
+
+        $this->expiredHoldReleaser->releaseBlocking(
+            dealershipId: $dealershipId,
+            range: $newRange,
+            vehicleId: $appointment->vehicle_id,
+            now: $now,
+        );
+
+        // 6. Candidate search (RQ §B7 step 6, INV-09.4)
         $tz = new DateTimeZone($dealership->timezone);
         $localDate = $newRange->start->setTimezone($tz)->toDateString();
         $snapshot = $this->snapshotRepository->forDay($dealershipId, $localDate, $now);
