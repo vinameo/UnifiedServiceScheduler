@@ -1,6 +1,7 @@
-import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import { useMe } from '../auth/useMe'
+import { setAppointment, withIfMatch } from './appointmentQuery'
 
 export interface CreateAppointmentPayload {
   dealershipId?: string
@@ -291,6 +292,45 @@ export function useMyAppointments(scope: AppointmentScope) {
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => getMyAppointments(scope, pageParam),
     getNextPageParam: (lastPage) => lastPage.meta.nextCursor ?? undefined,
+  })
+}
+
+export interface CancelAppointmentPayload {
+  reason?: string | null
+  note?: string | null
+}
+
+export function useCancelAppointment(appointmentId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      reason,
+      note,
+      idempotencyKey,
+      etag,
+    }: CancelAppointmentPayload & { idempotencyKey: string; etag: string }) => {
+      const response = await api.post<Appointment>(
+        `/appointments/${appointmentId}/cancel`,
+        { reason, note },
+        {
+          headers: {
+            'Idempotency-Key': idempotencyKey,
+            ...withIfMatch(etag),
+          },
+        },
+      )
+      const rawEtag = response.headers['etag']
+      const newEtag = typeof rawEtag === 'string' ? rawEtag : ''
+      return { appointment: response.data, etag: newEtag }
+    },
+    onSuccess: ({ appointment, etag }) => {
+      setAppointment(queryClient, appointment, etag)
+      queryClient.invalidateQueries({ queryKey: ['dealershipAppointments'] })
+      queryClient.invalidateQueries({ queryKey: ['myAppointments'] })
+      queryClient.invalidateQueries({ queryKey: ['availability'] })
+      queryClient.invalidateQueries({ queryKey: ['appointmentHistory', appointmentId] })
+    },
   })
 }
 

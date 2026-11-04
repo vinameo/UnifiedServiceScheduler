@@ -72,6 +72,12 @@ class AppServiceProvider extends ServiceProvider
             return $role === Role::SERVICE_ADVISOR || $role === Role::CUSTOMER;
         });
 
+        Gate::define('cancel-appointment', function (User $user): bool {
+            $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
+
+            return $role === Role::SERVICE_ADVISOR || $role === Role::CUSTOMER;
+        });
+
         Gate::define('search-customers', function (User $user): bool {
             $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
 
