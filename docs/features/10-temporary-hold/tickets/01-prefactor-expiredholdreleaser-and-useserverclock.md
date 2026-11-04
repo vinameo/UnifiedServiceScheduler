@@ -4,7 +4,7 @@
 
 **Blocked by:** F09 [10-acceptance](../../09-reschedule/tickets/10-acceptance.md) (the whole F09 branch merged to `develop`).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/10-temporary-hold`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** TC-10-18
 
-- [ ] TC-10-18 (D-10.11; Web unit): given Response `Date` 10:00:00, browser 09:58:00; when `useServerClock().now()`; then 10:00:00 (± test tolerance). Test: `web/src/shared/time/useServerClock.test.ts`.
-- [ ] No change users can see; existing tests stay green unchanged
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-10-18 (D-10.11; Web unit): given Response `Date` 10:00:00, browser 09:58:00; when `useServerClock().now()`; then 10:00:00 (± test tolerance). Test: `web/src/shared/time/useServerClock.test.ts`.
+- [x] No change users can see; existing tests stay green unchanged
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

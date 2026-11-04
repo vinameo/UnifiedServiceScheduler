@@ -41,6 +41,8 @@ use App\Domain\Booking\Services\AvailabilityService;
 use App\Domain\Booking\Services\AvailabilityServiceInterface;
 use App\Domain\Booking\Services\BookingService;
 use App\Domain\Booking\Services\BookingServiceInterface;
+use App\Domain\Booking\Services\ExpiredHoldReleaser;
+use App\Domain\Booking\Services\ExpiredHoldReleaserInterface;
 use App\Domain\MasterData\Repositories\MasterDataRepository;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\MasterData\Services\MasterDataService;
@@ -104,6 +106,7 @@ class DomainServiceProvider extends ServiceProvider
         AppointmentQueryServiceInterface::class => AppointmentQueryService::class,
         AvailabilityCalculatorInterface::class => AvailabilityCalculator::class,
         AvailabilityServiceInterface::class => AvailabilityService::class,
+        ExpiredHoldReleaserInterface::class => ExpiredHoldReleaser::class,
 
         // Notifications (F04, F11)
         OutboxWriterInterface::class => OutboxWriter::class,

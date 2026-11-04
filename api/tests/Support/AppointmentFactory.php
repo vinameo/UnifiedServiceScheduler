@@ -29,6 +29,7 @@ class AppointmentFactory
         ?Customer $customer = null,
         ?Vehicle $vehicle = null,
         AppointmentStatus $status = AppointmentStatus::CONFIRMED,
+        ?CarbonImmutable $expiresAt = null,
     ): Appointment {
         $now = CarbonImmutable::now();
         $tz = $dealership->timezone;
@@ -73,7 +74,7 @@ class AppointmentFactory
             'status' => $status->value,
             'start_at' => $startUtc,
             'end_at' => $endUtc,
-            'expires_at' => $status === AppointmentStatus::HELD ? $now->addMinutes(5) : null,
+            'expires_at' => $expiresAt ?? ($status === AppointmentStatus::HELD ? $now->addMinutes(5) : null),
             'version' => 1,
             'source' => 'STAFF',
             'reminder_opt_in' => false,

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Booking\Repositories;
 
+use App\Domain\Allocation\TimeRange;
 use App\Models\Appointment;
 use App\Models\AppointmentEvent;
 use App\Models\Dealership;
@@ -56,4 +57,14 @@ interface AppointmentRepositoryInterface
     public function updateVersioned(string $id, int $expectedVersion, array $changes, CarbonImmutable $now): int;
 
     public function hasActiveAllocations(string $appointmentId): bool;
+
+    /**
+     * @return Collection<int, Appointment>
+     */
+    public function findExpiredHoldsBlocking(
+        string $dealershipId,
+        TimeRange $range,
+        ?string $vehicleId,
+        CarbonImmutable $now,
+    ): Collection;
 }
