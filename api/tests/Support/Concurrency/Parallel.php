@@ -12,7 +12,7 @@ class Parallel
      * Run $n parallel requests using Process::pool.
      *
      * @param  int  $count  Number of processes
-     * @param  Closure(int, float): (string|array{method?: string, uri?: string, user?: mixed, headers?: array<string, string>, body?: mixed, json?: mixed})  $requestFor
+     * @param  Closure(int, float): (string|array{method?: string, uri?: string, user?: mixed, headers?: array<string, string>, body?: mixed, json?: mixed, now?: string})  $requestFor
      * @return array<int, array{status: int, body: array<string, mixed>, headers: array<string, array<int, string>>, raw: string}>
      */
     public static function run(int $count, Closure $requestFor, float $delaySeconds = 0.5): array
@@ -60,6 +60,9 @@ class Parallel
                 if ($body !== '') {
                     $cmd .= ' --body='.escapeshellarg($body);
                 }
+                if (isset($item['now'])) {
+                    $cmd .= ' --now='.escapeshellarg((string) $item['now']);
+                }
 
                 $pool->command($cmd);
             }
@@ -83,7 +86,7 @@ class Parallel
                 ];
             } else {
                 $output[] = [
-                    'status' => 500,
+                    'status' => $result->exitCode() === 0 ? 0 : 500,
                     'body' => ['raw' => $raw, 'error' => $result->errorOutput()],
                     'headers' => [],
                     'raw' => $raw,

@@ -19,7 +19,9 @@ class ExpireHoldsCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'holds:expire {--now= : ISO timestamp for app clock (testing only)}';
+    protected $signature = 'holds:expire
+                            {--now= : ISO timestamp for app clock (testing only)}
+                            {--start-at= : Unix timestamp with microsecond precision to wait for (testing only)}';
 
     /**
      * The console command description.
@@ -35,6 +37,14 @@ class ExpireHoldsCommand extends Command
         AppointmentRepositoryInterface $appointmentRepository,
         AppointmentTransitionInterface $appointmentTransition,
     ): int {
+        $startAtOption = $this->option('start-at');
+        if ($startAtOption !== null && is_numeric($startAtOption) && app()->environment('testing')) {
+            $targetTime = (float) $startAtOption;
+            while (microtime(true) < $targetTime) {
+                usleep(100);
+            }
+        }
+
         $now = CarbonImmutable::now();
         $nowOption = $this->option('now');
 
