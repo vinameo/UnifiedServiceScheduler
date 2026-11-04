@@ -125,3 +125,4 @@ Spec: `docs/features/07-cancel-appointment/`
   - Code Style & Static Analysis: Pint passed; PHPStan analysis clean (Level 6, 0 errors).
 - **Manual Scenarios (M1–M6):** All verified PASS.
 - **Verdict:** **READY TO MERGE** into `develop`.
+
