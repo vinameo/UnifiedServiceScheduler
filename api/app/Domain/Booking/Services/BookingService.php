@@ -36,7 +36,6 @@ use App\Models\User;
 use App\Support\Tracing\Tracer;
 use Carbon\CarbonImmutable;
 use DateTimeZone;
-use Illuminate\Support\Facades\DB;
 
 final readonly class BookingService implements BookingServiceInterface
 {
@@ -301,10 +300,7 @@ final readonly class BookingService implements BookingServiceInterface
         // 4. Same time check (RQ §B7 step 4, D-09.5)
         $currentStart = CarbonImmutable::parse($appointment->start_at);
         if ($newStart->equalTo($currentStart)) {
-            $hasActiveAllocations = DB::table('resource_allocations')
-                ->where('appointment_id', $appointment->id)
-                ->where('active', true)
-                ->exists();
+            $hasActiveAllocations = $this->appointmentRepository->hasActiveAllocations($appointment->id);
             if ($hasActiveAllocations) {
                 throw new RescheduleSameTime;
             }
