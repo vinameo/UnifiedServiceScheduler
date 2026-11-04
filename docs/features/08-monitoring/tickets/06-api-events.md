@@ -4,7 +4,7 @@
 
 **Blocked by:** [05-readiness-check](05-readiness-check.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/08-monitoring`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-08-16
 
-- [ ] TC-08-16 (INV-08.7; Integration): given A test route throws an exception whose message holds an email; when Call it; then `api_events.detail` has no email. Test: `ApiEventsTest::test_INV_08_7_detail_is_redacted`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-08-16 (INV-08.7; Integration): given A test route throws an exception whose message holds an email; when Call it; then `api_events.detail` has no email. Test: `ApiEventsTest::test_INV_08_7_detail_is_redacted`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
