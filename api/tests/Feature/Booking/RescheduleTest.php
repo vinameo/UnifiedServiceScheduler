@@ -589,6 +589,7 @@ class RescheduleTest extends TestCase
             $this->assertSame('VEHICLE_ALREADY_BOOKED', $rescheduleResponse->json('code'));
             $this->assertSame($appointmentYId, $rescheduleResponse->json('existingAppointment.id'));
             $this->assertSame($referenceY, $rescheduleResponse->json('existingAppointment.reference'));
+            $this->assertSame('CONFIRMED', $rescheduleResponse->json('existingAppointment.status'));
 
             // X is unchanged: status, start, end, technician, bay, version
             /** @var Appointment $rowAfter */

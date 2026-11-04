@@ -544,7 +544,8 @@ class CreateBookingTest extends TestCase
 
             $res2->assertStatus(409)
                 ->assertJsonPath('code', 'VEHICLE_ALREADY_BOOKED')
-                ->assertJsonPath('existingAppointment.id', $firstApptId);
+                ->assertJsonPath('existingAppointment.id', $firstApptId)
+                ->assertJsonPath('existingAppointment.status', 'CONFIRMED');
 
             $this->assertNoOverlappingAllocations();
         } finally {

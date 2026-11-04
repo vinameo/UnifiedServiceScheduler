@@ -170,6 +170,7 @@ class AppointmentWriterTest extends TestCase
             $this->assertSame('VEHICLE_ALREADY_BOOKED', $problem->code);
             $this->assertArrayHasKey('existingAppointment', $problem->extra);
             $this->assertSame($firstAppointment->id, $problem->extra['existingAppointment']['id']);
+            $this->assertSame('CONFIRMED', $problem->extra['existingAppointment']['status']);
 
             // AllocationRetried must NOT be dispatched for vehicle clash
             Event::assertNotDispatched(AllocationRetried::class);

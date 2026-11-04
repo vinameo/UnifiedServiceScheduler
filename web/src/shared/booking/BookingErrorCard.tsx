@@ -1,5 +1,5 @@
 import React from 'react'
-import { Alert, Box, Button, Stack, Text } from '@mantine/core'
+import { Alert, Box, Button, Group, Stack, Text } from '@mantine/core'
 import { Link, useInRouterContext } from 'react-router'
 import { noAvailabilityReasonCopy } from '../api/errorCopy'
 import { AlternativeChips, type AlternativeSlot } from './AlternativeChips'
@@ -19,6 +19,7 @@ export interface BookingProblem {
     reference?: string
     start?: string
     end?: string
+    status?: string
   } | null
   alternatives?: AlternativeSlot[]
   [key: string]: unknown
@@ -70,6 +71,32 @@ function ExistingBookingButton({ url }: { url: string }) {
       variant="default"
     >
       View existing booking
+    </Button>
+  )
+}
+
+function RescheduleExistingButton({ url }: { url: string }) {
+  const inRouter = useInRouterContext()
+  if (inRouter) {
+    return (
+      <Button
+        component={Link}
+        to={url}
+        size="xs"
+        variant="default"
+      >
+        Reschedule existing booking
+      </Button>
+    )
+  }
+  return (
+    <Button
+      component="a"
+      href={url}
+      size="xs"
+      variant="default"
+    >
+      Reschedule existing booking
     </Button>
   )
 }
@@ -137,6 +164,14 @@ export function BookingErrorCard({
       ? `/my-bookings/${existingAppointmentId}`
       : `/staff/appointments/${existingAppointmentId}`
     : undefined
+  const canRescheduleExisting =
+    !isCustomer &&
+    error.code === 'VEHICLE_ALREADY_BOOKED' &&
+    Boolean(existingAppointmentId) &&
+    error.existingAppointment?.status === 'CONFIRMED'
+  const rescheduleExistingUrl = canRescheduleExisting && existingAppointmentId
+    ? `/staff/appointments/${existingAppointmentId}/reschedule`
+    : undefined
 
   const effectiveTimeZone = timeZone ?? context.timeZone ?? 'Asia/Ho_Chi_Minh'
   const effectiveReferenceDate = context.referenceDate ?? context.date
@@ -160,9 +195,12 @@ export function BookingErrorCard({
             />
           </Box>
         )}
-        {existingAppointmentUrl && (
+        {(existingAppointmentUrl || rescheduleExistingUrl) && (
           <Box mt="xs">
-            <ExistingBookingButton url={existingAppointmentUrl} />
+            <Group gap="xs" wrap="wrap">
+              {existingAppointmentUrl && <ExistingBookingButton url={existingAppointmentUrl} />}
+              {rescheduleExistingUrl && <RescheduleExistingButton url={rescheduleExistingUrl} />}
+            </Group>
           </Box>
         )}
         {actions && <Box mt="xs">{actions}</Box>}

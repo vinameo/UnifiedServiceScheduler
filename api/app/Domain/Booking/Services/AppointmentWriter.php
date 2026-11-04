@@ -201,6 +201,7 @@ class AppointmentWriter implements AppointmentWriterInterface
                                 $existing['reference'] = (string) $conflictingAppt->reference;
                                 $existing['start'] = (string) $conflictingAppt->start_at;
                                 $existing['end'] = (string) $conflictingAppt->end_at;
+                                $existing['status'] = (string) $conflictingAppt->status;
                             }
                         }
 
@@ -444,6 +445,7 @@ class AppointmentWriter implements AppointmentWriterInterface
                                 $existing['reference'] = (string) $conflictingAppt->reference;
                                 $existing['start'] = (string) $conflictingAppt->start_at;
                                 $existing['end'] = (string) $conflictingAppt->end_at;
+                                $existing['status'] = (string) $conflictingAppt->status;
                             }
                         }
 

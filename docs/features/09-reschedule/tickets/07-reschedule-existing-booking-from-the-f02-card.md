@@ -4,7 +4,7 @@
 
 **Blocked by:** [06-customer-reschedules-api](06-customer-reschedules-api.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/09-reschedule`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-09-20
 
-- [ ] TC-09-20 (D-09.11; Web component): given `VEHICLE_ALREADY_BOOKED` with a CONFIRMED `existingAppointment` (advisor); when Render the card; then "Reschedule existing booking" → `/staff/appointments/{id}/reschedule`. Test: `web/src/shared/booking/BookingErrorCard.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-09-20 (D-09.11; Web component): given `VEHICLE_ALREADY_BOOKED` with a CONFIRMED `existingAppointment` (advisor); when Render the card; then "Reschedule existing booking" → `/staff/appointments/{id}/reschedule`. Test: `web/src/shared/booking/BookingErrorCard.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
