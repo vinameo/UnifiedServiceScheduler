@@ -7,6 +7,7 @@ use App\Domain\Monitoring\Services\ApiEventServiceInterface;
 use App\Domain\Monitoring\Services\MetricCounterServiceInterface;
 use App\Domain\Monitoring\Services\RequestMetrics;
 use App\Support\Logging\RedactPersonalData;
+use App\Support\Tracing\Tracer;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -27,18 +28,28 @@ final class RecordRequestOutcome
 {
     private const START_ATTRIBUTE = '_request_start_hrtime';
 
+    private readonly Tracer $tracer;
+
     public function __construct(
         private readonly MetricCounterServiceInterface $metricService,
         private readonly RequestMetrics $requestMetrics,
         private readonly ApiEventServiceInterface $apiEventService,
-    ) {}
+        ?Tracer $tracer = null,
+    ) {
+        $this->tracer = $tracer ?? app(Tracer::class);
+    }
 
     public function handle(Request $request, Closure $next): Response
     {
         $this->requestMetrics->reset();
         $request->attributes->set(self::START_ATTRIBUTE, hrtime(true));
 
-        return $next($request);
+        return $this->tracer->span('http.request', function () use ($request, $next) {
+            return $next($request);
+        }, [
+            'http.method' => $request->getMethod(),
+            'http.url' => $request->fullUrl(),
+        ]);
     }
 
     public function terminate(Request $request, Response $response): void
