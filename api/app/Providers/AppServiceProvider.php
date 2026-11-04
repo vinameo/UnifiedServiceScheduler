@@ -78,6 +78,25 @@ class AppServiceProvider extends ServiceProvider
             return $role === Role::SERVICE_ADVISOR || $role === Role::CUSTOMER;
         });
 
+        Gate::define('reschedule-appointment', function (User $user, ?Appointment $appointment = null): bool {
+            $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
+
+            if ($role === Role::SERVICE_ADVISOR) {
+                return $appointment === null || ($user->dealership_id !== null && $appointment->dealership_id === $user->dealership_id);
+            }
+
+            if ($role === Role::CUSTOMER) {
+                if ($appointment === null) {
+                    return true;
+                }
+                $customerId = $user->customer->id ?? $user->customer()->value('id');
+
+                return $customerId !== null && $appointment->customer_id === $customerId;
+            }
+
+            return false;
+        });
+
         Gate::define('search-customers', function (User $user): bool {
             $role = $user->role instanceof Role ? $user->role : Role::tryFrom((string) $user->role);
 

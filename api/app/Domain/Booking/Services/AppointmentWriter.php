@@ -21,6 +21,7 @@ use App\Domain\Notifications\Services\OutboxWriter;
 use App\Domain\Notifications\Services\OutboxWriterInterface;
 use App\Models\Appointment;
 use App\Models\Dealership;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use DateTimeZone;
 use Illuminate\Database\QueryException;
@@ -200,6 +201,7 @@ class AppointmentWriter implements AppointmentWriterInterface
                                 $existing['reference'] = (string) $conflictingAppt->reference;
                                 $existing['start'] = (string) $conflictingAppt->start_at;
                                 $existing['end'] = (string) $conflictingAppt->end_at;
+                                $existing['status'] = (string) $conflictingAppt->status;
                             }
                         }
 
@@ -266,6 +268,7 @@ class AppointmentWriter implements AppointmentWriterInterface
         AppointmentEventType $event,
         ?OutboxEventType $outbox,
         CarbonImmutable $now,
+        ?User $actor = null,
     ): Appointment {
         $appointment = $this->appointmentRepository->find($appointmentId);
         if ($appointment === null) {
@@ -307,6 +310,7 @@ class AppointmentWriter implements AppointmentWriterInterface
                     $event,
                     $outbox,
                     $now,
+                    $actor,
                 ): Appointment {
                     $techRow = DB::table('technicians')
                         ->where('id', $technicianId)
@@ -360,6 +364,11 @@ class AppointmentWriter implements AppointmentWriterInterface
 
                     $this->allocationRepository->insertFor($appointmentId, $appointment->dealership_id, $allocations, $now);
 
+                    $actorRole = null;
+                    if ($actor !== null) {
+                        $actorRole = $actor->role instanceof \BackedEnum ? $actor->role->value : ($actor->role ? (string) $actor->role : null);
+                    }
+
                     // 4. insert event row
                     $this->eventRecorder->record(
                         appointmentId: $appointmentId,
@@ -369,8 +378,8 @@ class AppointmentWriter implements AppointmentWriterInterface
                         occurredAt: $now,
                         fromStatus: $appointment->status,
                         toStatus: $appointment->status,
-                        actorUserId: null,
-                        actorRole: null,
+                        actorUserId: $actor?->id,
+                        actorRole: $actorRole,
                         data: [
                             'from' => [
                                 'start' => $appointment->start_at->toIso8601String(),
@@ -436,6 +445,7 @@ class AppointmentWriter implements AppointmentWriterInterface
                                 $existing['reference'] = (string) $conflictingAppt->reference;
                                 $existing['start'] = (string) $conflictingAppt->start_at;
                                 $existing['end'] = (string) $conflictingAppt->end_at;
+                                $existing['status'] = (string) $conflictingAppt->status;
                             }
                         }
 

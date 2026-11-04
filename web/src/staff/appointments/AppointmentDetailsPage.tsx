@@ -43,19 +43,29 @@ export function AppointmentDetailsPage() {
 
   const timeZone = data.appointment.dealership?.timezone ?? 'Asia/Ho_Chi_Minh'
   const isAdvisor = me?.role === 'SERVICE_ADVISOR'
+  const canReschedule = isAdvisor && data.appointment.status === 'CONFIRMED'
   const canCancel =
     isAdvisor &&
     (data.appointment.status === 'CONFIRMED' || data.appointment.status === 'HELD')
 
-  const actions = canCancel ? (
+  const actions = canCancel || canReschedule ? (
     <Group>
-      <Button
-        variant="outline"
-        color="red"
-        onClick={() => setCancelModalOpened(true)}
-      >
-        {appointmentCopy.cancel.button}
-      </Button>
+      {canReschedule && (
+        <Button
+          onClick={() => navigate(`/staff/appointments/${data.appointment.id}/reschedule`)}
+        >
+          {appointmentCopy.reschedule.button}
+        </Button>
+      )}
+      {canCancel && (
+        <Button
+          variant="outline"
+          color="red"
+          onClick={() => setCancelModalOpened(true)}
+        >
+          {appointmentCopy.cancel.button}
+        </Button>
+      )}
     </Group>
   ) : undefined
 

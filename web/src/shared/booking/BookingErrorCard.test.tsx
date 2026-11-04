@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
+import { MemoryRouter } from 'react-router'
 import { BookingErrorCard } from './BookingErrorCard'
 
 function renderCard(ui: React.ReactElement) {
@@ -229,5 +230,99 @@ describe('BookingErrorCard (TC-02-28)', () => {
     renderCard(<BookingErrorCard error={error} timeZone="Asia/Ho_Chi_Minh" />)
     expect(screen.getByText('Nearest available slots')).toBeInTheDocument()
     expect(screen.getByText('No free time nearby. Pick another day.')).toBeInTheDocument()
+  })
+
+  describe('TC-09-20: Reschedule existing booking button (D-09.11)', () => {
+    it('TC-09-20: given VEHICLE_ALREADY_BOOKED with a CONFIRMED existingAppointment for staff, renders Reschedule existing booking linking to /staff/appointments/{id}/reschedule', () => {
+      const error = {
+        status: 409,
+        code: 'VEHICLE_ALREADY_BOOKED',
+        existingAppointment: {
+          id: 'apt-staff-conf-101',
+          reference: 'APT-20261102-0101',
+          status: 'CONFIRMED',
+        },
+      }
+
+      renderCard(<BookingErrorCard error={error} variant="staff" />)
+
+      const rescheduleLink = screen.getByRole('link', { name: 'Reschedule existing booking' })
+      expect(rescheduleLink).toBeInTheDocument()
+      expect(rescheduleLink).toHaveAttribute('href', '/staff/appointments/apt-staff-conf-101/reschedule')
+
+      const viewLink = screen.getByRole('link', { name: 'View existing booking' })
+      expect(viewLink).toBeInTheDocument()
+      expect(viewLink).toHaveAttribute('href', '/staff/appointments/apt-staff-conf-101')
+    })
+
+    it('TC-09-20: for customer variant, Reschedule existing booking is NOT rendered', () => {
+      const error = {
+        status: 409,
+        code: 'VEHICLE_ALREADY_BOOKED',
+        existingAppointment: {
+          id: 'apt-cust-conf-202',
+          reference: 'APT-20261102-0202',
+          status: 'CONFIRMED',
+        },
+      }
+
+      renderCard(<BookingErrorCard error={error} variant="customer" />)
+
+      expect(screen.queryByRole('link', { name: 'Reschedule existing booking' })).not.toBeInTheDocument()
+      const viewLink = screen.getByRole('link', { name: 'View existing booking' })
+      expect(viewLink).toBeInTheDocument()
+      expect(viewLink).toHaveAttribute('href', '/my-bookings/apt-cust-conf-202')
+    })
+
+    it('TC-09-20: when existingAppointment.status is not CONFIRMED (e.g. CANCELLED or undefined), Reschedule existing booking is NOT rendered', () => {
+      const errorCancelled = {
+        status: 409,
+        code: 'VEHICLE_ALREADY_BOOKED',
+        existingAppointment: {
+          id: 'apt-staff-canc-303',
+          status: 'CANCELLED',
+        },
+      }
+
+      const { unmount } = renderCard(<BookingErrorCard error={errorCancelled} variant="staff" />)
+      expect(screen.queryByRole('link', { name: 'Reschedule existing booking' })).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'View existing booking' })).toBeInTheDocument()
+      unmount()
+
+      const errorUndefined = {
+        status: 409,
+        code: 'VEHICLE_ALREADY_BOOKED',
+        existingAppointment: {
+          id: 'apt-staff-nostat-404',
+        },
+      }
+
+      renderCard(<BookingErrorCard error={errorUndefined} variant="staff" />)
+      expect(screen.queryByRole('link', { name: 'Reschedule existing booking' })).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'View existing booking' })).toBeInTheDocument()
+    })
+
+    it('TC-09-20: renders Reschedule existing booking as router Link when inside RouterContext', () => {
+      const error = {
+        status: 409,
+        code: 'VEHICLE_ALREADY_BOOKED',
+        existingAppointment: {
+          id: 'apt-staff-router-505',
+          status: 'CONFIRMED',
+        },
+      }
+
+      render(
+        <MemoryRouter>
+          <MantineProvider>
+            <BookingErrorCard error={error} variant="staff" />
+          </MantineProvider>
+        </MemoryRouter>,
+      )
+
+      const rescheduleLink = screen.getByRole('link', { name: 'Reschedule existing booking' })
+      expect(rescheduleLink).toBeInTheDocument()
+      expect(rescheduleLink).toHaveAttribute('href', '/staff/appointments/apt-staff-router-505/reschedule')
+    })
   })
 })

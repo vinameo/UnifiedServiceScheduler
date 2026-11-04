@@ -9,6 +9,7 @@ import { CustomerBookingConfirmedPage } from './customer/booking/CustomerBooking
 import { CustomerBookingLayout } from './customer/booking/CustomerBookingLayout'
 import { MyBookingsPage } from './customer/bookings/MyBookingsPage'
 import { BookingDetailsPage } from './customer/bookings/BookingDetailsPage'
+import { ChangeTimePage } from './customer/bookings/ChangeTimePage'
 import { StaffLayout } from './staff/StaffLayout'
 import { StaffSignInPage } from './staff/auth/StaffSignInPage'
 import { MasterDataPage } from './staff/master-data/MasterDataPage'
@@ -17,6 +18,7 @@ import { NewBookingPage } from './staff/booking/NewBookingPage'
 import { BookingConfirmedPage } from './staff/booking/BookingConfirmedPage'
 import { AppointmentListPage } from './staff/appointments/AppointmentListPage'
 import { AppointmentDetailsPage } from './staff/appointments/AppointmentDetailsPage'
+import { ReschedulePage } from './staff/appointments/ReschedulePage'
 import { RequireRole } from './shared/auth/RequireRole'
 
 export const routes = [
@@ -54,6 +56,14 @@ export const routes = [
     ),
   },
   {
+    path: '/my-bookings/:id/change',
+    element: (
+      <RequireRole roles={['CUSTOMER']} signInPath="/sign-in">
+        <ChangeTimePage />
+      </RequireRole>
+    ),
+  },
+  {
     path: '/staff/sign-in',
     element: <StaffSignInPage />,
   },
@@ -69,6 +79,14 @@ export const routes = [
       { path: 'bookings/:id/confirmed', element: <BookingConfirmedPage /> },
       { path: 'appointments', element: <AppointmentListPage /> },
       { path: 'appointments/:id', element: <AppointmentDetailsPage /> },
+      {
+        path: 'appointments/:id/reschedule',
+        element: (
+          <RequireRole roles={['SERVICE_ADVISOR']} signInPath="/staff/sign-in">
+            <ReschedulePage />
+          </RequireRole>
+        ),
+      },
       {
         path: 'master-data',
         element: (

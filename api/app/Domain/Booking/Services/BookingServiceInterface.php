@@ -20,4 +20,13 @@ interface BookingServiceInterface
         ?string $note,
         CarbonImmutable $now,
     ): Appointment;
+
+    public function reschedule(
+        User $actor,
+        string $appointmentId,
+        int $expectedVersion,
+        CarbonImmutable $newStart,
+        bool $keepTechnician,
+        CarbonImmutable $now,
+    ): Appointment;
 }

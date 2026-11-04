@@ -329,4 +329,12 @@ class AppointmentRepository implements AppointmentRepositoryInterface
 
         return $expectedVersion + 1;
     }
+
+    public function hasActiveAllocations(string $appointmentId): bool
+    {
+        return DB::table('resource_allocations')
+            ->where('appointment_id', $appointmentId)
+            ->where('active', true)
+            ->exists();
+    }
 }
