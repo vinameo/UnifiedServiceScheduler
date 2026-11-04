@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('idempotency:prune')->daily();
+Schedule::command('monitoring:prune')->daily();

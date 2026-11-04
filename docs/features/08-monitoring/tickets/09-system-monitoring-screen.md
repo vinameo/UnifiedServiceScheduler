@@ -4,7 +4,7 @@
 
 **Blocked by:** [08-prune-monitoring-data](08-prune-monitoring-data.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/08-monitoring`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-08-13
 
-- [ ] TC-08-13 (AC-08.12; Web component): given Fake API summary 24h; when Render, click "7 days"; then Card "No availability (409)" "131" "10.5% · business outcome, not an outage"; URL `?range=7d`, API called again with `7d`. Test: `web/src/staff/monitoring/MonitoringPage.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-08-13 (AC-08.12; Web component): given Fake API summary 24h; when Render, click "7 days"; then Card "No availability (409)" "131" "10.5% · business outcome, not an outage"; URL `?range=7d`, API called again with `7d`. Test: `web/src/staff/monitoring/MonitoringPage.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

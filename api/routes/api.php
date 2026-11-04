@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DealershipAppointmentController;
 use App\Http\Controllers\Api\V1\DealershipController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\MonitoringController;
 use App\Http\Controllers\Api\V1\MyAppointmentController;
 use App\Http\Controllers\Api\V1\ServiceTypeController;
 use App\Http\Controllers\Api\V1\TechnicianController;
@@ -67,4 +68,10 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('throttle:120,1');
     Route::get('/dealerships/{dealership}/availability', [AvailabilityController::class, 'availability'])
         ->middleware('throttle:120,1');
+
+    // Monitoring (F08)
+    Route::get('/monitoring/summary', [MonitoringController::class, 'summary'])
+        ->middleware('can:admin');
+    Route::get('/monitoring/errors', [MonitoringController::class, 'errors'])
+        ->middleware('can:admin');
 });

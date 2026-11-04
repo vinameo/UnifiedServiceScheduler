@@ -1,5 +1,7 @@
 <?php
 
+use App\Support\Logging\ConfigureLogging;
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -18,7 +20,7 @@ return [
     |
     */
 
-    'default' => env('LOG_CHANNEL', 'stack'),
+    'default' => env('LOG_CHANNEL', 'stderr'),
 
     /*
     |--------------------------------------------------------------------------
@@ -63,6 +65,7 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+            'tap' => [ConfigureLogging::class],
         ],
 
         'daily' => [
@@ -71,6 +74,7 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'max_files' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'tap' => [ConfigureLogging::class],
         ],
 
         'monthly' => [
@@ -109,8 +113,8 @@ return [
             'handler_with' => [
                 'stream' => 'php://stderr',
             ],
-            'formatter' => env('LOG_STDERR_FORMATTER'),
-            'processors' => [PsrLogMessageProcessor::class],
+            'formatter' => env('LOG_STDERR_FORMATTER', JsonFormatter::class),
+            'tap' => [ConfigureLogging::class],
         ],
 
         'syslog' => [

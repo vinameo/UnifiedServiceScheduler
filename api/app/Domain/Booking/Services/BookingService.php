@@ -29,6 +29,7 @@ use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\Notifications\OutboxEventType;
 use App\Models\Appointment;
 use App\Models\User;
+use App\Support\Tracing\Tracer;
 use Carbon\CarbonImmutable;
 use DateTimeZone;
 
@@ -37,6 +38,8 @@ final readonly class BookingService implements BookingServiceInterface
     private AppointmentRepositoryInterface $appointmentRepository;
 
     private AppointmentTransitionInterface $appointmentTransition;
+
+    private Tracer $tracer;
 
     public function __construct(
         private MasterDataRepositoryInterface $masterDataRepository,
@@ -48,9 +51,11 @@ final readonly class BookingService implements BookingServiceInterface
         private ?AvailabilityServiceInterface $availabilityService = null,
         ?AppointmentRepositoryInterface $appointmentRepository = null,
         ?AppointmentTransitionInterface $appointmentTransition = null,
+        ?Tracer $tracer = null,
     ) {
         $this->appointmentRepository = $appointmentRepository ?? app(AppointmentRepositoryInterface::class);
         $this->appointmentTransition = $appointmentTransition ?? app(AppointmentTransitionInterface::class);
+        $this->tracer = $tracer ?? app(Tracer::class);
     }
 
     public function create(CreateBookingInput $input, User $actor): Appointment
@@ -58,67 +63,72 @@ final readonly class BookingService implements BookingServiceInterface
         $role = $actor->role instanceof Role ? $actor->role : Role::tryFrom((string) $actor->role);
         $isCustomer = $role === Role::CUSTOMER;
 
-        // 1. Dealership
-        $dealershipId = $isCustomer ? $input->dealershipId : $actor->dealership_id;
-        if ($dealershipId === null) {
-            throw new DealershipNotFound;
-        }
-
-        $dealership = $this->masterDataRepository->findDealership($dealershipId);
-        if ($dealership === null) {
-            throw new DealershipNotFound;
-        }
-
-        // 2. Service type
-        $serviceType = $this->masterDataRepository->serviceTypeFor($dealershipId, $input->serviceTypeId);
-        if ($serviceType === null || ! $serviceType->active) {
-            throw new ServiceTypeNotFound;
-        }
-
-        // 3. Customer
-        if ($isCustomer) {
-            $customer = $actor->customer;
-            if ($customer === null) {
-                throw new CustomerNotFound;
+        [$dealership, $serviceType, $customer, $vehicle, $range, $now] = $this->tracer->span('booking.validate', function () use ($input, $actor, $isCustomer) {
+            // 1. Dealership
+            $dealershipId = $isCustomer ? $input->dealershipId : $actor->dealership_id;
+            if ($dealershipId === null) {
+                throw new DealershipNotFound;
             }
-        } else {
-            if ($input->customerId === null) {
-                throw new CustomerNotFound;
-            }
-            $customer = $this->customerRepository->find($input->customerId);
-            if ($customer === null) {
-                throw new CustomerNotFound;
-            }
-        }
 
-        // 4. Vehicle
-        $vehicle = $this->vehicleRepository->find($input->vehicleId);
-        if ($vehicle === null) {
-            throw new VehicleNotFound;
-        }
+            $dealership = $this->masterDataRepository->findDealership($dealershipId);
+            if ($dealership === null) {
+                throw new DealershipNotFound;
+            }
 
-        if ($vehicle->customer_id !== $customer->id) {
+            // 2. Service type
+            $serviceType = $this->masterDataRepository->serviceTypeFor($dealershipId, $input->serviceTypeId);
+            if ($serviceType === null || ! $serviceType->active) {
+                throw new ServiceTypeNotFound;
+            }
+
+            // 3. Customer
             if ($isCustomer) {
+                $customer = $actor->customer;
+                if ($customer === null) {
+                    throw new CustomerNotFound;
+                }
+            } else {
+                if ($input->customerId === null) {
+                    throw new CustomerNotFound;
+                }
+                $customer = $this->customerRepository->find($input->customerId);
+                if ($customer === null) {
+                    throw new CustomerNotFound;
+                }
+            }
+
+            // 4. Vehicle
+            $vehicle = $this->vehicleRepository->find($input->vehicleId);
+            if ($vehicle === null) {
                 throw new VehicleNotFound;
             }
-            throw new VehicleNotOwnedByCustomer;
-        }
 
-        // 5. BookingTimeRules
-        $now = CarbonImmutable::now();
-        $openingHoursList = $this->masterDataRepository->openingHours($dealershipId);
-        $openingHoursMap = [];
-        foreach ($openingHoursList as $oh) {
-            $openingHoursMap[$oh->weekday] = [
-                'opens_at' => $oh->opens_at,
-                'closes_at' => $oh->closes_at,
-            ];
-        }
+            if ($vehicle->customer_id !== $customer->id) {
+                if ($isCustomer) {
+                    throw new VehicleNotFound;
+                }
+                throw new VehicleNotOwnedByCustomer;
+            }
 
-        $openingHours = OpeningHours::fromWeekdayMap($openingHoursMap, $dealership->timezone);
-        $range = BookingTimeRules::check($input->desiredStart, $serviceType->duration_minutes, $openingHours, $now);
+            // 5. BookingTimeRules
+            $now = CarbonImmutable::now();
+            $openingHoursList = $this->masterDataRepository->openingHours($dealershipId);
+            $openingHoursMap = [];
+            foreach ($openingHoursList as $oh) {
+                $openingHoursMap[$oh->weekday] = [
+                    'opens_at' => $oh->opens_at,
+                    'closes_at' => $oh->closes_at,
+                ];
+            }
+
+            $openingHours = OpeningHours::fromWeekdayMap($openingHoursMap, $dealership->timezone);
+            $range = BookingTimeRules::check($input->desiredStart, $serviceType->duration_minutes, $openingHours, $now);
+
+            return [$dealership, $serviceType, $customer, $vehicle, $range, $now];
+        });
 
         // 6. Candidate finder
+        $dealershipId = $dealership->id;
         $tz = new DateTimeZone($dealership->timezone);
         $localDate = $range->start->setTimezone($tz)->toDateString();
         $snapshot = $this->snapshotRepository->forDay($dealershipId, $localDate, $now);
@@ -130,7 +140,9 @@ final readonly class BookingService implements BookingServiceInterface
             range: $range,
         );
 
-        $result = $this->candidateFinder->find($allocationRequest, $snapshot);
+        $result = $this->tracer->span('allocation.find_candidates', function () use ($allocationRequest, $snapshot) {
+            return $this->candidateFinder->find($allocationRequest, $snapshot);
+        });
 
         try {
             if (empty($result->pairs)) {
@@ -157,7 +169,9 @@ final readonly class BookingService implements BookingServiceInterface
                 createdByUserId: $actor->id,
             );
 
-            return $this->appointmentWriter->create($newAppointment, $result->pairs, $now);
+            return $this->tracer->span('booking.write', function () use ($newAppointment, $result, $now) {
+                return $this->appointmentWriter->create($newAppointment, $result->pairs, $now);
+            });
         } catch (NoAvailability $e) {
             $availability = $this->availabilityService ?? app(AvailabilityServiceInterface::class);
             $suggestions = $availability->near(

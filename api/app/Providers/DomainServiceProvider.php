@@ -48,6 +48,17 @@ use App\Domain\MasterData\Services\MasterDataServiceInterface;
 use App\Domain\MasterData\Services\TechnicianService;
 use App\Domain\MasterData\Services\TechnicianServiceInterface;
 use App\Domain\MasterData\Services\UpcomingAssignmentsReader;
+use App\Domain\Monitoring\Repositories\ApiEventRepository;
+use App\Domain\Monitoring\Repositories\ApiEventRepositoryInterface;
+use App\Domain\Monitoring\Repositories\MetricCounterRepository;
+use App\Domain\Monitoring\Repositories\MetricCounterRepositoryInterface;
+use App\Domain\Monitoring\Services\ApiEventService;
+use App\Domain\Monitoring\Services\ApiEventServiceInterface;
+use App\Domain\Monitoring\Services\MetricCounterService;
+use App\Domain\Monitoring\Services\MetricCounterServiceInterface;
+use App\Domain\Monitoring\Services\MonitoringService;
+use App\Domain\Monitoring\Services\MonitoringServiceInterface;
+use App\Domain\Monitoring\Services\RequestMetrics;
 use App\Domain\Notifications\Services\OutboxWriter;
 use App\Domain\Notifications\Services\OutboxWriterInterface;
 use Illuminate\Support\ServiceProvider;
@@ -96,5 +107,17 @@ class DomainServiceProvider extends ServiceProvider
 
         // Notifications (F04, F11)
         OutboxWriterInterface::class => OutboxWriter::class,
+
+        // Monitoring (F08)
+        MetricCounterRepositoryInterface::class => MetricCounterRepository::class,
+        MetricCounterServiceInterface::class => MetricCounterService::class,
+        ApiEventRepositoryInterface::class => ApiEventRepository::class,
+        ApiEventServiceInterface::class => ApiEventService::class,
+        MonitoringServiceInterface::class => MonitoringService::class,
     ];
+
+    public function register(): void
+    {
+        $this->app->scoped(RequestMetrics::class);
+    }
 }

@@ -4,7 +4,7 @@
 
 **Blocked by:** [07-monitoring-summary-and-errors-api](07-monitoring-summary-and-errors-api.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/08-monitoring`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-08-12
 
-- [ ] TC-08-12 (AC-08.11; Integration): given `api_events` 8 days and 6 days old; when `monitoring:prune`; then The 8-day row is deleted; the 6-day row stays. Test: `PruneTest::test_AC_08_11_events_older_than_7_days_are_pruned`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-08-12 (AC-08.11; Integration): given `api_events` 8 days and 6 days old; when `monitoring:prune`; then The 8-day row is deleted; the 6-day row stays. Test: `PruneTest::test_AC_08_11_events_older_than_7_days_are_pruned`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

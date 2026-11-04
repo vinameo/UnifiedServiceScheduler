@@ -1,5 +1,7 @@
 <?php
 
+use App\Domain\Booking\Events\AllocationRetried;
+use App\Domain\Booking\ResourceType;
 use App\Http\Controllers\Api\V1\Testing\TestingAppointmentController;
 use App\Http\Controllers\Api\V1\Testing\TestingEchoController;
 use Illuminate\Support\Facades\Route;
@@ -16,3 +18,17 @@ Route::post('appointments/{id}/transition', [TestingAppointmentController::class
 
 Route::post('echo', [TestingEchoController::class, 'handle'])
     ->middleware(['auth:sanctum', 'idempotent']);
+
+Route::get('fail', function () {
+    throw new RuntimeException('Deliberate failure with user@example.com and phone 0903123218');
+});
+
+Route::post('allocation-retry', function () {
+    AllocationRetried::dispatch(
+        '01935512-7712-7abc-9def-0123456789ab',
+        ResourceType::BAY,
+        '01935512-7712-7abc-9def-0123456789ac'
+    );
+
+    return response()->json(['status' => 'ok']);
+});

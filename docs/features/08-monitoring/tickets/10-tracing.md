@@ -4,7 +4,7 @@
 
 **Blocked by:** [09-system-monitoring-screen](09-system-monitoring-screen.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/08-monitoring`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-08-11
 
-- [ ] TC-08-11 (AC-08.10; Integration): given `InMemoryExporter`, `OTEL_SDK_DISABLED=false`; when Book; then Spans `http.request`, `booking.validate`, `allocation.find_candidates`, `booking.write`; one `traceId`; the last 3 are children of `http.request`. Test: `TracingTest::test_AC_08_10_booking_spans`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-08-11 (AC-08.10; Integration): given `InMemoryExporter`, `OTEL_SDK_DISABLED=false`; when Book; then Spans `http.request`, `booking.validate`, `allocation.find_candidates`, `booking.write`; one `traceId`; the last 3 are children of `http.request`. Test: `TracingTest::test_AC_08_10_booking_spans`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

@@ -3,7 +3,7 @@
  * Conforms to WEB-01.5 and WEB-02.1.
  */
 
-export type FormatPattern = 'time' | 'range' | 'dayLong' | 'dayShort'
+export type FormatPattern = 'time' | 'timeWithSeconds' | 'range' | 'dayLong' | 'dayShort'
 
 export function formatInZone(
   iso: string,
@@ -18,6 +18,16 @@ export function formatInZone(
       timeZone,
       hour: '2-digit',
       minute: '2-digit',
+      hour12: false,
+    }).format(date)
+  }
+
+  if (pattern === 'timeWithSeconds') {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
       hour12: false,
     }).format(date)
   }

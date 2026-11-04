@@ -4,7 +4,7 @@
 
 **Blocked by:** F07 [08-acceptance](../../07-cancel-appointment/tickets/08-acceptance.md) (the whole F07 branch merged to `develop`).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/08-monitoring`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** TC-08-14
 
-- [ ] TC-08-14 (D-08.2, R-08.4; Unit): when `RedactPersonalData` on: `{"user":{"email":"a@b.c"}}`, message "call 0903 123 218"; message "call +84 903 123 218"; `{"appointmentId":"01935512-7712-7abc-9def-0123456789ab"}`; message "booked APT-20261102-0042 at 2026-11-02T09:00:00+07:00"; `{"Authorization":"x"}`; then email dropped; "call [phone]" twice; the UUID unchanged; the reference and the time unchanged; Authorization key dropped. Test: `api/tests/Unit/Support/RedactPersonalDataTest`.
-- [ ] No change users can see; existing tests stay green unchanged
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-08-14 (D-08.2, R-08.4; Unit): when `RedactPersonalData` on: `{"user":{"email":"a@b.c"}}`, message "call 0903 123 218"; message "call +84 903 123 218"; `{"appointmentId":"01935512-7712-7abc-9def-0123456789ab"}`; message "booked APT-20261102-0042 at 2026-11-02T09:00:00+07:00"; `{"Authorization":"x"}`; then email dropped; "call [phone]" twice; the UUID unchanged; the reference and the time unchanged; Authorization key dropped. Test: `api/tests/Unit/Support/RedactPersonalDataTest`.
+- [x] No change users can see; existing tests stay green unchanged
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
