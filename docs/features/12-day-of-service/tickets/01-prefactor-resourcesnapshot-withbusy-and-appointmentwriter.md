@@ -4,7 +4,7 @@
 
 **Blocked by:** F11 [11-acceptance](../../11-outbox-notifications/tickets/11-acceptance.md) (the whole F11 branch merged to `develop`).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/12-day-of-service`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** none of its own; existing tests prove it changes nothing.
 
-- [ ] No change users can see; existing tests stay green unchanged
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] No change users can see; existing tests stay green unchanged
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

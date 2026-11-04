@@ -9,6 +9,7 @@ use App\Domain\Allocation\TimeRange;
 use App\Domain\Booking\AppointmentEventType;
 use App\Domain\Booking\AppointmentStatus;
 use App\Domain\Booking\Events\AllocationRetried;
+use App\Domain\Booking\Exceptions\AppointmentModified;
 use App\Domain\Booking\Exceptions\NoAvailability;
 use App\Domain\Booking\Exceptions\VehicleAlreadyBooked;
 use App\Domain\Booking\NewAppointment;
@@ -687,5 +688,198 @@ class AppointmentWriterTest extends TestCase
              AND r1.period && r2.period
         SQL);
         $this->assertEmpty($overlaps2, 'No active allocations may overlap');
+    }
+
+    public function test_displace_sets_contact_required_reason_and_deactivates_allocations(): void
+    {
+        $world = World::saigonD7();
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $tech = $world->technician('An');
+        $bay = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $startUtc = CarbonImmutable::parse('2026-11-04 02:00:00', 'UTC');
+        $endUtc = $startUtc->addHour();
+        $range = TimeRange::of($startUtc, $endUtc);
+
+        $pair = new CandidatePair(
+            new TechnicianState($tech->id, $tech->name, Level::from($tech->level)),
+            new BayState($bay->id, $bay->code, $bay->bay_type),
+        );
+
+        $now = CarbonImmutable::parse('2026-10-25 10:00:00', 'UTC');
+        $writer = new AppointmentWriter(new AppointmentRepository, new ResourceAllocationRepository);
+
+        $newAppointment = new NewAppointment(
+            dealershipId: $world->dealership->id,
+            customerId: $customer->id,
+            vehicleId: $vehicle->id,
+            serviceTypeId: $service->id,
+            range: $range,
+            createdByUserId: $user->id,
+            status: AppointmentStatus::CONFIRMED,
+        );
+
+        $appointment = $writer->create($newAppointment, [$pair], $now);
+        $this->assertSame(1, $appointment->version);
+        $this->assertNull($appointment->contact_required_reason);
+
+        // Precondition: 3 active allocations
+        $activeAllocationsBefore = DB::table('resource_allocations')
+            ->where('appointment_id', $appointment->id)
+            ->where('active', true)
+            ->count();
+        $this->assertSame(3, $activeAllocationsBefore);
+
+        // Displace the appointment
+        $displaceTime = $now->addMinutes(5);
+        $displaced = $writer->displace(
+            appointmentId: $appointment->id,
+            expectedVersion: 1,
+            reason: 'OVERRUN',
+            now: $displaceTime,
+            actor: $user,
+        );
+
+        $this->assertSame(2, $displaced->version);
+        $this->assertSame('OVERRUN', $displaced->contact_required_reason);
+        $this->assertSame(AppointmentStatus::CONFIRMED, $displaced->status);
+
+        // Allocations must now be deactivated (0 active)
+        $activeAllocationsAfter = DB::table('resource_allocations')
+            ->where('appointment_id', $appointment->id)
+            ->where('active', true)
+            ->count();
+        $this->assertSame(0, $activeAllocationsAfter);
+
+        // Deactivated allocations must have deactivated_at set
+        $deactivatedAllocations = DB::table('resource_allocations')
+            ->where('appointment_id', $appointment->id)
+            ->where('active', false)
+            ->whereNotNull('deactivated_at')
+            ->count();
+        $this->assertSame(3, $deactivatedAllocations);
+
+        // Event of type CONTACT_REQUIRED must be recorded
+        $event = DB::table('appointment_events')
+            ->where('appointment_id', $appointment->id)
+            ->where('type', 'CONTACT_REQUIRED')
+            ->first();
+        $this->assertNotNull($event);
+        $this->assertSame(2, $event->version);
+        $data = json_decode($event->data, true);
+        $this->assertSame('OVERRUN', $data['reason']);
+    }
+
+    public function test_displace_with_wrong_version_throws_AppointmentModified(): void
+    {
+        $world = World::saigonD7();
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $tech = $world->technician('An');
+        $bay = $world->bay('K1');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $startUtc = CarbonImmutable::parse('2026-11-04 02:00:00', 'UTC');
+        $endUtc = $startUtc->addHour();
+        $range = TimeRange::of($startUtc, $endUtc);
+
+        $pair = new CandidatePair(
+            new TechnicianState($tech->id, $tech->name, Level::from($tech->level)),
+            new BayState($bay->id, $bay->code, $bay->bay_type),
+        );
+
+        $now = CarbonImmutable::parse('2026-10-25 10:00:00', 'UTC');
+        $writer = new AppointmentWriter(new AppointmentRepository, new ResourceAllocationRepository);
+
+        $newAppointment = new NewAppointment(
+            dealershipId: $world->dealership->id,
+            customerId: $customer->id,
+            vehicleId: $vehicle->id,
+            serviceTypeId: $service->id,
+            range: $range,
+            createdByUserId: $user->id,
+            status: AppointmentStatus::CONFIRMED,
+        );
+
+        $appointment = $writer->create($newAppointment, [$pair], $now);
+
+        $this->expectException(AppointmentModified::class);
+        $writer->displace(
+            appointmentId: $appointment->id,
+            expectedVersion: 999,
+            reason: 'OVERRUN',
+            now: $now,
+        );
+    }
+
+    public function test_moveTo_clears_contact_required_reason(): void
+    {
+        $world = World::saigonD7();
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $tech = $world->technician('An');
+        $bay = $world->bay('K1');
+        $bay2 = $world->bay('K2');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $startUtc = CarbonImmutable::parse('2026-11-04 02:00:00', 'UTC');
+        $endUtc = $startUtc->addHour();
+        $range = TimeRange::of($startUtc, $endUtc);
+
+        $pair1 = new CandidatePair(
+            new TechnicianState($tech->id, $tech->name, Level::from($tech->level)),
+            new BayState($bay->id, $bay->code, $bay->bay_type),
+        );
+
+        $now = CarbonImmutable::parse('2026-10-25 10:00:00', 'UTC');
+        $writer = new AppointmentWriter(new AppointmentRepository, new ResourceAllocationRepository);
+
+        $newAppointment = new NewAppointment(
+            dealershipId: $world->dealership->id,
+            customerId: $customer->id,
+            vehicleId: $vehicle->id,
+            serviceTypeId: $service->id,
+            range: $range,
+            createdByUserId: $user->id,
+            status: AppointmentStatus::CONFIRMED,
+        );
+
+        $appointment = $writer->create($newAppointment, [$pair1], $now);
+
+        // Displace the appointment
+        $displaced = $writer->displace(
+            appointmentId: $appointment->id,
+            expectedVersion: 1,
+            reason: 'OVERRUN',
+            now: $now->addMinute(),
+        );
+        $this->assertSame('OVERRUN', $displaced->contact_required_reason);
+        $this->assertSame(2, $displaced->version);
+
+        // Move/reschedule to bay 2
+        $pair2 = new CandidatePair(
+            new TechnicianState($tech->id, $tech->name, Level::from($tech->level)),
+            new BayState($bay2->id, $bay2->code, $bay2->bay_type),
+        );
+
+        $moved = $writer->moveTo(
+            appointmentId: $appointment->id,
+            expectedVersion: 2,
+            newRange: $range,
+            pairs: [$pair2],
+            event: AppointmentEventType::RESCHEDULED,
+            outbox: OutboxEventType::AppointmentRescheduled,
+            now: $now->addMinutes(5),
+            actor: $user,
+        );
+
+        $this->assertSame(3, $moved->version);
+        $this->assertNull($moved->contact_required_reason);
+
+        // Check active allocations count is restored to 3
+        $activeAllocations = DB::table('resource_allocations')
+            ->where('appointment_id', $appointment->id)
+            ->where('active', true)
+            ->count();
+        $this->assertSame(3, $activeAllocations);
     }
 }

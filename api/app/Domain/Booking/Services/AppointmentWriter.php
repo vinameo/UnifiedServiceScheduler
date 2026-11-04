@@ -330,6 +330,7 @@ class AppointmentWriter implements AppointmentWriterInterface
                             'bay_id' => $bayId,
                             'start_at' => $newRange->start,
                             'end_at' => $newRange->end,
+                            'contact_required_reason' => null,
                         ],
                         $now,
                     );
@@ -495,6 +496,68 @@ class AppointmentWriter implements AppointmentWriterInterface
             requestedEnd: $newRange->end,
             dealershipId: $appointment->dealership_id,
         );
+    }
+
+    public function displace(
+        string $appointmentId,
+        int $expectedVersion,
+        string $reason,
+        ?CarbonImmutable $now = null,
+        ?User $actor = null,
+    ): Appointment {
+        $now = $now ?? CarbonImmutable::now('UTC');
+
+        $appointment = $this->appointmentRepository->find($appointmentId);
+        if ($appointment === null) {
+            throw new AppointmentNotFound($appointmentId);
+        }
+
+        if ($appointment->version !== $expectedVersion) {
+            AppointmentModifiedDetected::dispatch($appointmentId, $expectedVersion);
+            throw new AppointmentModified($appointmentId, $appointment);
+        }
+
+        return DB::transaction(function () use (
+            $appointmentId,
+            $expectedVersion,
+            $reason,
+            $now,
+            $actor,
+            $appointment,
+        ): Appointment {
+            $newVersion = $this->appointmentRepository->updateVersioned(
+                $appointmentId,
+                $expectedVersion,
+                [
+                    'contact_required_reason' => $reason,
+                ],
+                $now,
+            );
+
+            $this->allocationRepository->deactivateFor($appointmentId, $now);
+
+            $actorRole = null;
+            if ($actor !== null) {
+                $actorRole = $actor->role instanceof \BackedEnum ? $actor->role->value : ($actor->role ? (string) $actor->role : null);
+            }
+
+            $this->eventRecorder->record(
+                appointmentId: $appointmentId,
+                dealershipId: (string) $appointment->dealership_id,
+                type: AppointmentEventType::CONTACT_REQUIRED,
+                version: $newVersion,
+                occurredAt: $now,
+                fromStatus: $appointment->status,
+                toStatus: $appointment->status,
+                actorUserId: $actor?->id,
+                actorRole: $actorRole,
+                data: [
+                    'reason' => $reason,
+                ],
+            );
+
+            return $this->appointmentRepository->find($appointmentId) ?? $appointment;
+        });
     }
 }
 
