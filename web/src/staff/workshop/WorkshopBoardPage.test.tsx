@@ -134,4 +134,100 @@ describe('WorkshopBoardPage (TC-12-28, AC-12.15, D-12.15)', () => {
       expect(boardFetchCount).toBeGreaterThanOrEqual(2)
     })
   })
+
+  it('renders workshop board with schedule by bay, legend, displaced bookings and technicians table', async () => {
+    const fullBoardData = {
+      data: {
+        date: '2026-11-02',
+        now: '2026-11-02T10:50:00+07:00',
+        opensAt: '08:00',
+        closesAt: '17:00',
+        bays: [
+          {
+            id: 'bay-1',
+            code: 'K1',
+            name: 'Bay 1 Quick service',
+            bayType: 'QUICK',
+            blocks: [
+              {
+                appointmentId: 'apt-1',
+                version: 1,
+                reference: 'BK-100',
+                status: 'COMPLETED',
+                start: '2026-11-02T08:00:00+07:00',
+                end: '2026-11-02T09:00:00+07:00',
+                customerName: 'Trần Văn A',
+                serviceName: 'Oil change',
+                technicianName: 'Trần Minh An',
+                overrunMinutes: 0,
+              },
+            ],
+          },
+        ],
+        displaced: [
+          {
+            appointmentId: 'apt-displaced',
+            reference: 'BK-DISPLACED',
+            start: '2026-11-02T14:00:00+07:00',
+            end: '2026-11-02T15:00:00+07:00',
+            reason: 'OVERRUN',
+          },
+        ],
+        technicians: [
+          {
+            id: 'tech-1',
+            name: 'Trần Minh An',
+            level: 2,
+            bookedMinutes: 120,
+            status: 'WORKING',
+          },
+          {
+            id: 'tech-2',
+            name: 'Võ Thị Chi',
+            level: 4,
+            bookedMinutes: 180,
+            status: 'OVERRUN',
+          },
+        ],
+        alerts: [],
+      },
+    }
+
+    apiMock.get(
+      new RegExp(`/dealerships/${dealershipId}/workshop-board`),
+      () => [200, fullBoardData],
+    )
+
+    renderRoute('/staff/workshop')
+
+    // Schedule by bay
+    await waitFor(() => {
+      expect(screen.getByText('Schedule by bay')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Bay 1 Quick service')).toBeInTheDocument()
+    expect(screen.getByTestId('bay-timeline')).toBeInTheDocument()
+
+    // Legend
+    expect(screen.getByText('Completed')).toBeInTheDocument()
+    expect(screen.getByText('In progress')).toBeInTheDocument()
+    expect(screen.getByText('Checked in')).toBeInTheDocument()
+    expect(screen.getByText('Confirmed')).toBeInTheDocument()
+    expect(screen.getByText('On hold')).toBeInTheDocument()
+    expect(screen.getAllByText('Overrun')).toHaveLength(2) // in legend and technician status
+
+    // Displaced bookings (Needs customer contact)
+    expect(screen.getByText('Needs customer contact')).toBeInTheDocument()
+    expect(screen.getByText('BK-DISPLACED')).toBeInTheDocument()
+
+    // Technicians today table
+    expect(screen.getByText('Technicians today')).toBeInTheDocument()
+    expect(screen.getAllByText('Trần Minh An')).toHaveLength(2) // in timeline block and technician table
+    expect(screen.getByText('Level 2')).toBeInTheDocument()
+    expect(screen.getByText('120 min')).toBeInTheDocument()
+    expect(screen.getByText('Working')).toBeInTheDocument()
+
+    expect(screen.getByText('Võ Thị Chi')).toBeInTheDocument()
+    expect(screen.getByText('Level 4')).toBeInTheDocument()
+    expect(screen.getByText('180 min')).toBeInTheDocument()
+  })
 })

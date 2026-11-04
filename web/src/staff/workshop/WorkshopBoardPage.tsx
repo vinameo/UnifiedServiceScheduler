@@ -2,6 +2,8 @@ import { useState } from 'react'
 import axios from 'axios'
 import {
   Alert,
+  Anchor,
+  Badge,
   Box,
   Button,
   Card,
@@ -9,9 +11,11 @@ import {
   Group,
   Loader,
   Stack,
+  Table,
   Text,
   Title,
 } from '@mantine/core'
+import { Link } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMe } from '../../shared/auth/useMe'
 import { useExtend, useWorkshopBoard, type WorkshopAlert } from '../../shared/api/workshop'
@@ -19,6 +23,8 @@ import { AppointmentModifiedAlert } from '../../shared/appointments/AppointmentM
 import type { AppointmentDiffInput } from '../../shared/appointments/diffAppointment'
 import { useIdempotencyKey } from '../../shared/idempotency/useIdempotencyKey'
 import { formatInZone } from '../../shared/format/time'
+import { appointmentCopy } from '../appointments/copy'
+import { BayTimeline } from './BayTimeline'
 import { workshopCopy } from './copy'
 
 interface OverrunAlertCardProps {
@@ -193,6 +199,149 @@ export function WorkshopBoardPage() {
               />
             ))}
           </Stack>
+        )}
+
+        {/* Schedule by Bay */}
+        <Card withBorder padding="md" radius="md">
+          <Stack gap="md">
+            <Group justify="space-between" align="baseline">
+              <Title order={3}>{workshopCopy.board.byBay}</Title>
+              <Text size="xs" c="dimmed">
+                {workshopCopy.board.caption}
+              </Text>
+            </Group>
+
+            <BayTimeline board={board} timeZone={timeZone} />
+
+            {/* Legend */}
+            <Stack gap={4}>
+              <Text size="xs" c="dimmed" style={{ display: 'none' }}>
+                {workshopCopy.board.legend}
+              </Text>
+              <Group gap="xs" wrap="wrap">
+                <Text size="xs" fw={600} c="dimmed">
+                  Legend:
+                </Text>
+                <Badge color="green" variant="filled" size="sm">
+                  Completed
+                </Badge>
+                <Badge color="indigo" variant="filled" size="sm">
+                  In progress
+                </Badge>
+                <Badge color="cyan" variant="filled" size="sm">
+                  Checked in
+                </Badge>
+                <Badge color="blue" variant="filled" size="sm">
+                  Confirmed
+                </Badge>
+                <Badge color="yellow" variant="filled" size="sm">
+                  On hold
+                </Badge>
+                <Box
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    background:
+                      'repeating-linear-gradient(45deg, #fa5252 0px, #fa5252 4px, #c92a2a 4px, #c92a2a 8px)',
+                    color: '#ffffff',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    lineHeight: '16px',
+                  }}
+                >
+                  Overrun
+                </Box>
+              </Group>
+            </Stack>
+          </Stack>
+        </Card>
+
+        {/* Displaced Bookings (Needs customer contact) */}
+        {board.displaced && board.displaced.length > 0 && (
+          <Card withBorder padding="md" radius="md">
+            <Stack gap="sm">
+              <Title order={4} c="yellow.8">
+                {workshopCopy.board.displaced}
+              </Title>
+              <Table>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Booking</Table.Th>
+                    <Table.Th>Time</Table.Th>
+                    <Table.Th>Reason</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {board.displaced.map((item) => (
+                    <Table.Tr key={item.appointmentId}>
+                      <Table.Td>
+                        <Anchor
+                          component={Link}
+                          to={`/staff/appointments/${item.appointmentId}`}
+                          fw={500}
+                        >
+                          {item.reference}
+                        </Anchor>
+                      </Table.Td>
+                      <Table.Td>
+                        {formatInZone(item.start, timeZone, 'range', item.end)}
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color="yellow" variant="light">
+                          {item.reason === 'OVERRUN'
+                            ? appointmentCopy.contact.reason.OVERRUN
+                            : item.reason}
+                        </Badge>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Stack>
+          </Card>
+        )}
+
+        {/* Technicians Table */}
+        {board.technicians && board.technicians.length > 0 && (
+          <Card withBorder padding="md" radius="md">
+            <Stack gap="sm">
+              <Title order={4}>{workshopCopy.board.technicians}</Title>
+              <Table>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Technician</Table.Th>
+                    <Table.Th>Level</Table.Th>
+                    <Table.Th>Booked</Table.Th>
+                    <Table.Th>Status</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {board.technicians.map((tech) => (
+                    <Table.Tr key={tech.id}>
+                      <Table.Td>
+                        <Text fw={500}>{tech.name}</Text>
+                      </Table.Td>
+                      <Table.Td>{workshopCopy.board.level(tech.level)}</Table.Td>
+                      <Table.Td>{tech.bookedMinutes} min</Table.Td>
+                      <Table.Td>
+                        {tech.status === 'OVERRUN' ? (
+                          <Badge color="red" variant="filled">
+                            {workshopCopy.board.overrun}
+                          </Badge>
+                        ) : (
+                          <Badge color="green" variant="light">
+                            {workshopCopy.board.working}
+                          </Badge>
+                        )}
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Stack>
+          </Card>
         )}
       </Stack>
     </Container>
