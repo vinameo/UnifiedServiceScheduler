@@ -10,17 +10,23 @@ use App\Domain\Auth\Repositories\CustomerRepositoryInterface;
 use App\Domain\Auth\Role;
 use App\Domain\Booking\AppointmentStatus;
 use App\Domain\Booking\BookingTimeRules;
+use App\Domain\Booking\CancelReason;
 use App\Domain\Booking\CreateBookingInput;
+use App\Domain\Booking\CustomerChangePolicy;
+use App\Domain\Booking\Exceptions\AppointmentModified;
 use App\Domain\Booking\Exceptions\CustomerNotFound;
 use App\Domain\Booking\Exceptions\NoAvailability;
+use App\Domain\Booking\Exceptions\TooLateToCancel;
 use App\Domain\Booking\Exceptions\VehicleNotFound;
 use App\Domain\Booking\Exceptions\VehicleNotOwnedByCustomer;
 use App\Domain\Booking\NewAppointment;
 use App\Domain\Booking\Repositories\AllocationSnapshotRepositoryInterface;
+use App\Domain\Booking\Repositories\AppointmentRepositoryInterface;
 use App\Domain\Booking\Repositories\VehicleRepositoryInterface;
 use App\Domain\MasterData\Exceptions\DealershipNotFound;
 use App\Domain\MasterData\Exceptions\ServiceTypeNotFound;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
+use App\Domain\Notifications\OutboxEventType;
 use App\Models\Appointment;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -28,6 +34,10 @@ use DateTimeZone;
 
 final readonly class BookingService implements BookingServiceInterface
 {
+    private AppointmentRepositoryInterface $appointmentRepository;
+
+    private AppointmentTransitionInterface $appointmentTransition;
+
     public function __construct(
         private MasterDataRepositoryInterface $masterDataRepository,
         private CustomerRepositoryInterface $customerRepository,
@@ -36,7 +46,12 @@ final readonly class BookingService implements BookingServiceInterface
         private CandidateFinderInterface $candidateFinder,
         private AppointmentWriterInterface $appointmentWriter,
         private ?AvailabilityServiceInterface $availabilityService = null,
-    ) {}
+        ?AppointmentRepositoryInterface $appointmentRepository = null,
+        ?AppointmentTransitionInterface $appointmentTransition = null,
+    ) {
+        $this->appointmentRepository = $appointmentRepository ?? app(AppointmentRepositoryInterface::class);
+        $this->appointmentTransition = $appointmentTransition ?? app(AppointmentTransitionInterface::class);
+    }
 
     public function create(CreateBookingInput $input, User $actor): Appointment
     {
@@ -166,6 +181,67 @@ final readonly class BookingService implements BookingServiceInterface
                 detail: $e->detail,
                 alternatives: $formattedAlternatives,
             );
+        }
+    }
+
+    public function cancel(
+        User $actor,
+        string $appointmentId,
+        int $expectedVersion,
+        ?CancelReason $reason,
+        ?string $note,
+        CarbonImmutable $now,
+    ): Appointment {
+        $appointment = $this->appointmentRepository->findVisibleTo($actor, $appointmentId);
+
+        // D-07.4: Cancelling a CANCELLED booking returns 200 with current state, nothing written
+        if ($appointment->status === AppointmentStatus::CANCELLED) {
+            return $appointment;
+        }
+
+        $role = $actor->role instanceof Role ? $actor->role : Role::tryFrom((string) $actor->role);
+        $isCustomer = $role === Role::CUSTOMER;
+
+        // Customer time check: CONFIRMED requires start - now >= 2 hours (INV-07.3, BR-07.2)
+        if ($isCustomer && $appointment->status === AppointmentStatus::CONFIRMED) {
+            if (! CustomerChangePolicy::isWithinCustomerChangeWindow($appointment, $now)) {
+                $dealership = $appointment->dealership ?? $this->masterDataRepository->findDealership($appointment->dealership_id);
+                $phone = $dealership !== null ? $dealership->phone : '';
+                throw new TooLateToCancel(
+                    dealershipPhone: $phone,
+                    start: CarbonImmutable::parse($appointment->start_at)->toIso8601String(),
+                );
+            }
+        }
+
+        $changes = [
+            'cancel_reason' => $reason?->value,
+            'cancel_note' => $note !== null ? trim($note) : null,
+            'cancelled_at' => $now,
+            'cancelled_by_user_id' => $actor->id,
+        ];
+
+        $outbox = $appointment->status === AppointmentStatus::CONFIRMED
+            ? OutboxEventType::AppointmentCancelled
+            : null;
+
+        try {
+            return $this->appointmentTransition->transition(
+                id: $appointment->id,
+                expectedVersion: $expectedVersion,
+                to: AppointmentStatus::CANCELLED,
+                changes: $changes,
+                outbox: $outbox,
+                actor: $actor,
+                now: $now,
+            );
+        } catch (AppointmentModified $e) {
+            // D-07.5: if versioned update hit 0 rows or version mismatch, but fresh read is CANCELLED -> 200
+            $fresh = $this->appointmentRepository->find($appointmentId);
+            if ($fresh !== null && $fresh->status === AppointmentStatus::CANCELLED) {
+                return $fresh;
+            }
+            throw $e;
         }
     }
 }

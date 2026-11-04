@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { renderRoute } from '../../test/render'
 import { apiMock } from '../../test/apiMock'
 import type { Appointment } from '../../shared/api/appointments'
@@ -70,7 +71,8 @@ describe('BookingDetailsPage', () => {
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date('2026-11-02T08:00:00Z'))
+    // Default system time: 07:00 UTC+7 (00:00 UTC), which is 3 hours before 10:00 UTC+7
+    vi.setSystemTime(new Date('2026-11-02T00:00:00Z'))
     sessionStorage.clear()
     apiMock.install()
     apiMock.reset()
@@ -83,7 +85,7 @@ describe('BookingDetailsPage', () => {
     apiMock.restore()
   })
 
-  it('renders booking details, service with duration, vehicle, booked by, reminder, location with phone link, and new booking button', async () => {
+  it('renders booking details, service with duration, vehicle, booked by, reminder, location with phone link, and cancel button when >= 2h before', async () => {
     apiMock.get(`/appointments/${appointmentId}`, [
       200,
       baseAppointment,
@@ -124,13 +126,146 @@ describe('BookingDetailsPage', () => {
     // Location & phone link
     expect(screen.getByText('Location')).toBeInTheDocument()
     expect(screen.getByText('Saigon Auto · District 7')).toBeInTheDocument()
-    const phoneLink = screen.getByRole('link', { name: '028 3812 3456' })
-    expect(phoneLink).toHaveAttribute('href', 'tel:02838123456')
+    const phoneLinks = screen.getAllByRole('link', { name: '028 3812 3456' })
+    expect(phoneLinks[0]).toHaveAttribute('href', 'tel:02838123456')
 
-    // Actions area placeholder and New booking button
-    expect(screen.getByTestId('actions-placeholder')).toBeInTheDocument()
+    // Cancel appointment button is available when >= 2 hours before
+    expect(screen.getByRole('button', { name: 'Cancel appointment' })).toBeInTheDocument()
+
     const newBookingButton = screen.getByRole('link', { name: 'New booking' })
     expect(newBookingButton).toHaveAttribute('href', '/book')
+  })
+
+  it('TC-07-16 (AC-07.13, WEB-07.4): inside 2 hours shows no Cancel button and displays call dealership notice', async () => {
+    // Fake clock 08:00 (UTC+7 -> 01:00 UTC); booking 09:00 (UTC+7) -> 1 hour before start
+    vi.setSystemTime(new Date('2026-11-02T01:00:00Z'))
+
+    apiMock.get(`/appointments/${appointmentId}`, [
+      200,
+      {
+        ...baseAppointment,
+        start: '2026-11-02T09:00:00+07:00',
+        end: '2026-11-02T10:00:00+07:00',
+      },
+      { etag: '"1"' },
+    ])
+
+    renderRoute(`/my-bookings/${appointmentId}`)
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 3, name: 'Appointment details' })).toBeInTheDocument()
+    })
+
+    // No Cancel button
+    expect(screen.queryByRole('button', { name: 'Cancel appointment' })).not.toBeInTheDocument()
+
+    // "It's less than 2 hours before your appointment. Please call 028 3812 3456 to cancel."
+    expect(
+      screen.getByText(/It's less than 2 hours before your appointment\. Please call/i),
+    ).toBeInTheDocument()
+    const callLinks = screen.getAllByRole('link', { name: '028 3812 3456' })
+    expect(callLinks.length).toBeGreaterThanOrEqual(1)
+    expect(callLinks[callLinks.length - 1]).toHaveAttribute('href', 'tel:02838123456')
+  })
+
+  it('customer cancels appointment via bottom sheet with optional reason', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    apiMock.get(`/appointments/${appointmentId}`, [
+      200,
+      baseAppointment,
+      { etag: '"1"' },
+    ])
+
+    const cancelledAppointment: Appointment = {
+      ...baseAppointment,
+      status: 'CANCELLED',
+      version: 2,
+      cancellation: {
+        reason: 'SOMETHING_CAME_UP',
+        note: null,
+        at: '2026-11-02T07:05:00+07:00',
+        byRole: 'CUSTOMER',
+      },
+    }
+
+    apiMock.post(`/appointments/${appointmentId}/cancel`, [
+      200,
+      cancelledAppointment,
+      { etag: '"2"' },
+    ])
+
+    renderRoute(`/my-bookings/${appointmentId}`)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Cancel appointment' })).toBeInTheDocument()
+    })
+
+    // Click Cancel appointment to open sheet
+    await user.click(screen.getByRole('button', { name: 'Cancel appointment' }))
+
+    // Sheet displays
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', {
+          level: 2,
+          name: 'Cancel your 10:00 appointment on Mon 2 Nov?',
+        }),
+      ).toBeInTheDocument()
+    })
+
+    // Select reason
+    const radio = screen.getByRole('radio', { name: 'Something came up' })
+    await user.click(radio)
+
+    // Submit cancellation inside the sheet dialog
+    const dialog = screen.getByRole('dialog')
+    const confirmButton = within(dialog).getByRole('button', { name: 'Cancel appointment' })
+    await user.click(confirmButton)
+
+    // Sheet closes and page displays "You cancelled this appointment" banner
+    await waitFor(() => {
+      expect(screen.getByText('You cancelled this appointment')).toBeInTheDocument()
+      expect(
+        screen.getByText("The time slot has been released. We'll send you a cancellation SMS."),
+      ).toBeInTheDocument()
+    })
+
+    // Sheet dialog is closed and Cancel button is hidden
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+    expect(screen.queryByRole('button', { name: 'Cancel appointment' })).not.toBeInTheDocument()
+  })
+
+  it('displays dealership cancelled banner when cancelled by service advisor', async () => {
+    apiMock.get(`/appointments/${appointmentId}`, [
+      200,
+      {
+        ...baseAppointment,
+        status: 'CANCELLED',
+        cancellation: {
+          reason: 'CUSTOMER_REQUEST',
+          note: 'Customer requested by phone',
+          at: '2026-11-02T07:10:00+07:00',
+          byRole: 'SERVICE_ADVISOR',
+        },
+      },
+      { etag: '"2"' },
+    ])
+
+    renderRoute(`/my-bookings/${appointmentId}`)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/This appointment was cancelled by the dealership\. Call/i),
+      ).toBeInTheDocument()
+    })
+
+    const phoneLinks = screen.getAllByRole('link', { name: '028 3812 3456' })
+    expect(phoneLinks.length).toBeGreaterThanOrEqual(1)
+    expect(phoneLinks[0]).toHaveAttribute('href', 'tel:02838123456')
+    expect(screen.queryByRole('button', { name: 'Cancel appointment' })).not.toBeInTheDocument()
   })
 
   it('omits reminder when reminderOptIn is false', async () => {

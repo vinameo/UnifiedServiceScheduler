@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { Box, Button, Center, Loader, Stack, Text, Title } from '@mantine/core'
+import { Box, Button, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
 import { useAppointment } from '../../shared/api/appointmentQuery'
 import { useAppointmentHistory } from '../../shared/api/appointments'
+import { useMe } from '../../shared/auth/useMe'
 import { AppointmentDetailsLayout } from './AppointmentDetailsLayout'
 import { AppointmentHistorySection } from './AppointmentHistorySection'
+import { CancelAppointmentModal } from './CancelAppointmentModal'
 import { appointmentCopy } from './copy'
 
 export function AppointmentDetailsPage() {
@@ -11,6 +14,8 @@ export function AppointmentDetailsPage() {
   const navigate = useNavigate()
   const { data, isLoading, isError } = useAppointment(id ?? '')
   const { data: historyEvents, isLoading: isHistoryLoading } = useAppointmentHistory(id ?? '')
+  const { data: me } = useMe()
+  const [cancelModalOpened, setCancelModalOpened] = useState(false)
 
   if (isLoading) {
     return (
@@ -37,17 +42,42 @@ export function AppointmentDetailsPage() {
   }
 
   const timeZone = data.appointment.dealership?.timezone ?? 'Asia/Ho_Chi_Minh'
+  const isAdvisor = me?.role === 'SERVICE_ADVISOR'
+  const canCancel =
+    isAdvisor &&
+    (data.appointment.status === 'CONFIRMED' || data.appointment.status === 'HELD')
+
+  const actions = canCancel ? (
+    <Group>
+      <Button
+        variant="outline"
+        color="red"
+        onClick={() => setCancelModalOpened(true)}
+      >
+        {appointmentCopy.cancel.button}
+      </Button>
+    </Group>
+  ) : undefined
 
   return (
-    <AppointmentDetailsLayout
-      appointment={data.appointment}
-      history={
-        <AppointmentHistorySection
-          events={historyEvents}
-          isLoading={isHistoryLoading}
-          timeZone={timeZone}
-        />
-      }
-    />
+    <>
+      <AppointmentDetailsLayout
+        appointment={data.appointment}
+        actions={actions}
+        history={
+          <AppointmentHistorySection
+            events={historyEvents}
+            isLoading={isHistoryLoading}
+            timeZone={timeZone}
+          />
+        }
+      />
+      <CancelAppointmentModal
+        opened={cancelModalOpened}
+        onClose={() => setCancelModalOpened(false)}
+        appointment={data.appointment}
+        etag={data.etag}
+      />
+    </>
   )
 }

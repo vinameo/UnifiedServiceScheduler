@@ -23,6 +23,25 @@ export const appointmentCopy = {
   backToList: 'Back to appointments',
   viewAppointment: 'View appointment',
   noHistory: 'No history available.',
+  cancel: {
+    button: 'Cancel appointment',
+    title: 'Cancel this appointment?',
+    body: (bay: string, technician: string, range: string) =>
+      `${bay} and technician ${technician} will be released for ${range} so other customers can book it. This cannot be undone.`,
+    reason: 'Reason',
+    note: 'Note (optional)',
+    keep: 'Keep appointment',
+    confirm: 'Cancel appointment',
+    submitting: 'Cancelling…',
+    done: 'Appointment cancelled',
+    reasons: {
+      CUSTOMER_REQUEST: 'Customer asked to cancel',
+      CUSTOMER_BUSY: 'Customer is busy',
+      DONE_ELSEWHERE: 'Service done elsewhere',
+      DEALERSHIP_ISSUE: 'Dealership issue',
+      OTHER: 'Other',
+    },
+  },
   list: {
     title: 'Appointments',
     subtitle: (dayLong: string, offset: string) =>

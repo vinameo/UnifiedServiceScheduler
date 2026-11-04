@@ -4,7 +4,7 @@
 
 **Blocked by:** F06 [10-acceptance-and-performance](../../06-alternative-times/tickets/10-acceptance-and-performance.md) (the whole F06 branch merged to `develop`).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/07-cancel-appointment`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** none of its own; existing tests prove it changes nothing.
 
-- [ ] No change users can see; existing tests stay green unchanged
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] No change users can see; existing tests stay green unchanged
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

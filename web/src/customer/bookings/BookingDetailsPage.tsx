@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import {
+  Alert,
   Anchor,
   Box,
   Button,
@@ -13,12 +15,16 @@ import {
 import { Link, useParams } from 'react-router'
 import { useAppointment } from '../../shared/api/appointmentQuery'
 import { AppointmentStatusBadge } from '../../shared/appointments/AppointmentStatusBadge'
+import { canCustomerChange } from '../../shared/appointments/changeWindow'
 import { formatAppointmentSlot } from '../../shared/format/time'
+import { CancelBookingSheet } from './CancelBookingSheet'
 import { customerBookingsCopy } from './copy'
 
 export function BookingDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const { data, isLoading, isError } = useAppointment(id ?? '')
+  const [cancelSheetOpened, setCancelSheetOpened] = useState(false)
+  const [now] = useState(() => Date.now())
 
   if (isLoading) {
     return (
@@ -54,6 +60,8 @@ export function BookingDetailsPage() {
   const dealershipDisplay = appointment.dealership
     ? `${appointment.dealership.name}${appointment.dealership.branchName ? ` · ${appointment.dealership.branchName}` : ''}`
     : ''
+
+  const canChange = canCustomerChange(appointment, now)
 
   return (
     <Container size={390} py="md" px="md">
@@ -94,6 +102,41 @@ export function BookingDetailsPage() {
             </Text>
           </Box>
         </Group>
+
+        {/* Cancellation banner if cancelled */}
+        {appointment.status === 'CANCELLED' && (
+          <Alert
+            color="gray"
+            radius="md"
+            title={
+              appointment.cancellation?.byRole === 'SERVICE_ADVISOR'
+                ? undefined
+                : customerBookingsCopy.cancel.doneTitle
+            }
+          >
+            {appointment.cancellation?.byRole === 'SERVICE_ADVISOR' ? (
+              <Text size="sm">
+                This appointment was cancelled by the dealership.{' '}
+                {appointment.dealership?.phone ? (
+                  <>
+                    Call{' '}
+                    <Anchor
+                      href={`tel:${appointment.dealership.phone.replace(/\s+/g, '')}`}
+                      fw={600}
+                    >
+                      {appointment.dealership.phone}
+                    </Anchor>{' '}
+                    if you have questions.
+                  </>
+                ) : (
+                  'Call the dealership if you have questions.'
+                )}
+              </Text>
+            ) : (
+              <Text size="sm">{customerBookingsCopy.cancel.doneBody}</Text>
+            )}
+          </Alert>
+        )}
 
         {/* Slot and Service card */}
         <Card withBorder radius="md" p="md">
@@ -190,16 +233,47 @@ export function BookingDetailsPage() {
           </Stack>
         </Card>
 
-        {/* Actions area placeholder + New booking button */}
+        {/* Actions area + New booking button */}
         <Stack gap="sm" mt="xs">
-          {/* Actions area placeholder (for F07/F09) */}
-          <Box data-testid="actions-placeholder" />
+          {appointment.status === 'CONFIRMED' && (
+            canChange ? (
+              <Button
+                variant="outline"
+                color="red"
+                fullWidth
+                size="md"
+                onClick={() => setCancelSheetOpened(true)}
+              >
+                {customerBookingsCopy.cancel.button}
+              </Button>
+            ) : (
+              <Text size="sm" c="dimmed" ta="center">
+                It's less than 2 hours before your appointment. Please call{' '}
+                {appointment.dealership?.phone ? (
+                  <Anchor
+                    href={`tel:${appointment.dealership.phone.replace(/\s+/g, '')}`}
+                    fw={600}
+                  >
+                    {appointment.dealership.phone}
+                  </Anchor>
+                ) : null}{' '}
+                to cancel.
+              </Text>
+            )
+          )}
 
           <Button component={Link} to="/book" fullWidth size="md">
             {customerBookingsCopy.details.newBooking}
           </Button>
         </Stack>
       </Stack>
+
+      <CancelBookingSheet
+        opened={cancelSheetOpened}
+        onClose={() => setCancelSheetOpened(false)}
+        appointment={data.appointment}
+        etag={data.etag}
+      />
     </Container>
   )
 }

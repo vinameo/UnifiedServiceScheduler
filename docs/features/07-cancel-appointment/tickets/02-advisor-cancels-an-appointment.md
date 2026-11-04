@@ -4,7 +4,7 @@
 
 **Blocked by:** [01-prefactor-customerchangepolicy](01-prefactor-customerchangepolicy.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/07-cancel-appointment`
 
@@ -12,8 +12,8 @@
 
 **Test cases:** TC-07-01, TC-07-05, TC-07-15
 
-- [ ] TC-07-01 (AC-07.1, INV-07.1, INV-07.6; Integration): given `onlyTechnicians(['An'])`; booking A 09:00 tomorrow; when Advisor cancels A (`CUSTOMER_BUSY`, note); books B 09:00; then Cancel 200, `ETag "2"`, columns `cancel_reason`, `cancel_note`, `cancelled_at`, `cancelled_by_user_id` set; 0 active allocations of A; B 201. Test: `CancelAppointmentTest::test_AC_07_1_cancel_frees_the_slot_at_once`.
-- [ ] TC-07-05 (AC-07.5; Integration): given Booking at 08:30; when Advisor cancels; then 200. Test: `…::test_AC_07_5_advisor_has_no_time_limit`.
-- [ ] TC-07-15 (AC-07.12, WEB-07.2; Web component): given Fake API: CONFIRMED booking (Bay 2, Trần Minh An, 09:00–10:00); cancel 200; when Open the dialog, pick a reason, confirm; then "Bay 2 and technician Trần Minh An will be released for 09:00–10:00 …"; the request has `If-Match "1"`; then Cancelled badge, banner, no buttons. Test: `web/src/staff/appointments/CancelAppointmentModal.test.tsx`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
-- [ ] Run `/code-review` on the branch and fix findings before later tickets build on it
+- [x] TC-07-01 (AC-07.1, INV-07.1, INV-07.6; Integration): given `onlyTechnicians(['An'])`; booking A 09:00 tomorrow; when Advisor cancels A (`CUSTOMER_BUSY`, note); books B 09:00; then Cancel 200, `ETag "2"`, columns `cancel_reason`, `cancel_note`, `cancelled_at`, `cancelled_by_user_id` set; 0 active allocations of A; B 201. Test: `CancelAppointmentTest::test_AC_07_1_cancel_frees_the_slot_at_once`.
+- [x] TC-07-05 (AC-07.5; Integration): given Booking at 08:30; when Advisor cancels; then 200. Test: `…::test_AC_07_5_advisor_has_no_time_limit`.
+- [x] TC-07-15 (AC-07.12, WEB-07.2; Web component): given Fake API: CONFIRMED booking (Bay 2, Trần Minh An, 09:00–10:00); cancel 200; when Open the dialog, pick a reason, confirm; then "Bay 2 and technician Trần Minh An will be released for 09:00–10:00 …"; the request has `If-Match "1"`; then Cancelled badge, banner, no buttons. Test: `web/src/staff/appointments/CancelAppointmentModal.test.tsx`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] Run `/code-review` on the branch and fix findings before later tickets build on it

@@ -28,20 +28,24 @@ class AppointmentResource extends JsonResource
         $expiresAt = $this->expires_at !== null ? CarbonImmutable::parse($this->expires_at)->setTimezone($tz)->toIso8601String() : null;
         $createdAt = CarbonImmutable::parse($this->created_at)->setTimezone($tz)->toIso8601String();
 
+        $user = $request->user();
+        $isStaff = $user !== null && method_exists($user, 'isStaff') ? $user->isStaff() : false;
+
         $cancellation = null;
         if ($this->status === AppointmentStatus::CANCELLED && $this->cancelled_at !== null) {
             $cancelledAt = CarbonImmutable::parse($this->cancelled_at)->setTimezone($tz)->toIso8601String();
             $cancelledByUser = $this->cancelledByUser;
+            $byRole = $cancelledByUser?->role instanceof \BackedEnum ? $cancelledByUser->role->value : (string) $cancelledByUser?->role;
+            $canSeeStaffReason = $isStaff || ($user !== null && $this->cancelled_by_user_id === $user->id);
+
             $cancellation = [
-                'reason' => $this->cancel_reason,
-                'note' => $this->cancel_note,
+                'reason' => $canSeeStaffReason ? $this->cancel_reason : null,
+                'note' => $canSeeStaffReason ? $this->cancel_note : null,
                 'at' => $cancelledAt,
-                'byRole' => $cancelledByUser?->role instanceof \BackedEnum ? $cancelledByUser->role->value : (string) $cancelledByUser?->role,
+                'byRole' => $byRole,
             ];
         }
 
-        $user = $request->user();
-        $isStaff = $user !== null && method_exists($user, 'isStaff') ? $user->isStaff() : false;
         $createdBy = null;
         if ($isStaff && $this->createdByUser !== null) {
             $createdByUser = $this->createdByUser;

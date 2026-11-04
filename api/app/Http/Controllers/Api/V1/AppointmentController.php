@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Booking\CancelReason;
 use App\Domain\Booking\Services\AppointmentQueryServiceInterface;
 use App\Domain\Booking\Services\BookingServiceInterface;
 use App\Http\AppointmentResponder;
 use App\Http\Controllers\Controller;
+use App\Http\ExpectedVersion;
 use App\Http\Requests\Booking\CreateAppointmentRequest;
+use App\Http\Requests\CancelAppointmentRequest;
 use App\Http\Resources\AppointmentEventResource;
 use App\Models\Appointment;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -45,5 +49,29 @@ class AppointmentController extends Controller
         );
 
         return AppointmentResponder::created($appointment);
+    }
+
+    public function cancel(CancelAppointmentRequest $request, Appointment $appointment): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $expectedVersion = ExpectedVersion::from($request);
+
+        $reason = $request->validated('reason') !== null
+            ? CancelReason::from($request->validated('reason'))
+            : null;
+
+        $note = $request->validated('note');
+
+        $cancelled = $this->bookingService->cancel(
+            actor: $user,
+            appointmentId: $appointment->id,
+            expectedVersion: $expectedVersion,
+            reason: $reason,
+            note: $note,
+            now: CarbonImmutable::now(),
+        );
+
+        return AppointmentResponder::ok($cancelled);
     }
 }

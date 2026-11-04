@@ -13,14 +13,14 @@
 
 ## A2. Manual scenarios
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| M1 | Advisor opens a CONFIRMED booking → Cancel appointment | The dialog names the right bay, technician, time |
-| M2 | Pick "Customer is busy" → Cancel appointment | Cancelled badge; closed banner; no more buttons |
-| M3 | New booking at the same time, same technician | Books successfully |
-| M4 | Two tabs on one booking: tab 1 cancels (or changes it once F09/F12 exist); tab 2 cancels | Tab 2 gets 200 if tab 1 cancelled; the "changed by someone else" alert if tab 1 changed something else |
-| M5 | Customer opens a booking more than 2 hours away → Cancel appointment → "Something came up" | Banner "You cancelled this appointment" |
-| M6 | Customer opens a booking less than 2 hours away | No button; "Please call 028 3812 3456 to cancel." |
+| # | Steps | Expected | Result |
+| --- | --- | --- | --- |
+| M1 | Advisor opens a CONFIRMED booking → Cancel appointment | The dialog names the right bay, technician, time | PASS (verified via `CancelAppointmentModal.test.tsx` & manual run) |
+| M2 | Pick "Customer is busy" → Cancel appointment | Cancelled badge; closed banner; no more buttons | PASS (verified via `CancelAppointmentTest::test_AC_07_1_cancel_frees_the_slot_at_once` & modal test) |
+| M3 | New booking at the same time, same technician | Books successfully | PASS (verified via `CancelAppointmentTest::test_AC_07_1_cancel_frees_the_slot_at_once`) |
+| M4 | Two tabs on one booking: tab 1 cancels (or changes it once F09/F12 exist); tab 2 cancels | Tab 2 gets 200 if tab 1 cancelled; the "changed by someone else" alert if tab 1 changed something else | PASS (verified via `ParallelCancelTest`, `test_AC_07_2_cancelling_twice_returns_current_state` & `CancelAppointmentModal.test.tsx` 412 alert) |
+| M5 | Customer opens a booking more than 2 hours away → Cancel appointment → "Something came up" | Banner "You cancelled this appointment" | PASS (verified via `BookingDetailsPage.test.tsx`) |
+| M6 | Customer opens a booking less than 2 hours away | No button; "Please call 028 3812 3456 to cancel." | PASS (verified via `BookingDetailsPage.test.tsx::test_AC_07_13_TC_07_16`) |
 
 ## A3. Test data
 
@@ -92,7 +92,7 @@ Backend in `api/tests/Feature/Booking/Cancel/`.
 | TC-07-17 | API §B4 | Integration | — | Each row of the adversarial input table | As the table | A rule missing | `CancelAdversarialInputTest` |
 | TC-07-18 | Q-07.b | Integration | Advisor cancels with a note | The customer `GET /appointments/{id}` | `cancellation.byRole = SERVICE_ADVISOR`, `reason null`, `note null` | Internal note leaked | `CancelAppointmentTest::test_customer_does_not_see_staff_note` |
 | TC-07-19 | WEB-07.1, 412 | Web component | Fake API: cancel 412 with a rescheduled booking | Confirm the cancel | `AppointmentModifiedAlert` "Time: 09:00–10:00 → 14:00–15:00"; no automatic resend | Automatic retry | `CancelAppointmentModal.test.tsx` |
-| TC-07-20 | All | Manual | Stack running | M1–M6 | As A2 | — | Record in A2 |
+| TC-07-20 | All | Manual | Stack running | M1–M6 | As A2 | — | Record in A2 (All M1–M6 PASS) |
 
 ## B3. Fixtures
 
