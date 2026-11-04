@@ -87,6 +87,27 @@ export const appointmentCopy = {
     empty: 'No appointments on this day.',
     newBooking: 'New booking',
   },
+  actions: {
+    checkIn: 'Check in',
+    start: 'Start work',
+    complete: 'Mark completed',
+    noShow: 'Mark no-show',
+    noShowLater: (time: string) => `Available after ${time}`,
+    extend: 'Extend time',
+    extendBy: (minutes: number) => `${minutes} min`,
+    extended: (time: string) => `Time extended to ${time}`,
+    movedNext: (reference: string, technician: string, bay: string) =>
+      `Next booking ${reference} moved to ${technician}, ${bay}`,
+    flaggedNext: (reference: string) => `Booking ${reference} needs customer contact`,
+  },
+  contact: {
+    banner: (reason: string) => `Customer contact needed: ${reason}`,
+    displacedNote:
+      'This booking no longer has a bay or technician. Reschedule it before checking in.',
+    reason: {
+      OVERRUN: 'the previous job ran late',
+    },
+  },
 }
 
 export const historyTypeLabels: Record<string, string> = {
