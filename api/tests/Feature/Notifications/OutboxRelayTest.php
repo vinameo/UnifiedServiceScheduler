@@ -9,8 +9,10 @@ use App\Domain\Notifications\OutboxChannel;
 use App\Domain\Notifications\Services\OutboxRelayInterface;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Tests\Support\AssertsNoOverlap;
@@ -216,5 +218,115 @@ class OutboxRelayTest extends TestCase
         ]);
 
         $this->assertSame(0, $exitCode);
+    }
+
+    /**
+     * TC-11-06 (D-11.5, INV-11.5; Integration):
+     * given A DMS row; fake HTTP (Http::fake) with DMS_WEBHOOK_URL set;
+     * when runOnce;
+     * then The request has header Idempotency-Key: {eventId}:DMS and body with eventId;
+     *      the stored payload has no phone/email keys.
+     * Test: …::test_D_11_5_messages_carry_event_id.
+     */
+    public function test_D_11_5_messages_carry_event_id(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $customer->update(['phone' => '0901234567']);
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $bookingNow = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($bookingNow);
+
+        $desiredStart = '2026-11-02T09:00:00+07:00';
+        $key = (string) Str::uuid();
+
+        $bookingResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+            'customerId' => $customer->id,
+            'vehicleId' => $vehicle->id,
+            'serviceTypeId' => $service->id,
+            'desiredStart' => $desiredStart,
+        ], [
+            'Idempotency-Key' => $key,
+        ]);
+
+        $bookingResponse->assertStatus(201);
+        $apptId = $bookingResponse->json('id');
+        $this->assertNotNull($apptId);
+
+        // Precondition: A DMS row exists
+        $dmsRow = DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('channel', 'DMS')
+            ->first();
+        $this->assertNotNull($dmsRow);
+        $this->assertSame('PENDING', $dmsRow->status);
+
+        // Assert stored payload has no phone/email keys (INV-11.5)
+        /** @var array<string, mixed> $initialPayload */
+        $initialPayload = json_decode((string) $dmsRow->payload, true);
+        $this->assertArrayNotHasKey('phone', $initialPayload);
+        $this->assertArrayNotHasKey('email', $initialPayload);
+
+        // Configure fake HTTP and DMS_WEBHOOK_URL
+        $webhookUrl = 'https://dms.example.test/incoming-events';
+        config([
+            'outbox.dms.driver' => 'webhook',
+            'outbox.dms.webhook_url' => $webhookUrl,
+        ]);
+
+        Http::fake([
+            $webhookUrl => Http::response(['status' => 'received'], 200),
+        ]);
+
+        // Register fake channels for SMS & EMAIL to isolate DMS webhook testing
+        $smsFake = new RecordingChannel;
+        /** @var ChannelRegistryInterface $registry */
+        $registry = app(ChannelRegistryInterface::class);
+        $registry->forget(OutboxChannel::DMS);
+        $registry->register(OutboxChannel::SMS, $smsFake);
+        Mail::fake();
+
+        $relayNow = CarbonImmutable::parse('2026-11-02 08:00:10', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($relayNow);
+
+        /** @var OutboxRelayInterface $relay */
+        $relay = app(OutboxRelayInterface::class);
+        $result = $relay->runOnce($relayNow);
+
+        $this->assertGreaterThanOrEqual(1, $result->sent);
+
+        // Verify HTTP request sent to DMS_WEBHOOK_URL
+        $eventId = (string) $dmsRow->event_id;
+        Http::assertSent(function (Request $request) use ($webhookUrl, $eventId) {
+            $this->assertSame($webhookUrl, $request->url());
+            $this->assertTrue($request->hasHeader('Idempotency-Key', "{$eventId}:DMS"));
+
+            $data = $request->data();
+            $this->assertSame($eventId, $data['eventId']);
+            $this->assertArrayNotHasKey('phone', $data);
+            $this->assertArrayNotHasKey('email', $data);
+
+            $raw = $request->body();
+            $this->assertStringNotContainsString('0901234567', $raw);
+
+            return true;
+        });
+
+        // Verify DMS row marked SENT
+        $updatedDmsRow = DB::table('outbox_messages')
+            ->where('id', $dmsRow->id)
+            ->first();
+        $this->assertNotNull($updatedDmsRow);
+        $this->assertSame('SENT', $updatedDmsRow->status);
+        $this->assertSame(1, $updatedDmsRow->attempts);
+        $this->assertNotNull($updatedDmsRow->sent_at);
+
+        // Verify the stored payload in database still has no phone/email keys
+        /** @var array<string, mixed> $updatedPayload */
+        $updatedPayload = json_decode((string) $updatedDmsRow->payload, true);
+        $this->assertArrayNotHasKey('phone', $updatedPayload);
+        $this->assertArrayNotHasKey('email', $updatedPayload);
     }
 }

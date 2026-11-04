@@ -23,6 +23,12 @@ class ChannelRegistry implements ChannelRegistryInterface
         $this->channels[$key] = $driver;
     }
 
+    public function forget(OutboxChannel|string $channel): void
+    {
+        $key = $channel instanceof OutboxChannel ? $channel->value : $channel;
+        unset($this->channels[$key]);
+    }
+
     public function channel(OutboxChannel|string $channel): NotificationChannel
     {
         $key = $channel instanceof OutboxChannel ? $channel->value : $channel;
@@ -55,10 +61,15 @@ class ChannelRegistry implements ChannelRegistryInterface
         $configKey = strtolower($channelKey);
         $driverName = (string) config("outbox.{$configKey}.driver", 'log');
 
+        if ($channelKey === 'DMS' && $driverName === 'log' && ! empty(config('outbox.dms.webhook_url'))) {
+            $driverName = 'webhook';
+        }
+
         return match ($driverName) {
             'failing' => $this->container->make(FailingChannel::class),
             'log' => $this->container->make(LogChannel::class),
             'mail' => $this->container->make(MailChannel::class),
+            'webhook' => $this->container->make(DmsWebhookChannel::class),
             default => throw new InvalidArgumentException("Unsupported driver [{$driverName}] for channel [{$channelKey}]."),
         };
     }

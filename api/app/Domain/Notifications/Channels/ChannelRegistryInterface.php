@@ -11,4 +11,6 @@ interface ChannelRegistryInterface
     public function get(OutboxChannel|string $channel): NotificationChannel;
 
     public function register(OutboxChannel|string $channel, NotificationChannel $driver): void;
+
+    public function forget(OutboxChannel|string $channel): void;
 }
