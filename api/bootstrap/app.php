@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CorrelationId;
+use App\Http\Middleware\EnsureInternalMetrics;
 use App\Http\Middleware\Idempotency;
 use App\Http\Middleware\IfMatch;
 use App\Http\Middleware\RecordRequestOutcome;
@@ -30,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'if-match' => IfMatch::class,
             'idempotent' => Idempotency::class,
+            'internal.metrics' => EnsureInternalMetrics::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

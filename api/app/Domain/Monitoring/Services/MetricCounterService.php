@@ -66,11 +66,9 @@ class MetricCounterService implements MetricCounterServiceInterface
 
         // 1. booking_requests_total
         $bookingRequests = $rows->where('name', 'booking_requests_total');
-        if ($bookingRequests->isNotEmpty()) {
-            $output .= "# TYPE booking_requests_total counter\n";
-            foreach ($bookingRequests as $row) {
-                $output .= "booking_requests_total{{$row->labels}} {$row->value}\n";
-            }
+        $output .= "# TYPE booking_requests_total counter\n";
+        foreach ($bookingRequests as $row) {
+            $output .= "booking_requests_total{{$row->labels}} {$row->value}\n";
         }
 
         // 2. booking_duration_seconds (histogram)

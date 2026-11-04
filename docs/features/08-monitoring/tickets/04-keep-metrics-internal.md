@@ -4,7 +4,7 @@
 
 **Blocked by:** [03-request-outcome-counters-and-metrics](03-request-outcome-counters-and-metrics.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/08-monitoring`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** TC-08-07, TC-08-08
 
-- [ ] TC-08-07 (AC-08.7, INV-08.5; Integration): when `GET /metrics` without the flag; with `X-Forwarded-For`; with server var `METRICS_INTERNAL=1`; then 404; 404; 200 `text/plain` with `# TYPE booking_requests_total counter`. Test: `MetricsEndpointTest::test_AC_08_7_metrics_only_from_internal_nginx`.
-- [ ] TC-08-08 (AC-08.7, D-08.7; Manual): given Stack running; when M1, M2, M3; then As A2. Test: `Record in A2`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-08-07 (AC-08.7, INV-08.5; Integration): when `GET /metrics` without the flag; with `X-Forwarded-For`; with server var `METRICS_INTERNAL=1`; then 404; 404; 200 `text/plain` with `# TYPE booking_requests_total counter`. Test: `MetricsEndpointTest::test_AC_08_7_metrics_only_from_internal_nginx`.
+- [x] TC-08-08 (AC-08.7, D-08.7; Manual): given Stack running; when M1, M2, M3; then As A2. Test: `Record in A2`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

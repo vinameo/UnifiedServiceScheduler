@@ -254,7 +254,7 @@ class MetricsTest extends TestCase
         $repo->incrementDuration(0.15);
         $repo->increment('idempotent_replays_total', '', 2);
 
-        $response = $this->get('/metrics');
+        $response = $this->withServerVariables(['METRICS_INTERNAL' => '1'])->get('/metrics');
 
         $response->assertStatus(200);
         $response->assertHeader('Content-Type', 'text/plain; version=0.0.4; charset=UTF-8');
