@@ -620,6 +620,9 @@ class ExtendTest extends TestCase
             status: AppointmentStatus::CONFIRMED,
         );
 
+        $versionX = $appointmentX->version;
+        $versionY = $appointmentY->version;
+
         $hookRunCount = 0;
         WorkshopService::$beforeAttemptHook = function (int $attempt, Appointment $job, array $neighbours) use (&$hookRunCount, $appointmentY): void {
             $hookRunCount++;
@@ -650,8 +653,153 @@ class ExtendTest extends TestCase
         $appointmentX->refresh();
         $appointmentY->refresh();
 
+        $this->assertSame($versionX + 1, $appointmentX->version);
         $this->assertSame($bayK1->id, $appointmentX->bay_id);
+        $this->assertSame(
+            CarbonImmutable::parse('2026-11-02 10:30:00', 'Asia/Ho_Chi_Minh')->utc()->toIso8601String(),
+            CarbonImmutable::parse($appointmentX->end_at)->utc()->toIso8601String()
+        );
+
+        // Y was bumped by hook (+1) and then reassign updated it (+1), total +2
+        $this->assertSame($versionY + 2, $appointmentY->version);
         $this->assertSame($bayK2->id, $appointmentY->bay_id);
+
+        // Invariant: Never a state where X is extended on K1 but Y still holds K1
+        $yHoldsK1 = DB::table('resource_allocations')
+            ->where('appointment_id', $appointmentY->id)
+            ->where('resource_id', $bayK1->id)
+            ->where('active', true)
+            ->exists();
+        $this->assertFalse($yHoldsK1);
+
+        // Response affected list
+        $data = $response->json('data');
+        $this->assertNotNull($data);
+        $this->assertCount(1, $data['affected']);
+        $this->assertSame($appointmentY->id, $data['affected'][0]['appointmentId']);
+        $this->assertSame('REASSIGNED', $data['affected'][0]['outcome']);
+
+        $this->assertNoOverlappingAllocations();
+        $this->assertM042Passes();
+    }
+
+    /**
+     * TC-12-10 (AC-12.8, INV-12.4; Integration):
+     * given As TC-12-04; a test hook changes Y (version bump) on every attempt;
+     * when Extend;
+     * then Retries are exhausted and answers 409 NO_AVAILABILITY (reason: SLOT_TAKEN);
+     * never a partial change (X and Y remain untouched).
+     */
+    public function test_AC_12_8_exhausted_retries_returns_409_slot_taken(): void
+    {
+        $world = World::saigonD7();
+        $foreman = $world->foreman();
+
+        $techAn = $world->technician('An');
+        $techDung = $world->technician('Dũng');
+        $bayK1 = $world->bay('K1');
+        $bayK2 = $world->bay('K2');
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $customerDataX = $world->customerWithVehicle();
+        $customerDataY = $world->customerWithVehicle();
+
+        $now = CarbonImmutable::parse('2026-11-02 10:05:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        $startX = CarbonImmutable::parse('2026-11-02 09:00:00', 'Asia/Ho_Chi_Minh');
+        $endX = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+
+        $appointmentX = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $techAn,
+            bay: $bayK1,
+            start: $startX,
+            end: $endX,
+            serviceType: $service,
+            customer: $customerDataX['customer'],
+            vehicle: $customerDataX['vehicle'],
+            status: AppointmentStatus::IN_PROGRESS,
+        );
+
+        $startY = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+        $endY = CarbonImmutable::parse('2026-11-02 11:00:00', 'Asia/Ho_Chi_Minh');
+
+        $appointmentY = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $techDung,
+            bay: $bayK1,
+            start: $startY,
+            end: $endY,
+            serviceType: $service,
+            customer: $customerDataY['customer'],
+            vehicle: $customerDataY['vehicle'],
+            status: AppointmentStatus::CONFIRMED,
+        );
+
+        $versionX = $appointmentX->version;
+        $versionY = $appointmentY->version;
+
+        $hookRunCount = 0;
+        WorkshopService::$beforeAttemptHook = function (int $attempt, Appointment $job, array $neighbours) use (&$hookRunCount, $appointmentY): void {
+            $hookRunCount++;
+            if (! empty($neighbours)) {
+                // Simulate persistent race on neighbour Y before each attempt's transaction
+                DB::table('appointments')
+                    ->where('id', $appointmentY->id)
+                    ->update([
+                        'version' => DB::raw('version + 1'),
+                        'updated_at' => CarbonImmutable::now(),
+                    ]);
+            }
+        };
+
+        $response = $this->actingAs($foreman)->postJson(
+            "/api/v1/appointments/{$appointmentX->id}/extend",
+            ['minutes' => 30],
+            [
+                'If-Match' => sprintf('"%d"', $versionX),
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]
+        );
+
+        $response->assertStatus(409)
+            ->assertJsonPath('code', 'NO_AVAILABILITY')
+            ->assertJsonPath('reason', 'SLOT_TAKEN');
+
+        $this->assertSame(2, $hookRunCount);
+
+        // Invariant: Never a partial change.
+        // X is completely unchanged: same end_at, same version, same allocations
+        $appointmentX->refresh();
+        $this->assertSame($versionX, $appointmentX->version);
+        $this->assertSame($bayK1->id, $appointmentX->bay_id);
+        $this->assertSame(
+            $endX->utc()->toIso8601String(),
+            CarbonImmutable::parse($appointmentX->end_at)->utc()->toIso8601String()
+        );
+
+        // Y's bay is still K1 (was not moved or displaced)
+        $appointmentY->refresh();
+        $this->assertSame($bayK1->id, $appointmentY->bay_id);
+        $this->assertSame(AppointmentStatus::CONFIRMED, $appointmentY->status);
+        $this->assertNull($appointmentY->contact_required_reason);
+
+        // Y still holds active allocation on K1
+        $yHoldsK1 = DB::table('resource_allocations')
+            ->where('appointment_id', $appointmentY->id)
+            ->where('resource_id', $bayK1->id)
+            ->where('active', true)
+            ->exists();
+        $this->assertTrue($yHoldsK1);
+
+        // No EXTENDED event exists for X
+        $this->assertSame(
+            0,
+            AppointmentEvent::where('appointment_id', $appointmentX->id)
+                ->where('type', AppointmentEventType::EXTENDED->value)
+                ->count()
+        );
 
         $this->assertNoOverlappingAllocations();
         $this->assertM042Passes();
