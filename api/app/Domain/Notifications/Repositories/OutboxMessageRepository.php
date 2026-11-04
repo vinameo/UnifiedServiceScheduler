@@ -49,6 +49,45 @@ class OutboxMessageRepository implements OutboxMessageRepositoryInterface
         });
     }
 
+    /**
+     * @return Collection<int, OutboxMessage>
+     */
+    public function failAbandoned(CarbonImmutable $now, int $batch = 50): Collection
+    {
+        return DB::transaction(function () use ($now, $batch) {
+            /** @var Collection<int, OutboxMessage> $rows */
+            $rows = OutboxMessage::query()
+                ->where('status', 'PENDING')
+                ->where('attempts', '>=', 5)
+                ->where('next_attempt_at', '<=', $now)
+                ->orderBy('next_attempt_at')
+                ->limit($batch)
+                ->lock('FOR UPDATE SKIP LOCKED')
+                ->get();
+
+            if ($rows->isEmpty()) {
+                return collect();
+            }
+
+            $ids = $rows->pluck('id')->all();
+
+            DB::table('outbox_messages')
+                ->whereIn('id', $ids)
+                ->update([
+                    'status' => 'FAILED',
+                    'last_error' => 'NO_RESULT',
+                    'updated_at' => $now->toIso8601String(),
+                ]);
+
+            foreach ($rows as $row) {
+                $row->status = 'FAILED';
+                $row->last_error = 'NO_RESULT';
+            }
+
+            return $rows;
+        });
+    }
+
     public function markSent(string $id, CarbonImmutable $sentAt): bool
     {
         $affected = DB::table('outbox_messages')

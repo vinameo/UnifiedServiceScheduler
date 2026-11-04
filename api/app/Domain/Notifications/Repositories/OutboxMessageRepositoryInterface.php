@@ -17,6 +17,13 @@ interface OutboxMessageRepositoryInterface
     public function claimDue(CarbonImmutable $now, int $batch = 50): Collection;
 
     /**
+     * Fail abandoned pending messages whose attempts >= 5 and next_attempt_at <= $now (INV-11.4).
+     *
+     * @return Collection<int, OutboxMessage>
+     */
+    public function failAbandoned(CarbonImmutable $now, int $batch = 50): Collection;
+
+    /**
      * Mark a pending message as SENT.
      */
     public function markSent(string $id, CarbonImmutable $sentAt): bool;

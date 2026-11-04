@@ -4,10 +4,14 @@ namespace Tests\Feature\Notifications;
 
 use App\Domain\Notifications\Channels\ChannelRegistryInterface;
 use App\Domain\Notifications\Channels\FailingChannel;
+use App\Domain\Notifications\Channels\NotificationChannel;
 use App\Domain\Notifications\Mail\AppointmentNotification;
 use App\Domain\Notifications\OutboxChannel;
+use App\Domain\Notifications\Recipient;
 use App\Domain\Notifications\Services\OutboxRelayInterface;
+use App\Models\OutboxMessage;
 use Carbon\CarbonImmutable;
+use Error;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -328,5 +332,236 @@ class OutboxRelayTest extends TestCase
         $updatedPayload = json_decode((string) $updatedDmsRow->payload, true);
         $this->assertArrayNotHasKey('phone', $updatedPayload);
         $this->assertArrayNotHasKey('email', $updatedPayload);
+    }
+
+    /**
+     * TC-11-04 (AC-11.6, INV-11.4; Integration):
+     * given One SMS row; FailingChannel;
+     * when runOnce at t, then travel to each next_attempt_at and run again, 5 times;
+     * then attempts 1…5; next_attempt_at gaps 10/20/40/80 s;
+     *      after the 5th: FAILED, last_error set (redacted), 1 api_events row DELIVERY_FAILED.
+     */
+    public function test_AC_11_6_backoff_then_failed(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $customer->update(['phone' => '0901234567']);
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $t0 = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($t0);
+
+        $bookingResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+            'customerId' => $customer->id,
+            'vehicleId' => $vehicle->id,
+            'serviceTypeId' => $service->id,
+            'desiredStart' => '2026-11-02T09:00:00+07:00',
+        ], [
+            'Idempotency-Key' => (string) Str::uuid(),
+        ]);
+
+        $bookingResponse->assertStatus(201);
+        $apptId = $bookingResponse->json('id');
+        $this->assertNotNull($apptId);
+
+        // Keep only one SMS row for this test
+        DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('channel', '!=', 'SMS')
+            ->delete();
+
+        $smsRow = DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('channel', 'SMS')
+            ->first();
+        $this->assertNotNull($smsRow);
+        $this->assertSame(0, $smsRow->attempts);
+        $this->assertSame('PENDING', $smsRow->status);
+
+        // Configure FailingChannel with sensitive data to verify redaction and length limit <= 500 chars
+        $sensitiveErrorMessage = 'SMS provider gateway error for 0901234567 / test.user@example.com: '.str_repeat('X', 600);
+        $failingChannel = new FailingChannel($sensitiveErrorMessage);
+
+        /** @var ChannelRegistryInterface $registry */
+        $registry = app(ChannelRegistryInterface::class);
+        $registry->register(OutboxChannel::SMS, $failingChannel);
+
+        /** @var OutboxRelayInterface $relay */
+        $relay = app(OutboxRelayInterface::class);
+
+        $expectedGaps = [10, 20, 40, 80]; // seconds: 10 * 2^(attempts - 1)
+        $currentTime = $t0;
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $result = $relay->runOnce($currentTime);
+
+            $this->assertSame(1, $result->claimed);
+            $this->assertSame(0, $result->sent);
+            $this->assertSame(1, $result->failed);
+
+            $row = DB::table('outbox_messages')->where('id', $smsRow->id)->first();
+            $this->assertNotNull($row);
+            $this->assertSame($attempt, $row->attempts);
+
+            if ($attempt < 5) {
+                $this->assertSame('PENDING', $row->status);
+                $expectedGap = $expectedGaps[$attempt - 1];
+                $nextAttemptAt = CarbonImmutable::parse($row->next_attempt_at);
+                $actualGap = (int) $currentTime->diffInSeconds($nextAttemptAt);
+                $this->assertSame($expectedGap, $actualGap, "Attempt {$attempt} should wait {$expectedGap}s");
+
+                // api_events row DELIVERY_FAILED should not exist before 5th failure
+                $this->assertSame(0, DB::table('api_events')->where('code', 'DELIVERY_FAILED')->count());
+
+                // Travel to next_attempt_at for next retry
+                $currentTime = $nextAttemptAt;
+                CarbonImmutable::setTestNow($currentTime);
+            } else {
+                // After the 5th attempt: status is FAILED, last_error set (redacted, <= 500 chars)
+                $this->assertSame('FAILED', $row->status);
+                $this->assertNotNull($row->last_error);
+                $this->assertLessThanOrEqual(500, mb_strlen((string) $row->last_error));
+                $this->assertStringNotContainsString('0901234567', (string) $row->last_error);
+                $this->assertStringNotContainsString('test.user@example.com', (string) $row->last_error);
+                $this->assertStringContainsString('[phone]', (string) $row->last_error);
+                $this->assertStringContainsString('[email]', (string) $row->last_error);
+
+                // 1 api_events row DELIVERY_FAILED
+                $apiEvents = DB::table('api_events')
+                    ->where('code', 'DELIVERY_FAILED')
+                    ->get();
+                $this->assertCount(1, $apiEvents);
+
+                $event = $apiEvents->first();
+                $this->assertNotNull($event);
+                $this->assertSame((string) $smsRow->event_id, $event->correlation_id);
+                $this->assertSame('outbox-relay', $event->route);
+                $this->assertSame('-', $event->method);
+                $this->assertNull($event->status);
+                $this->assertSame('error', $event->outcome);
+                $this->assertSame($world->dealership->id, $event->dealership_id);
+                $this->assertSame($apptId, $event->appointment_id);
+
+                /** @var array<string, mixed> $detail */
+                $detail = json_decode((string) $event->detail, true);
+                $this->assertSame('SMS', $detail['channel']);
+                $this->assertStringContainsString('Confirmation SMS', $detail['event']);
+                $this->assertStringNotContainsString('0901234567', (string) $event->detail);
+                $this->assertStringNotContainsString('test.user@example.com', (string) $event->detail);
+            }
+        }
+    }
+
+    /**
+     * TC-11-18 (INV-11.4; Integration):
+     * given One SMS row; the channel throws an Error that is not DeliveryFailed
+     *       and the test aborts the run each time (simulated crash, no result recorded);
+     * when runOnce + travel(61)->seconds(), 6 times;
+     * then attempts stops at 5; after the 5th lease expires the row is FAILED,
+     *      last_error 'NO_RESULT', one DELIVERY_FAILED event; the claim never sees it again.
+     */
+    public function test_INV_11_4_abandoned_attempts_end_in_failed(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $customer->update(['phone' => '0901234567']);
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $t0 = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($t0);
+
+        $bookingResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+            'customerId' => $customer->id,
+            'vehicleId' => $vehicle->id,
+            'serviceTypeId' => $service->id,
+            'desiredStart' => '2026-11-02T09:00:00+07:00',
+        ], [
+            'Idempotency-Key' => (string) Str::uuid(),
+        ]);
+
+        $bookingResponse->assertStatus(201);
+        $apptId = $bookingResponse->json('id');
+        $this->assertNotNull($apptId);
+
+        // Keep only one SMS row for this test
+        DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('channel', '!=', 'SMS')
+            ->delete();
+
+        $smsRow = DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('channel', 'SMS')
+            ->first();
+        $this->assertNotNull($smsRow);
+        $this->assertSame(0, $smsRow->attempts);
+        $this->assertSame('PENDING', $smsRow->status);
+
+        // Simulated crash channel throwing Error (not DeliveryFailed)
+        $crashingChannel = new class implements NotificationChannel
+        {
+            public function send(OutboxMessage $message, Recipient $recipient): void
+            {
+                throw new Error('Simulated worker process crash during channel dispatch');
+            }
+        };
+
+        /** @var ChannelRegistryInterface $registry */
+        $registry = app(ChannelRegistryInterface::class);
+        $registry->register(OutboxChannel::SMS, $crashingChannel);
+
+        /** @var OutboxRelayInterface $relay */
+        $relay = app(OutboxRelayInterface::class);
+
+        $currentTime = $t0;
+
+        // Run runOnce + travel(61)->seconds(), 6 times
+        for ($i = 1; $i <= 6; $i++) {
+            CarbonImmutable::setTestNow($currentTime);
+
+            try {
+                $relay->runOnce($currentTime);
+            } catch (Error $e) {
+                $this->assertSame('Simulated worker process crash during channel dispatch', $e->getMessage());
+            }
+
+            $currentTime = $currentTime->addSeconds(61);
+        }
+
+        // Row assertions: attempts stops at 5; status is FAILED, last_error 'NO_RESULT'
+        $updatedRow = DB::table('outbox_messages')->where('id', $smsRow->id)->first();
+        $this->assertNotNull($updatedRow);
+        $this->assertSame('FAILED', $updatedRow->status);
+        $this->assertSame(5, $updatedRow->attempts, 'Attempts must not exceed 5');
+        $this->assertSame('NO_RESULT', $updatedRow->last_error);
+
+        // Exactly one DELIVERY_FAILED api_events row
+        $apiEvents = DB::table('api_events')
+            ->where('code', 'DELIVERY_FAILED')
+            ->where('correlation_id', (string) $smsRow->event_id)
+            ->get();
+        $this->assertCount(1, $apiEvents);
+
+        $event = $apiEvents->first();
+        $this->assertNotNull($event);
+        $this->assertSame('outbox-relay', $event->route);
+        $this->assertSame('-', $event->method);
+        $this->assertNull($event->status);
+        $this->assertSame('error', $event->outcome);
+        $this->assertSame($world->dealership->id, $event->dealership_id);
+        $this->assertSame($apptId, $event->appointment_id);
+
+        /** @var array<string, mixed> $detail */
+        $detail = json_decode((string) $event->detail, true);
+        $this->assertSame('SMS', $detail['channel']);
+        $this->assertSame('NO_RESULT', $detail['error']);
+
+        // The claim never sees it again: running relay again claims 0
+        CarbonImmutable::setTestNow($currentTime);
+        $subsequentResult = $relay->runOnce($currentTime);
+        $this->assertSame(0, $subsequentResult->claimed);
+        $this->assertSame(0, $subsequentResult->failed);
     }
 }

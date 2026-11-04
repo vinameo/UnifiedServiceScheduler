@@ -87,7 +87,10 @@ class ApiEventRepository implements ApiEventRepositoryInterface
     public function getRecentErrors(?string $dealershipId, CarbonImmutable $from, CarbonImmutable $to, int $limit = 20): Collection
     {
         $query = ApiEvent::query()
-            ->where('status', '>=', 400)
+            ->where(function ($q) {
+                $q->where('status', '>=', 400)
+                    ->orWhere('code', 'DELIVERY_FAILED');
+            })
             ->where('occurred_at', '>=', $from)
             ->where('occurred_at', '<=', $to);
 
@@ -108,7 +111,10 @@ class ApiEventRepository implements ApiEventRepositoryInterface
 
     public function listErrors(?string $dealershipId, ?string $correlationId, ?string $cursor, int $limit = 20): CursorPage
     {
-        $baseQuery = ApiEvent::query()->where('status', '>=', 400);
+        $baseQuery = ApiEvent::query()->where(function ($q) {
+            $q->where('status', '>=', 400)
+                ->orWhere('code', 'DELIVERY_FAILED');
+        });
 
         if ($dealershipId !== null && $dealershipId !== '') {
             $baseQuery->where(function ($q) use ($dealershipId) {
