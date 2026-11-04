@@ -2,11 +2,21 @@
 
 namespace Tests\Feature\Booking;
 
+use App\Domain\Allocation\ResourceSnapshot;
 use App\Domain\Booking\AppointmentStatus;
+use App\Domain\Booking\Events\AllocationRetried;
+use App\Domain\Booking\Repositories\AllocationSnapshotRepositoryInterface;
 use App\Models\Appointment;
+use App\Models\Bay;
+use App\Models\Customer;
+use App\Models\ServiceType;
+use App\Models\Technician;
+use App\Models\User;
+use App\Models\Vehicle;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Tests\Support\AssertsNoOverlap;
 use Tests\Support\World;
@@ -673,6 +683,276 @@ class RescheduleTest extends TestCase
             $this->assertCount(3, $activeAllocations);
 
             // Overlap query 0
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * TC-09-07 (D-09.10, INV-09.2): All candidate technicians get conflicting allocations inserted by hand
+     * after the snapshot; when Reschedule; then 409 NO_AVAILABILITY SLOT_TAKEN after 3 tries with the same
+     * expected version; alternatives present; appointment unchanged.
+     */
+    public function test_three_tries_then_slot_taken_with_alternatives(): void
+    {
+        Event::fake([AllocationRetried::class]);
+
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['user' => $user, 'customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-03T09:00:00+07:00';
+            $slot1400 = '2026-11-03T14:00:00+07:00';
+
+            // 1. Create booking X at 09:00
+            $bookX = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookX->assertStatus(201);
+            $appointmentXId = $bookX->json('id');
+
+            // Record snapshot of X before reschedule
+            /** @var Appointment $rowBefore */
+            $rowBefore = Appointment::findOrFail($appointmentXId);
+            $this->assertSame(1, $rowBefore->version);
+
+            $allocationsBefore = DB::table('resource_allocations')
+                ->where('appointment_id', $appointmentXId)
+                ->where('active', true)
+                ->orderBy('resource_type')
+                ->get()
+                ->toArray();
+            $eventsCountBefore = DB::table('appointment_events')
+                ->where('appointment_id', $appointmentXId)
+                ->count();
+            $outboxCountBefore = DB::table('outbox_messages')
+                ->where('appointment_id', $appointmentXId)
+                ->count();
+
+            // Decorate snapshot repository so that after the snapshot is taken,
+            // conflicting allocations for all candidate technicians are inserted by hand
+            $realSnapshotRepo = app(AllocationSnapshotRepositoryInterface::class);
+            $injected = false;
+            $bayK1 = $world->bay('K1');
+
+            $this->app->bind(AllocationSnapshotRepositoryInterface::class, function () use (
+                $realSnapshotRepo,
+                &$injected,
+                $customer,
+                $user,
+                $serviceType,
+                $bayK1,
+                $now,
+            ) {
+                return new class($realSnapshotRepo, $injected, $customer, $user, $serviceType, $bayK1, $now) implements AllocationSnapshotRepositoryInterface
+                {
+                    public function __construct(
+                        private readonly AllocationSnapshotRepositoryInterface $real,
+                        private bool &$injected,
+                        private readonly Customer $customer,
+                        private readonly User $user,
+                        private readonly ServiceType $serviceType,
+                        private readonly Bay $bay,
+                        private readonly CarbonImmutable $now,
+                    ) {}
+
+                    public function forDay(string $dealershipId, string $localDate, CarbonImmutable $now): ResourceSnapshot
+                    {
+                        $snapshot = $this->real->forDay($dealershipId, $localDate, $now);
+
+                        if (! $this->injected) {
+                            $this->injected = true;
+                            $targetStart = CarbonImmutable::parse('2026-11-03 14:00:00', 'Asia/Ho_Chi_Minh')->setTimezone('UTC');
+                            $targetEnd = CarbonImmutable::parse('2026-11-03 15:00:00', 'Asia/Ho_Chi_Minh')->setTimezone('UTC');
+
+                            $technicians = Technician::where('dealership_id', $dealershipId)
+                                ->where('active', true)
+                                ->get();
+
+                            foreach ($technicians as $tech) {
+                                $otherVehicle = Vehicle::factory()->create(['customer_id' => $this->customer->id]);
+                                $dummyApptId = (string) Str::uuid();
+
+                                DB::table('appointments')->insert([
+                                    'id' => $dummyApptId,
+                                    'reference' => 'APT-20261103-'.Str::upper(Str::random(6)),
+                                    'dealership_id' => $dealershipId,
+                                    'customer_id' => $this->customer->id,
+                                    'vehicle_id' => $otherVehicle->id,
+                                    'service_type_id' => $this->serviceType->id,
+                                    'technician_id' => $tech->id,
+                                    'bay_id' => $this->bay->id,
+                                    'status' => AppointmentStatus::CONFIRMED->value,
+                                    'start_at' => $targetStart,
+                                    'end_at' => $targetEnd,
+                                    'version' => 1,
+                                    'source' => 'STAFF',
+                                    'created_by_user_id' => $this->user->id,
+                                    'created_at' => $this->now,
+                                    'updated_at' => $this->now,
+                                ]);
+
+                                DB::statement(<<<'SQL'
+                                    INSERT INTO resource_allocations (
+                                        id, appointment_id, dealership_id, resource_type, resource_id, period, active, created_at
+                                    ) VALUES (
+                                        :id, :appointment_id, :dealership_id, 'TECHNICIAN', :tech_id, tstzrange(:start, :end, '[)'), true, :created_at
+                                    )
+                                SQL, [
+                                    'id' => (string) Str::uuid(),
+                                    'appointment_id' => $dummyApptId,
+                                    'dealership_id' => $dealershipId,
+                                    'tech_id' => $tech->id,
+                                    'start' => $targetStart->toIso8601String(),
+                                    'end' => $targetEnd->toIso8601String(),
+                                    'created_at' => $this->now->toIso8601String(),
+                                ]);
+                            }
+                        }
+
+                        return $snapshot;
+                    }
+                };
+            });
+
+            // When: Reschedule X to 14:00 with If-Match "1"
+            $rescheduleResponse = $this->actingAs($advisor)->postJson("/api/v1/appointments/{$appointmentXId}/reschedule", [
+                'newStart' => $slot1400,
+                'keepTechnician' => true,
+            ], [
+                'If-Match' => '"1"',
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+
+            // Then: 409 NO_AVAILABILITY with reason SLOT_TAKEN
+            $rescheduleResponse->assertStatus(409);
+            $this->assertSame('NO_AVAILABILITY', $rescheduleResponse->json('code'));
+            $this->assertSame('SLOT_TAKEN', $rescheduleResponse->json('reason') ?? $rescheduleResponse->json('extra.reason'));
+
+            // Alternatives present
+            $alternatives = $rescheduleResponse->json('alternatives') ?? $rescheduleResponse->json('extra.alternatives');
+            $this->assertIsArray($alternatives);
+            $this->assertNotEmpty($alternatives);
+
+            // Exactly 3 tries occurred (3 AllocationRetried events dispatched)
+            Event::assertDispatchedTimes(AllocationRetried::class, 3);
+
+            // X is unchanged: status, times, technician, bay, version
+            /** @var Appointment $rowAfter */
+            $rowAfter = Appointment::findOrFail($appointmentXId);
+            $this->assertSame($rowBefore->start_at->toIso8601String(), $rowAfter->start_at->toIso8601String());
+            $this->assertSame($rowBefore->end_at->toIso8601String(), $rowAfter->end_at->toIso8601String());
+            $this->assertSame($rowBefore->technician_id, $rowAfter->technician_id);
+            $this->assertSame($rowBefore->bay_id, $rowAfter->bay_id);
+            $this->assertSame(1, $rowAfter->version);
+            $this->assertSame(AppointmentStatus::CONFIRMED, $rowAfter->status);
+
+            // Allocations unchanged and active
+            $allocationsAfter = DB::table('resource_allocations')
+                ->where('appointment_id', $appointmentXId)
+                ->where('active', true)
+                ->orderBy('resource_type')
+                ->get()
+                ->toArray();
+            $this->assertEquals($allocationsBefore, $allocationsAfter);
+
+            // No events or outbox messages written for failed move
+            $this->assertSame($eventsCountBefore, DB::table('appointment_events')->where('appointment_id', $appointmentXId)->count());
+            $this->assertSame($outboxCountBefore, DB::table('outbox_messages')->where('appointment_id', $appointmentXId)->count());
+
+            $this->assertNoOverlappingAllocations();
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * TC-09-22 (SDD §13 "retry after success"): Reschedule with key K -> 200 (version 2);
+     * when resend K with If-Match "1", returns the saved 200 response with Idempotent-Replayed: true header
+     * (it must not return 412).
+     */
+    public function test_retry_after_success_replays(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $serviceType = $world->serviceType('OIL_CHANGE');
+
+        $now = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        try {
+            $slot0900 = '2026-11-03T09:00:00+07:00';
+            $slot1400 = '2026-11-03T14:00:00+07:00';
+
+            // 1. Create booking X at 09:00 (version 1)
+            $bookResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+                'customerId' => $customer->id,
+                'vehicleId' => $vehicle->id,
+                'serviceTypeId' => $serviceType->id,
+                'desiredStart' => $slot0900,
+            ], [
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]);
+            $bookResponse->assertStatus(201);
+            $appointmentId = $bookResponse->json('id');
+            $this->assertSame(1, $bookResponse->json('version'));
+
+            $key = (string) Str::uuid();
+            $payload = [
+                'newStart' => $slot1400,
+                'keepTechnician' => true,
+            ];
+
+            // 2. Reschedule with key K and If-Match "1" -> 200, version becomes 2
+            $rescheduleResponse = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointmentId}/reschedule",
+                $payload,
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => $key,
+                ],
+            );
+
+            $rescheduleResponse->assertStatus(200);
+            $rescheduleResponse->assertHeader('ETag', '"2"');
+            $rescheduleResponse->assertHeaderMissing('Idempotent-Replayed');
+            $this->assertSame(2, $rescheduleResponse->json('version'));
+            $this->assertSame($slot1400, $rescheduleResponse->json('start'));
+
+            /** @var Appointment $fresh */
+            $fresh = Appointment::findOrFail($appointmentId);
+            $this->assertSame(2, $fresh->version);
+
+            // 3. Resend identical request with key K and OLD If-Match "1"
+            // Idempotency runs before If-Match, so it must return the saved 200 with Idempotent-Replayed: true, NOT 412
+            $replayResponse = $this->actingAs($advisor)->postJson(
+                "/api/v1/appointments/{$appointmentId}/reschedule",
+                $payload,
+                [
+                    'If-Match' => '"1"',
+                    'Idempotency-Key' => $key,
+                ],
+            );
+
+            $replayResponse->assertStatus(200);
+            $replayResponse->assertHeader('Idempotent-Replayed', 'true');
+            $replayResponse->assertHeader('ETag', '"2"');
+            $this->assertSame(2, $replayResponse->json('version'));
+            $this->assertSame($slot1400, $replayResponse->json('start'));
+            $this->assertSame($appointmentId, $replayResponse->json('id'));
+
             $this->assertNoOverlappingAllocations();
         } finally {
             CarbonImmutable::setTestNow();
