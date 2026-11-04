@@ -4,7 +4,7 @@
 
 **Blocked by:** F10 [11-acceptance](../../10-temporary-hold/tickets/11-acceptance.md) (the whole F10 branch merged to `develop`).
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/11-outbox-notifications`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** TC-11-03
 
-- [ ] TC-11-03 (INV-11.1; Unit): when Scan `app/Http/**` and `app/Domain/Booking/**`; then No reference to `NotificationChannel` or `Mail::`. Test: `Unit/Architecture/NoChannelCallsInRequestsTest`.
-- [ ] No change users can see; existing tests stay green unchanged
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-11-03 (INV-11.1; Unit): when Scan `app/Http/**` and `app/Domain/Booking/**`; then No reference to `NotificationChannel` or `Mail::`. Test: `Unit/Architecture/NoChannelCallsInRequestsTest`.
+- [x] No change users can see; existing tests stay green unchanged
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

@@ -61,6 +61,10 @@ use App\Domain\Monitoring\Services\MetricCounterServiceInterface;
 use App\Domain\Monitoring\Services\MonitoringService;
 use App\Domain\Monitoring\Services\MonitoringServiceInterface;
 use App\Domain\Monitoring\Services\RequestMetrics;
+use App\Domain\Notifications\Channels\ChannelRegistry;
+use App\Domain\Notifications\Channels\ChannelRegistryInterface;
+use App\Domain\Notifications\RecipientResolver;
+use App\Domain\Notifications\RecipientResolverInterface;
 use App\Domain\Notifications\Services\OutboxWriter;
 use App\Domain\Notifications\Services\OutboxWriterInterface;
 use Illuminate\Support\ServiceProvider;
@@ -110,6 +114,8 @@ class DomainServiceProvider extends ServiceProvider
 
         // Notifications (F04, F11)
         OutboxWriterInterface::class => OutboxWriter::class,
+        RecipientResolverInterface::class => RecipientResolver::class,
+        ChannelRegistryInterface::class => ChannelRegistry::class,
 
         // Monitoring (F08)
         MetricCounterRepositoryInterface::class => MetricCounterRepository::class,
@@ -122,5 +128,6 @@ class DomainServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(RequestMetrics::class);
+        $this->app->singleton(ChannelRegistryInterface::class, ChannelRegistry::class);
     }
 }
