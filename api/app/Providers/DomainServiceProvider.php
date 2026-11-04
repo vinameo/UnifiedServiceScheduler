@@ -65,6 +65,10 @@ use App\Domain\Notifications\Channels\ChannelRegistry;
 use App\Domain\Notifications\Channels\ChannelRegistryInterface;
 use App\Domain\Notifications\RecipientResolver;
 use App\Domain\Notifications\RecipientResolverInterface;
+use App\Domain\Notifications\Repositories\OutboxMessageRepository;
+use App\Domain\Notifications\Repositories\OutboxMessageRepositoryInterface;
+use App\Domain\Notifications\Services\OutboxRelay;
+use App\Domain\Notifications\Services\OutboxRelayInterface;
 use App\Domain\Notifications\Services\OutboxWriter;
 use App\Domain\Notifications\Services\OutboxWriterInterface;
 use Illuminate\Support\ServiceProvider;
@@ -115,7 +119,8 @@ class DomainServiceProvider extends ServiceProvider
         // Notifications (F04, F11)
         OutboxWriterInterface::class => OutboxWriter::class,
         RecipientResolverInterface::class => RecipientResolver::class,
-        ChannelRegistryInterface::class => ChannelRegistry::class,
+        OutboxMessageRepositoryInterface::class => OutboxMessageRepository::class,
+        OutboxRelayInterface::class => OutboxRelay::class,
 
         // Monitoring (F08)
         MetricCounterRepositoryInterface::class => MetricCounterRepository::class,
@@ -125,9 +130,15 @@ class DomainServiceProvider extends ServiceProvider
         MonitoringServiceInterface::class => MonitoringService::class,
     ];
 
+    /**
+     * @var array<class-string, class-string>
+     */
+    public array $singletons = [
+        ChannelRegistryInterface::class => ChannelRegistry::class,
+    ];
+
     public function register(): void
     {
         $this->app->scoped(RequestMetrics::class);
-        $this->app->singleton(ChannelRegistryInterface::class, ChannelRegistry::class);
     }
 }
