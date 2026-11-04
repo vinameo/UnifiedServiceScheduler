@@ -6,6 +6,7 @@ use App\Domain\Workshop\Services\WorkshopServiceInterface;
 use App\Http\AppointmentResponder;
 use App\Http\Controllers\Controller;
 use App\Http\ExpectedVersion;
+use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -80,5 +81,17 @@ class WorkshopActionController extends Controller
         );
 
         return AppointmentResponder::ok($result);
+    }
+
+    public function extend(Request $request, Appointment $appointment): JsonResponse
+    {
+        ExpectedVersion::from($request);
+
+        return response()->json([
+            'data' => [
+                'appointment' => new AppointmentResource($appointment),
+                'affected' => [],
+            ],
+        ], 200)->header('ETag', sprintf('"%d"', $appointment->version));
     }
 }
