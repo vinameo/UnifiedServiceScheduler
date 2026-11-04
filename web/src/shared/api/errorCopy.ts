@@ -10,6 +10,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   EMAIL_ALREADY_USED: 'An account with this email already exists. Sign in instead.',
   WEAK_PASSWORD: 'Password must be at least 8 characters, with a letter and a number.',
   TOO_MANY_ATTEMPTS: 'Too many attempts. Please try again later.',
+  OUTBOX_NOT_RETRYABLE: 'Only failed messages can be sent again.',
   INTERNAL_ERROR: 'Something went wrong. Please try again.',
 }
 

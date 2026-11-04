@@ -4,7 +4,7 @@
 
 **Blocked by:** [09-resend-a-failed-message](09-resend-a-failed-message.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/11-outbox-notifications`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** TC-11-14, TC-11-15
 
-- [ ] TC-11-14 (AC-11.10; Web component): given Fake API: summary, a FAILED row, retry 200; when Click "Failed, needs action", then "Resend"; then The filter becomes `status=FAILED`; the retry request has an `Idempotency-Key`; summary and list refetched. Test: `web/src/staff/notifications/NotificationsPage.test.tsx`.
-- [ ] TC-11-15 (D-11.9; Unit): given Rows with (PENDING, 0), (PENDING, 2), FAILED, SENT, SKIPPED; when `displayStatus`; then Pending, Retrying, Failed, Sent, Skipped. Test: `api/tests/Unit/Notifications/DisplayStatusTest`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-11-14 (AC-11.10; Web component): given Fake API: summary, a FAILED row, retry 200; when Click "Failed, needs action", then "Resend"; then The filter becomes `status=FAILED`; the retry request has an `Idempotency-Key`; summary and list refetched. Test: `web/src/staff/notifications/NotificationsPage.test.tsx`.
+- [x] TC-11-15 (D-11.9; Unit): given Rows with (PENDING, 0), (PENDING, 2), FAILED, SENT, SKIPPED; when `displayStatus`; then Pending, Retrying, Failed, Sent, Skipped. Test: `api/tests/Unit/Notifications/DisplayStatusTest`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

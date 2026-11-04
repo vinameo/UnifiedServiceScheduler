@@ -77,13 +77,16 @@ describe('AppointmentDetailsPage', () => {
     },
   }
 
+  let currentUser = mockStaffUser
+
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-11-02T08:00:00Z'))
     sessionStorage.clear()
+    currentUser = mockStaffUser
     apiMock.install()
     apiMock.reset()
-    apiMock.get('/me', [200, mockStaffUser])
+    apiMock.get('/me', () => [200, currentUser])
   })
 
   afterEach(() => {
@@ -242,5 +245,26 @@ describe('AppointmentDetailsPage', () => {
     await user.click(showButton)
     const phoneLink = screen.getByRole('link', { name: '0903123218' })
     expect(phoneLink).toHaveAttribute('href', 'tel:0903123218')
+  })
+
+  it('renders "View notification log" link for admin users linking to notifications with appointmentId', async () => {
+    currentUser = {
+      ...mockStaffUser,
+      role: 'ADMIN',
+    }
+    apiMock.get(`/appointments/${appointmentId}`, [
+      200,
+      baseAppointment,
+      { etag: '"1"' },
+    ])
+    apiMock.get(`/appointments/${appointmentId}/history`, [200, []])
+
+    renderRoute(`/staff/appointments/${appointmentId}`)
+
+    await waitFor(() => {
+      const link = screen.getByRole('link', { name: /view notification log/i })
+      expect(link).toBeInTheDocument()
+      expect(link).toHaveAttribute('href', `/staff/notifications?appointmentId=${appointmentId}`)
+    })
   })
 })
