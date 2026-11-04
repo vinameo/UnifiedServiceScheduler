@@ -14,6 +14,8 @@ class OutboxMessageRepository implements OutboxMessageRepositoryInterface
      */
     public function claimDue(CarbonImmutable $now, int $batch = 50): Collection
     {
+        $now = $now->utc();
+
         return DB::transaction(function () use ($now, $batch) {
             /** @var Collection<int, OutboxMessage> $rows */
             $rows = OutboxMessage::query()
@@ -54,6 +56,8 @@ class OutboxMessageRepository implements OutboxMessageRepositoryInterface
      */
     public function failAbandoned(CarbonImmutable $now, int $batch = 50): Collection
     {
+        $now = $now->utc();
+
         return DB::transaction(function () use ($now, $batch) {
             /** @var Collection<int, OutboxMessage> $rows */
             $rows = OutboxMessage::query()
@@ -90,6 +94,7 @@ class OutboxMessageRepository implements OutboxMessageRepositoryInterface
 
     public function markSent(string $id, CarbonImmutable $sentAt): bool
     {
+        $sentAt = $sentAt->utc();
         $affected = DB::table('outbox_messages')
             ->where('id', $id)
             ->where('status', 'PENDING')
@@ -104,7 +109,7 @@ class OutboxMessageRepository implements OutboxMessageRepositoryInterface
 
     public function markSkipped(string $id, ?string $reason = null, ?CarbonImmutable $now = null): bool
     {
-        $now = $now ?? CarbonImmutable::now();
+        $now = ($now ?? CarbonImmutable::now())->utc();
         $affected = DB::table('outbox_messages')
             ->where('id', $id)
             ->where('status', 'PENDING')
@@ -119,7 +124,7 @@ class OutboxMessageRepository implements OutboxMessageRepositoryInterface
 
     public function markFailed(string $id, string $error, ?CarbonImmutable $now = null): bool
     {
-        $now = $now ?? CarbonImmutable::now();
+        $now = ($now ?? CarbonImmutable::now())->utc();
         $affected = DB::table('outbox_messages')
             ->where('id', $id)
             ->where('status', 'PENDING')
@@ -134,7 +139,8 @@ class OutboxMessageRepository implements OutboxMessageRepositoryInterface
 
     public function scheduleRetry(string $id, CarbonImmutable $nextAttemptAt, string $error, ?CarbonImmutable $now = null): bool
     {
-        $now = $now ?? CarbonImmutable::now();
+        $now = ($now ?? CarbonImmutable::now())->utc();
+        $nextAttemptAt = $nextAttemptAt->utc();
         $affected = DB::table('outbox_messages')
             ->where('id', $id)
             ->where('status', 'PENDING')

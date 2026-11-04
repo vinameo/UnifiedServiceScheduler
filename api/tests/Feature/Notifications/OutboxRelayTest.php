@@ -11,6 +11,7 @@ use App\Domain\Notifications\OutboxEventType;
 use App\Domain\Notifications\Recipient;
 use App\Domain\Notifications\Services\OutboxRelayInterface;
 use App\Models\OutboxMessage;
+use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Error;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
@@ -803,5 +804,121 @@ class OutboxRelayTest extends TestCase
         Mail::assertNotSent(AppointmentNotification::class, function (AppointmentNotification $mail) {
             return $mail->outboxMessage->event_type === OutboxEventType::AppointmentConfirmed;
         });
+    }
+
+    /**
+     * TC-11-07 (INV-11.3; Integration):
+     * given A row claimed (lease set) and the "crash" simulated (never marked);
+     * when travel(61)->seconds(); runOnce;
+     * then The row is claimed again and sent (attempts 2).
+     * Test: OutboxRelayTest::test_INV_11_3_expired_lease_is_retried.
+     */
+    public function test_INV_11_3_expired_lease_is_retried(): void
+    {
+        $world = World::saigonD7();
+        $advisor = $world->advisor();
+        ['customer' => $customer, 'vehicle' => $vehicle] = $world->customerWithVehicle();
+        $customer->update(['phone' => '0901234567']);
+        $service = $world->serviceType('OIL_CHANGE');
+
+        $t0 = CarbonImmutable::parse('2026-11-02 08:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($t0);
+
+        $bookingResponse = $this->actingAs($advisor)->postJson('/api/v1/appointments', [
+            'customerId' => $customer->id,
+            'vehicleId' => $vehicle->id,
+            'serviceTypeId' => $service->id,
+            'desiredStart' => '2026-11-02T09:00:00+07:00',
+        ], [
+            'Idempotency-Key' => (string) Str::uuid(),
+        ]);
+
+        $bookingResponse->assertStatus(201);
+        $apptId = $bookingResponse->json('id');
+        $this->assertNotNull($apptId);
+
+        // Keep only one SMS row for this test
+        DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('channel', '!=', 'SMS')
+            ->delete();
+
+        $smsRow = DB::table('outbox_messages')
+            ->where('appointment_id', $apptId)
+            ->where('channel', 'SMS')
+            ->first();
+        $this->assertNotNull($smsRow);
+        $this->assertSame(0, $smsRow->attempts);
+        $this->assertSame('PENDING', $smsRow->status);
+
+        // Simulated crash channel throwing Error (not DeliveryFailed) so it aborts runOnce
+        // before marking sent or scheduling retry.
+        $crashingChannel = new class implements NotificationChannel
+        {
+            public function send(OutboxMessage $message, Recipient $recipient): void
+            {
+                throw new Error('Simulated process crash during dispatch');
+            }
+        };
+
+        /** @var ChannelRegistryInterface $registry */
+        $registry = app(ChannelRegistryInterface::class);
+        $registry->register(OutboxChannel::SMS, $crashingChannel);
+
+        /** @var OutboxRelayInterface $relay */
+        $relay = app(OutboxRelayInterface::class);
+
+        // Claimed and crashed: attempts incremented to 1, next_attempt_at set to t0 + 60s (lease),
+        // but row is never marked (status remains PENDING).
+        try {
+            $relay->runOnce($t0);
+            $this->fail('Expected crash Error was not thrown');
+        } catch (Error $e) {
+            $this->assertSame('Simulated process crash during dispatch', $e->getMessage());
+        }
+
+        // Verify the lease in DB: status PENDING, attempts 1, next_attempt_at = t0 + 60s
+        $claimedRow = DB::table('outbox_messages')->where('id', $smsRow->id)->first();
+        $this->assertNotNull($claimedRow);
+        $this->assertSame('PENDING', $claimedRow->status);
+        $this->assertSame(1, $claimedRow->attempts);
+        $this->assertNull($claimedRow->sent_at);
+        $this->assertNull($claimedRow->last_error);
+
+        $leaseExpiry = CarbonImmutable::parse($claimedRow->next_attempt_at);
+        $this->assertSame(60, (int) $t0->diffInSeconds($leaseExpiry));
+
+        // Before lease expires (e.g. running again at t0 + 30s), it cannot be claimed
+        $intermediateTime = $t0->addSeconds(30);
+        CarbonImmutable::setTestNow($intermediateTime);
+        $intermediateResult = $relay->runOnce($intermediateTime);
+        $this->assertSame(0, $intermediateResult->claimed);
+
+        // Swap to working recording channel
+        $recordingChannel = new RecordingChannel;
+        $registry->register(OutboxChannel::SMS, $recordingChannel);
+
+        // Travel 61 seconds (past the 60-second lease)
+        $this->travel(61)->seconds();
+        CarbonImmutable::setTestNow(Carbon::getTestNow());
+        $t61 = CarbonImmutable::now();
+
+        // Run relay again: the row is claimed again and delivered (attempts = 2)
+        $result = $relay->runOnce($t61);
+        $this->assertSame(1, $result->claimed);
+        $this->assertSame(1, $result->sent);
+        $this->assertSame(0, $result->failed);
+        $this->assertSame(0, $result->skipped);
+
+        // Row in DB is now SENT with attempts = 2
+        $finalRow = DB::table('outbox_messages')->where('id', $smsRow->id)->first();
+        $this->assertNotNull($finalRow);
+        $this->assertSame('SENT', $finalRow->status);
+        $this->assertSame(2, $finalRow->attempts);
+        $this->assertNotNull($finalRow->sent_at);
+        $this->assertNull($finalRow->last_error);
+
+        $this->assertSame(1, $recordingChannel->count());
+        $this->assertSame('0901234567', $recordingChannel->lastRecipient()?->phone);
     }
 }

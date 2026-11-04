@@ -7,9 +7,9 @@ return [
     |--------------------------------------------------------------------------
     |
     | Supported drivers:
-    |   - SMS: "log", "failing"
-    |   - EMAIL: "mail", "log", "failing"
-    |   - DMS: "log", "failing", "webhook"
+    |   - SMS: "log", "failing", "table"
+    |   - EMAIL: "mail", "log", "failing", "table"
+    |   - DMS: "log", "failing", "webhook", "table"
     |
     */
 

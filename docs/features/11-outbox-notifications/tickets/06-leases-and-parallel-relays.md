@@ -4,7 +4,7 @@
 
 **Blocked by:** [05-skip-messages-that-are-no-longer-relevant](05-skip-messages-that-are-no-longer-relevant.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/11-outbox-notifications`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** TC-11-07, TC-11-08
 
-- [ ] TC-11-07 (INV-11.3; Integration): given A row claimed (lease set) and the "crash" simulated (never marked); when `travel(61)->seconds()`; `runOnce`; then The row is claimed again and sent (`attempts` 2). Test: `OutboxRelayTest::test_INV_11_3_expired_lease_is_retried`.
-- [ ] TC-11-08 (INV-11.3; Concurrency): given 100 `PENDING` rows; a channel that records `eventId:channel` to a table; when 2 processes run `outbox:relay` at the same moment; then Every row sent exactly once (no duplicate records). Test: `ParallelRelayTest::test_two_relays_never_send_the_same_row`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-11-07 (INV-11.3; Integration): given A row claimed (lease set) and the "crash" simulated (never marked); when `travel(61)->seconds()`; `runOnce`; then The row is claimed again and sent (`attempts` 2). Test: `OutboxRelayTest::test_INV_11_3_expired_lease_is_retried`.
+- [x] TC-11-08 (INV-11.3; Concurrency): given 100 `PENDING` rows; a channel that records `eventId:channel` to a table; when 2 processes run `outbox:relay` at the same moment; then Every row sent exactly once (no duplicate records). Test: `ParallelRelayTest::test_two_relays_never_send_the_same_row`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

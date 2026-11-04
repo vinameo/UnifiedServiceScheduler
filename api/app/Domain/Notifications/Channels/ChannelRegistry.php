@@ -70,6 +70,7 @@ class ChannelRegistry implements ChannelRegistryInterface
             'log' => $this->container->make(LogChannel::class),
             'mail' => $this->container->make(MailChannel::class),
             'webhook' => $this->container->make(DmsWebhookChannel::class),
+            'table' => $this->container->make(TableRecordingChannel::class),
             default => throw new InvalidArgumentException("Unsupported driver [{$driverName}] for channel [{$channelKey}]."),
         };
     }

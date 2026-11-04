@@ -15,7 +15,8 @@ class RelayOutbox extends Command
      */
     protected $signature = 'outbox:relay
                             {--batch=50 : Maximum number of messages to process}
-                            {--now= : ISO timestamp for app clock (testing only)}';
+                            {--now= : ISO timestamp for app clock (testing only)}
+                            {--start-at= : Unix timestamp with microsecond precision to wait for (testing only)}';
 
     /**
      * The console command description.
@@ -29,6 +30,14 @@ class RelayOutbox extends Command
      */
     public function handle(OutboxRelayInterface $relay): int
     {
+        $startAtOption = $this->option('start-at');
+        if ($startAtOption !== null && is_numeric($startAtOption) && app()->environment('testing')) {
+            $targetTime = (float) $startAtOption;
+            while (microtime(true) < $targetTime) {
+                usleep(100);
+            }
+        }
+
         $now = CarbonImmutable::now();
         $nowOption = $this->option('now');
 
