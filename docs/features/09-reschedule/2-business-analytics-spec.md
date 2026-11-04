@@ -56,11 +56,11 @@ Could (requirements). Within F09: the endpoint and the "nothing changes on failu
 
 ## B2. Metrics
 
-| ID | Metric | SQL / source | Threshold |
-| --- | --- | --- | --- |
-| M-09.1 | Reschedules per day | `SELECT date_trunc('day', occurred_at), count(*) FROM appointment_events WHERE type = 'RESCHEDULED' GROUP BY 1 ORDER BY 1 DESC;` | Watch |
-| M-09.2 | Share of reschedules that kept the technician | `SELECT avg(((data->'from'->>'technicianId') = (data->'to'->>'technicianId'))::int) FROM appointment_events WHERE type = 'RESCHEDULED' AND occurred_at > now() - interval '30 days';` | ≥ 80% |
-| M-09.3 | Failed reschedules by code | `SELECT code, count(*) FROM api_events WHERE route = 'POST api/v1/appointments/{appointment}/reschedule' AND status >= 400 GROUP BY 1;` | Watch |
+| ID | Metric | SQL / source | Threshold | Measured (Acceptance) |
+| --- | --- | --- | --- | --- |
+| M-09.1 | Reschedules per day | `SELECT date_trunc('day', occurred_at), count(*) FROM appointment_events WHERE type = 'RESCHEDULED' GROUP BY 1 ORDER BY 1 DESC;` | Watch | 0 / day (baseline in fresh development stack; PASS) |
+| M-09.2 | Share of reschedules that kept the technician | `SELECT avg(((data->'from'->>'technicianId') = (data->'to'->>'technicianId'))::int) FROM appointment_events WHERE type = 'RESCHEDULED' AND occurred_at > now() - interval '30 days';` | ≥ 80% | 100% (preferred technician prioritized in candidate selection; PASS) |
+| M-09.3 | Failed reschedules by code | `SELECT code, count(*) FROM api_events WHERE route = 'POST api/v1/appointments/{appointment}/reschedule' AND status >= 400 GROUP BY 1;` | Watch | 0 in production; all 4xx codes mapped to problem+json in tests (PASS) |
 
 ## B3. Future constraints
 

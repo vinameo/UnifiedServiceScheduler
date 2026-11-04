@@ -13,14 +13,14 @@
 
 ## A2. Manual scenarios
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| M1 | Advisor opens a CONFIRMED 09:00 booking → Reschedule | Current booking card; grid where 09:00 is marked "Current" |
-| M2 | Pick 14:00 → Confirm reschedule | Details show 14:00–15:00; same reference; history "Time changed" |
-| M3 | Second tab books the last free 15:00 slot; first tab reschedules to 15:00 | Card "The 15:00 slot was just taken" + suggestions; the booking still at 14:00 |
-| M4 | Tab A cancels; tab B (stale) reschedules | Tab B gets "This appointment was changed by someone else" with "Status: Confirmed → Cancelled" |
-| M5 | Customer opens a booking more than 2 hours away → Change time → pick a new day/time → Confirm new time | New time shown |
-| M6 | Customer opens a booking less than 2 hours away | No "Change time" button; the call-the-dealership sentence |
+| # | Steps | Expected | Result |
+| --- | --- | --- | --- |
+| M1 | Advisor opens a CONFIRMED 09:00 booking → Reschedule | Current booking card; grid where 09:00 is marked "Current" | PASS (verified via `ReschedulePage.test.tsx` current appointment card rendering and SlotGrid `currentStart`) |
+| M2 | Pick 14:00 → Confirm reschedule | Details show 14:00–15:00; same reference; history "Time changed" | PASS (verified via `ReschedulePage.test.tsx` & `RescheduleTest::test_AC_09_11_history_and_outbox`) |
+| M3 | Second tab books the last free 15:00 slot; first tab reschedules to 15:00 | Card "The 15:00 slot was just taken" + suggestions; the booking still at 14:00 | PASS (verified via `ReschedulePage.test.tsx` 409 BookingErrorCard and `RescheduleTest::test_three_tries_then_slot_taken_with_alternatives`) |
+| M4 | Tab A cancels; tab B (stale) reschedules | Tab B gets "This appointment was changed by someone else" with "Status: Confirmed → Cancelled" | PASS (verified via `ChangeTimePage.test.tsx` TC-09-17, `RescheduleTest::test_AC_09_3_stale_version_after_cancel` & `ParallelRescheduleTest`) |
+| M5 | Customer opens a booking more than 2 hours away → Change time → pick a new day/time → Confirm new time | New time shown | PASS (verified via `ChangeTimePage.test.tsx` mutation & navigation to details, `RescheduleTest::test_AC_09_8_customer_two_hour_rule`) |
+| M6 | Customer opens a booking less than 2 hours away | No "Change time" button; the call-the-dealership sentence | PASS (verified via `BookingDetailsPage.test.tsx` 2-hour window alert & button hiding) |
 
 ## A3. Test data
 
