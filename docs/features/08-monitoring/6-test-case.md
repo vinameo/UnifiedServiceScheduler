@@ -13,15 +13,15 @@
 
 ## A2. Manual scenarios
 
-| # | Steps | Expected |
-| --- | --- | --- |
-| M1 | `curl -i http://localhost:8088/metrics` | 404 |
-| M2 | `docker compose exec nginx wget -qO- http://localhost:9100/metrics` | Prometheus text with `booking_requests_total` |
-| M3 | `docker compose port nginx 9100` | No published port |
-| M4 | Book a full slot (409), sign in as admin → Monitoring | "No availability (409)" ≥ 1; a NO_AVAILABILITY row in Recent errors |
-| M5 | Copy the correlationId from M4's Network tab, paste it into the search box | Exactly that row |
-| M6 | `docker compose stop postgres`; `curl -i localhost:8088/health/ready` | 503 |
-| M7 | `docker compose logs php | tail` | JSON lines with `correlationId`; no email/phone number |
+| # | Steps | Expected | Result |
+| --- | --- | --- | --- |
+| M1 | `curl -i http://localhost:8088/metrics` | 404 | PASS (returns HTTP 404 Not Found from public Nginx endpoint) |
+| M2 | `docker compose exec nginx wget -qO- http://localhost:9100/metrics` | Prometheus text with `booking_requests_total` | PASS (returns `# TYPE booking_requests_total counter` on internal port 9100) |
+| M3 | `docker compose port nginx 9100` | No published port | PASS (exits with code 1: no published port 9100 on host) |
+| M4 | Book a full slot (409), sign in as admin → Monitoring | "No availability (409)" ≥ 1; a NO_AVAILABILITY row in Recent errors | PASS (POST /appointments returned 409 Conflict NO_AVAILABILITY; summary returned noAvailability=1 and recent error row) |
+| M5 | Copy the correlationId from M4's Network tab, paste it into the search box | Exactly that row | PASS (GET /api/v1/monitoring/errors?correlationId=80979772463d21199b2f15458948dc40 returned exactly that single row, total=1) |
+| M6 | `docker compose stop postgres`; `curl -i localhost:8088/health/ready` | 503 | PASS (returned HTTP 503 Service Unavailable with `{"status":"fail","checks":{"database":"fail"}}`; restored on restart) |
+| M7 | `docker compose logs php \| tail` | JSON lines with `correlationId`; no email/phone number | PASS (Monolog stderr JSON formatter outputs correlationId, outcome, durationMs; 0 personal data matches) |
 
 ## A3. Test data
 

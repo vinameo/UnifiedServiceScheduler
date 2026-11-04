@@ -60,12 +60,12 @@ Should. Within F08: logs + counters + screen are the core; tracing is Could with
 
 ## B2. Metrics
 
-| ID | Metric | SQL / source | Threshold |
-| --- | --- | --- | --- |
-| M-08.1 | Log lines with personal data | `grep -E '@[A-Za-z0-9.-]+\.[a-z]{2,}|\b0[0-9]{9}\b|"password"'` on CI logs | 0 |
-| M-08.2 | Retry rate (SDD phase 2) | `allocation_retries_total / booking_requests_total` | > 5%/hour → look at phase 2 |
-| M-08.3 | Booking p95 | `SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) FROM api_events WHERE route = 'POST api/v1/appointments' AND occurred_at > now() - interval '1 hour';` | < 300 ms |
-| M-08.4 | 5xx per hour | `SELECT count(*) FROM api_events WHERE status >= 500 AND occurred_at > now() - interval '1 hour';` | Watch |
+| ID | Metric | SQL / source | Threshold | Measured (Acceptance) |
+| --- | --- | --- | --- | --- |
+| M-08.1 | Log lines with personal data | `grep -E '@[A-Za-z0-9.-]+\.[a-z]{2,}|\b0[0-9]{9}\b|"password"'` on CI logs | 0 | 0 (PASS, 0 matches across php container logs) |
+| M-08.2 | Retry rate (SDD phase 2) | `allocation_retries_total / booking_requests_total` | > 5%/hour → look at phase 2 | 0.00% (0 retries / 2 bookings, PASS) |
+| M-08.3 | Booking p95 | `SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) FROM api_events WHERE route = 'POST api/v1/appointments' AND occurred_at > now() - interval '1 hour';` | < 300 ms | 100.3 ms (PASS) |
+| M-08.4 | 5xx per hour | `SELECT count(*) FROM api_events WHERE status >= 500 AND occurred_at > now() - interval '1 hour';` | Watch | 0 (PASS) |
 
 ## B3. Future constraints
 

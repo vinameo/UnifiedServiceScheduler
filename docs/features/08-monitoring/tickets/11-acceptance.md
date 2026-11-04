@@ -4,7 +4,7 @@
 
 **Blocked by:** [10-tracing](10-tracing.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/08-monitoring`
 
@@ -12,8 +12,8 @@
 
 **Test cases:** TC-08-18
 
-- [ ] TC-08-18 (All; Manual): given Stack running; when M1–M7; then As A2. Test: `Record in A2`.
-- [ ] Every `TC-` row of `6-test-case.md` is automated and green, or run by hand with the result recorded in `6-test-case.md`
-- [ ] BA metrics (`2-business-analytics-spec.md` §B2) measured and recorded
-- [ ] Whole-branch self-review written to `.claude/reviews/feature__08-monitoring.md` (the merge hook requires it)
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-08-18 (All; Manual): given Stack running; when M1–M7; then As A2. Test: `Record in A2`.
+- [x] Every `TC-` row of `6-test-case.md` is automated and green, or run by hand with the result recorded in `6-test-case.md`
+- [x] BA metrics (`2-business-analytics-spec.md` §B2) measured and recorded
+- [x] Whole-branch self-review written to `.claude/reviews/feature__08-monitoring.md` (the merge hook requires it)
+- [x] README §8 checks green; no existing test skipped, deleted or weakened
