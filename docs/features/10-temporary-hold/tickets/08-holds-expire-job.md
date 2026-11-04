@@ -4,7 +4,7 @@
 
 **Blocked by:** [07-parallel-holds-by-one-customer](07-parallel-holds-by-one-customer.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/10-temporary-hold`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-10-13
 
-- [ ] TC-10-13 (AC-10.10; Integration): given 3 expired holds, 1 valid; when `artisan holds:expire`; then 3 `EXPIRED` with inactive allocations and history rows (actor null); the valid one unchanged; no outbox rows. Test: `ExpireHoldsCommandTest::test_AC_10_10_job_expires_only_expired_holds`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-10-13 (AC-10.10; Integration): given 3 expired holds, 1 valid; when `artisan holds:expire`; then 3 `EXPIRED` with inactive allocations and history rows (actor null); the valid one unchanged; no outbox rows. Test: `ExpireHoldsCommandTest::test_AC_10_10_job_expires_only_expired_holds`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

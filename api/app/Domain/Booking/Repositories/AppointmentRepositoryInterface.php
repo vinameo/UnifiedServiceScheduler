@@ -67,4 +67,12 @@ interface AppointmentRepositoryInterface
         ?string $vehicleId,
         CarbonImmutable $now,
     ): Collection;
+
+    /**
+     * @return Collection<int, Appointment>
+     */
+    public function findExpiredHolds(
+        CarbonImmutable $now,
+        int $limit = 500,
+    ): Collection;
 }

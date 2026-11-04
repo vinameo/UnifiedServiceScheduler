@@ -376,4 +376,22 @@ class AppointmentRepository implements AppointmentRepositoryInterface
 
         return $results;
     }
+
+    /**
+     * @return Collection<int, Appointment>
+     */
+    public function findExpiredHolds(
+        CarbonImmutable $now,
+        int $limit = 500,
+    ): Collection {
+        /** @var Collection<int, Appointment> $results */
+        $results = Appointment::query()
+            ->where('status', AppointmentStatus::HELD->value)
+            ->where('expires_at', '<=', $now)
+            ->orderBy('expires_at', 'asc')
+            ->limit($limit)
+            ->get();
+
+        return $results;
+    }
 }
