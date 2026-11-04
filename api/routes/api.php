@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\V1\MyAppointmentController;
 use App\Http\Controllers\Api\V1\OutboxController;
 use App\Http\Controllers\Api\V1\ServiceTypeController;
 use App\Http\Controllers\Api\V1\TechnicianController;
+use App\Http\Controllers\Api\V1\WorkshopActionController;
+use App\Http\Controllers\Api\V1\WorkshopBoardController;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -61,6 +63,20 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware(['can:staff', 'can:view,appointment']);
     Route::get('/dealerships/{dealership}/appointments', [DealershipAppointmentController::class, 'index'])
         ->middleware('can:staff');
+
+    // Workshop actions (F12)
+    Route::get('/dealerships/{dealership}/workshop-board', [WorkshopBoardController::class, 'show'])
+        ->middleware('can:view-board');
+    Route::post('/appointments/{appointment}/check-in', [WorkshopActionController::class, 'checkIn'])
+        ->middleware(['can:check-in', 'idempotent', 'if-match']);
+    Route::post('/appointments/{appointment}/start', [WorkshopActionController::class, 'start'])
+        ->middleware(['can:run-workshop', 'idempotent', 'if-match']);
+    Route::post('/appointments/{appointment}/complete', [WorkshopActionController::class, 'complete'])
+        ->middleware(['can:run-workshop', 'idempotent', 'if-match']);
+    Route::post('/appointments/{appointment}/no-show', [WorkshopActionController::class, 'noShow'])
+        ->middleware(['can:check-in', 'idempotent', 'if-match']);
+    Route::post('/appointments/{appointment}/extend', [WorkshopActionController::class, 'extend'])
+        ->middleware(['can:run-workshop', 'idempotent', 'if-match']);
 
     // Customers (F02)
     Route::get('/customers', [CustomerController::class, 'index'])

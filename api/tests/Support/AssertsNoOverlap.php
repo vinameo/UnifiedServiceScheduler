@@ -40,4 +40,30 @@ trait AssertsNoOverlap
 
         $this->assertEmpty($overlaps, 'Found overlapping active resource allocations: '.json_encode($overlaps));
     }
+
+    public function assertM042Passes(): void
+    {
+        if (! Schema::hasTable('appointments') || ! Schema::hasTable('resource_allocations')) {
+            return;
+        }
+
+        /** @var list<object{id: string}> $invalid */
+        $invalid = DB::select(<<<'SQL'
+            SELECT a.id
+            FROM appointments a
+            LEFT JOIN resource_allocations r ON r.appointment_id = a.id AND r.active
+            GROUP BY a.id, a.status, a.vehicle_id, a.contact_required_reason
+            HAVING (
+                a.status IN ('HELD','CONFIRMED','CHECKED_IN','IN_PROGRESS')
+                AND NOT (a.status = 'CONFIRMED' AND a.contact_required_reason = 'OVERRUN')
+                AND count(r.id) <> 2 + (a.vehicle_id IS NOT NULL)::int
+            )
+            OR (
+                (a.status NOT IN ('HELD','CONFIRMED','CHECKED_IN','IN_PROGRESS') OR (a.status = 'CONFIRMED' AND a.contact_required_reason = 'OVERRUN'))
+                AND count(r.id) > 0
+            )
+        SQL);
+
+        $this->assertEmpty($invalid, 'Found appointments with invalid allocation count per M-04.2: '.json_encode($invalid));
+    }
 }

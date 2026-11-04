@@ -4,7 +4,7 @@
 
 **Blocked by:** [04-no-show](04-no-show.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/12-day-of-service`
 
@@ -12,5 +12,5 @@
 
 **Test cases:** TC-12-22
 
-- [ ] TC-12-22 (README §4; Integration): given Advisor; when Start, complete, extend; then 403 each; check-in and no-show 200. Test: `WorkshopRolesTest` (data provider).
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-12-22 (README §4; Integration): given Advisor; when Start, complete, extend; then 403 each; check-in and no-show 200. Test: `WorkshopRolesTest` (data provider).
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

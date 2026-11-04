@@ -20,7 +20,8 @@ class DealershipAppointmentsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'date' => ['required_without:contactRequired', 'date_format:Y-m-d'],
+            'date' => ['required_unless:contactRequired,true,1', 'nullable', 'date_format:Y-m-d'],
+            'contactRequired' => ['sometimes', 'in:true,false,1,0'],
             'technicianId' => ['sometimes', 'uuid'],
             'bayId' => ['sometimes', 'uuid'],
             'status' => ['sometimes', 'string'],
@@ -63,9 +64,14 @@ class DealershipAppointmentsRequest extends FormRequest
         });
     }
 
-    public function dateString(): string
+    public function dateString(): ?string
     {
-        return (string) $this->query('date');
+        return $this->filled('date') ? (string) $this->query('date') : null;
+    }
+
+    public function contactRequired(): bool
+    {
+        return $this->boolean('contactRequired');
     }
 
     public function technicianId(): ?string

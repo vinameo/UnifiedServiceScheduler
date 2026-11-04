@@ -8,8 +8,9 @@ use App\Support\Problem\ProblemException;
 
 class AppointmentModified extends ProblemException
 {
-    public function __construct(string $id, ?Appointment $latest = null)
+    public function __construct(public readonly string $appointmentId, ?Appointment $latest = null)
     {
+        $id = $this->appointmentId;
         $extra = [];
         $headers = [];
 

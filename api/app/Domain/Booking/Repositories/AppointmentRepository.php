@@ -94,37 +94,55 @@ class AppointmentRepository implements AppointmentRepositoryInterface
      */
     public function listForDealershipDay(
         Dealership $dealership,
-        string $date,
+        ?string $date = null,
         ?string $technicianId = null,
         ?string $bayId = null,
         ?array $statuses = null,
         int $limit = 50,
         ?string $cursor = null,
+        bool $contactRequired = false,
     ): CursorPage {
         $tzName = $dealership->timezone ?? 'UTC';
         $tz = new DateTimeZone($tzName);
 
-        $fromLocal = CarbonImmutable::parse($date.' 00:00:00', $tz);
-        $toLocal = $fromLocal->addDay();
-        $fromUtc = $fromLocal->utc();
-        $toUtc = $toLocal->utc();
+        if ($contactRequired) {
+            $fromLocal = ($date !== null && $date !== '')
+                ? CarbonImmutable::parse($date.' 00:00:00', $tz)
+                : CarbonImmutable::now($tz)->startOfDay();
+            $fromUtc = $fromLocal->utc();
 
-        $defaultStatuses = [
-            AppointmentStatus::HELD->value,
-            AppointmentStatus::CONFIRMED->value,
-            AppointmentStatus::CHECKED_IN->value,
-            AppointmentStatus::IN_PROGRESS->value,
-            AppointmentStatus::COMPLETED->value,
-            AppointmentStatus::CANCELLED->value,
-            AppointmentStatus::NO_SHOW->value,
-        ];
-        $effectiveStatuses = ! empty($statuses) ? $statuses : $defaultStatuses;
+            $effectiveStatuses = ! empty($statuses)
+                ? $statuses
+                : [AppointmentStatus::CONFIRMED->value];
 
-        $baseQuery = Appointment::query()
-            ->where('dealership_id', $dealership->id)
-            ->where('start_at', '>=', $fromUtc)
-            ->where('start_at', '<', $toUtc)
-            ->whereIn('status', $effectiveStatuses);
+            $baseQuery = Appointment::query()
+                ->where('dealership_id', $dealership->id)
+                ->where('start_at', '>=', $fromUtc)
+                ->whereNotNull('contact_required_reason')
+                ->whereIn('status', $effectiveStatuses);
+        } else {
+            $fromLocal = CarbonImmutable::parse((string) $date.' 00:00:00', $tz);
+            $toLocal = $fromLocal->addDay();
+            $fromUtc = $fromLocal->utc();
+            $toUtc = $toLocal->utc();
+
+            $defaultStatuses = [
+                AppointmentStatus::HELD->value,
+                AppointmentStatus::CONFIRMED->value,
+                AppointmentStatus::CHECKED_IN->value,
+                AppointmentStatus::IN_PROGRESS->value,
+                AppointmentStatus::COMPLETED->value,
+                AppointmentStatus::CANCELLED->value,
+                AppointmentStatus::NO_SHOW->value,
+            ];
+            $effectiveStatuses = ! empty($statuses) ? $statuses : $defaultStatuses;
+
+            $baseQuery = Appointment::query()
+                ->where('dealership_id', $dealership->id)
+                ->where('start_at', '>=', $fromUtc)
+                ->where('start_at', '<', $toUtc)
+                ->whereIn('status', $effectiveStatuses);
+        }
 
         if ($technicianId !== null && $technicianId !== '') {
             $baseQuery->where('technician_id', $technicianId);
@@ -412,5 +430,50 @@ class AppointmentRepository implements AppointmentRepositoryInterface
             ->get();
 
         return $results;
+    }
+
+    /**
+     * @return list<Appointment>
+     */
+    public function findActiveNeighbours(
+        string $appointmentId,
+        string $technicianId,
+        string $bayId,
+        CarbonImmutable $startAt,
+        CarbonImmutable $endAt,
+    ): array {
+        /** @var list<string> $ids */
+        $ids = DB::table('appointments as a')
+            ->join('resource_allocations as ra', 'ra.appointment_id', '=', 'a.id')
+            ->where('ra.active', true)
+            ->where(function ($query) use ($technicianId, $bayId): void {
+                $query->where(function ($q) use ($technicianId): void {
+                    $q->where('ra.resource_type', ResourceType::TECHNICIAN->value)
+                        ->where('ra.resource_id', $technicianId);
+                })->orWhere(function ($q) use ($bayId): void {
+                    $q->where('ra.resource_type', ResourceType::BAY->value)
+                        ->where('ra.resource_id', $bayId);
+                });
+            })
+            ->whereRaw("ra.period && tstzrange(?, ?, '[)')", [
+                $startAt->utc()->toIso8601String(),
+                $endAt->utc()->toIso8601String(),
+            ])
+            ->where('a.id', '<>', $appointmentId)
+            ->select('a.id')
+            ->distinct()
+            ->orderBy('a.id', 'asc')
+            ->pluck('id')
+            ->all();
+
+        if (empty($ids)) {
+            return [];
+        }
+
+        return array_values(Appointment::query()
+            ->whereIn('id', $ids)
+            ->orderBy('id', 'asc')
+            ->get()
+            ->all());
     }
 }

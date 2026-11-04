@@ -27,12 +27,13 @@ class AppointmentQueryService implements AppointmentQueryServiceInterface
      */
     public function listForDealershipDay(
         Dealership $dealership,
-        string $date,
+        ?string $date = null,
         ?string $technicianId = null,
         ?string $bayId = null,
         ?array $statuses = null,
         int $limit = 50,
         ?string $cursor = null,
+        bool $contactRequired = false,
     ): CursorPage {
         return $this->appointmentRepository->listForDealershipDay(
             dealership: $dealership,
@@ -42,6 +43,7 @@ class AppointmentQueryService implements AppointmentQueryServiceInterface
             statuses: $statuses,
             limit: $limit,
             cursor: $cursor,
+            contactRequired: $contactRequired,
         );
     }
 

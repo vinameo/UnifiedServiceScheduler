@@ -4,7 +4,7 @@
 
 **Blocked by:** [08-extend-retries-on-a-race](08-extend-retries-on-a-race.md)
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Branch:** `feature/12-day-of-service`
 
@@ -12,6 +12,6 @@
 
 **Test cases:** TC-12-16, TC-12-17
 
-- [ ] TC-12-16 (AC-12.12; Integration): given Today: blocks in K1, K3; X IN_PROGRESS ended 20 min ago; a cancelled booking; when `GET workshop-board?date=today`; then Bays with blocks (cancelled hidden); X `overrunMinutes 20`; alert `OVERRUN` for X with `nextBooking`; technicians: active only, with `level`, `bookedMinutes` and `status` (`OVERRUN` for X's technician). Test: `WorkshopBoardTest::test_AC_12_12_board`.
-- [ ] TC-12-17 (INV-12.10; Integration): given Foreman of D1; a D2 booking; D2; when Check in, extend the D2 booking; open D2's board; then 404 `APPOINTMENT_NOT_FOUND` twice; 404 `DEALERSHIP_NOT_FOUND`. Test: `WorkshopScopeTest`.
-- [ ] README §8 checks green; no existing test skipped, deleted or weakened
+- [x] TC-12-16 (AC-12.12; Integration): given Today: blocks in K1, K3; X IN_PROGRESS ended 20 min ago; a cancelled booking; when `GET workshop-board?date=today`; then Bays with blocks (cancelled hidden); X `overrunMinutes 20`; alert `OVERRUN` for X with `nextBooking`; technicians: active only, with `level`, `bookedMinutes` and `status` (`OVERRUN` for X's technician). Test: `WorkshopBoardTest::test_AC_12_12_board`.
+- [x] TC-12-17 (INV-12.10; Integration): given Foreman of D1; a D2 booking; D2; when Check in, extend the D2 booking; open D2's board; then 404 `APPOINTMENT_NOT_FOUND` twice; 404 `DEALERSHIP_NOT_FOUND`. Test: `WorkshopScopeTest`.
+- [x] README §8 checks green; no existing test skipped, deleted or weakened

@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
-import { Box, Button, Center, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { useNavigate, useParams } from 'react-router'
+import { Box, Button, Center, Loader, Stack, Text, Title } from '@mantine/core'
 import { useAppointment } from '../../shared/api/appointmentQuery'
 import { useAppointmentHistory } from '../../shared/api/appointments'
-import { useMe } from '../../shared/auth/useMe'
+import { AppointmentActions } from './AppointmentActions'
 import { AppointmentDetailsLayout } from './AppointmentDetailsLayout'
 import { AppointmentHistorySection } from './AppointmentHistorySection'
 import { CancelAppointmentModal } from './CancelAppointmentModal'
@@ -14,7 +14,6 @@ export function AppointmentDetailsPage() {
   const navigate = useNavigate()
   const { data, isLoading, isError } = useAppointment(id ?? '')
   const { data: historyEvents, isLoading: isHistoryLoading } = useAppointmentHistory(id ?? '')
-  const { data: me } = useMe()
   const [cancelModalOpened, setCancelModalOpened] = useState(false)
 
   if (isLoading) {
@@ -42,49 +41,21 @@ export function AppointmentDetailsPage() {
   }
 
   const timeZone = data.appointment.dealership?.timezone ?? 'Asia/Ho_Chi_Minh'
-  const isAdmin = me?.role === 'ADMIN'
-  const isAdvisor = me?.role === 'SERVICE_ADVISOR'
-  const canReschedule = isAdvisor && data.appointment.status === 'CONFIRMED'
-  const canCancel =
-    isAdvisor &&
-    (data.appointment.status === 'CONFIRMED' || data.appointment.status === 'HELD')
-
-  const actions =
-    canCancel || canReschedule || isAdmin ? (
-      <Group>
-        {canReschedule && (
-          <Button
-            onClick={() => navigate(`/staff/appointments/${data.appointment.id}/reschedule`)}
-          >
-            {appointmentCopy.reschedule.button}
-          </Button>
-        )}
-        {canCancel && (
-          <Button
-            variant="outline"
-            color="red"
-            onClick={() => setCancelModalOpened(true)}
-          >
-            {appointmentCopy.cancel.button}
-          </Button>
-        )}
-        {isAdmin && (
-          <Button
-            component={Link}
-            to={`/staff/notifications?appointmentId=${data.appointment.id}`}
-            variant="default"
-          >
-            {appointmentCopy.viewLog}
-          </Button>
-        )}
-      </Group>
-    ) : undefined
 
   return (
     <>
       <AppointmentDetailsLayout
         appointment={data.appointment}
-        actions={actions}
+        actions={
+          <AppointmentActions
+            appointment={data.appointment}
+            etag={data.etag}
+            onCancelClick={() => setCancelModalOpened(true)}
+            onRescheduleClick={() =>
+              navigate(`/staff/appointments/${data.appointment.id}/reschedule`)
+            }
+          />
+        }
         history={
           <AppointmentHistorySection
             events={historyEvents}

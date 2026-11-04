@@ -33,4 +33,15 @@ interface AppointmentWriterInterface
         CarbonImmutable $now,
         ?User $actor = null,
     ): Appointment;
+
+    /**
+     * F12 extend displacement: sets contact_required_reason and deactivates allocations.
+     */
+    public function displace(
+        string $appointmentId,
+        int $expectedVersion,
+        string $reason,
+        ?CarbonImmutable $now = null,
+        ?User $actor = null,
+    ): Appointment;
 }

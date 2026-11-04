@@ -75,6 +75,10 @@ use App\Domain\Notifications\Services\OutboxWriter;
 use App\Domain\Notifications\Services\OutboxWriterInterface;
 use App\Domain\Notifications\Services\ReminderQueue;
 use App\Domain\Notifications\Services\ReminderQueueInterface;
+use App\Domain\Workshop\Services\Reassigner;
+use App\Domain\Workshop\Services\ReassignerInterface;
+use App\Domain\Workshop\Services\WorkshopService;
+use App\Domain\Workshop\Services\WorkshopServiceInterface;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -134,6 +138,10 @@ class DomainServiceProvider extends ServiceProvider
         ApiEventRepositoryInterface::class => ApiEventRepository::class,
         ApiEventServiceInterface::class => ApiEventService::class,
         MonitoringServiceInterface::class => MonitoringService::class,
+
+        // Workshop (F12)
+        WorkshopServiceInterface::class => WorkshopService::class,
+        ReassignerInterface::class => Reassigner::class,
     ];
 
     /**

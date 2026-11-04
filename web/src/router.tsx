@@ -20,6 +20,7 @@ import { BookingConfirmedPage } from './staff/booking/BookingConfirmedPage'
 import { AppointmentListPage } from './staff/appointments/AppointmentListPage'
 import { AppointmentDetailsPage } from './staff/appointments/AppointmentDetailsPage'
 import { ReschedulePage } from './staff/appointments/ReschedulePage'
+import { WorkshopBoardPage } from './staff/workshop/WorkshopBoardPage'
 import { RequireRole } from './shared/auth/RequireRole'
 
 export const routes = [
@@ -81,6 +82,7 @@ export const routes = [
       { path: 'bookings/:id/confirmed', element: <BookingConfirmedPage /> },
       { path: 'appointments', element: <AppointmentListPage /> },
       { path: 'appointments/:id', element: <AppointmentDetailsPage /> },
+      { path: 'workshop', element: <WorkshopBoardPage /> },
       {
         path: 'appointments/:id/reschedule',
         element: (
