@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Monitoring\Services\MetricCounterServiceInterface;
+use App\Domain\Monitoring\Services\RequestMetrics;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
@@ -10,16 +12,21 @@ use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
- * Records request start time, then emits exactly one 'request' log line on termination (D-08.3).
- *
- * In ticket 03, this terminable middleware will also increment Prometheus counters in metric_counters.
+ * Records request start time, then emits exactly one 'request' log line on termination (D-08.3),
+ * and increments Prometheus counters in metric_counters (D-08.5, D-08.6).
  */
 final class RecordRequestOutcome
 {
     private const START_ATTRIBUTE = '_request_start_hrtime';
 
+    public function __construct(
+        private readonly MetricCounterServiceInterface $metricService,
+        private readonly RequestMetrics $requestMetrics,
+    ) {}
+
     public function handle(Request $request, Closure $next): Response
     {
+        $this->requestMetrics->reset();
         $request->attributes->set(self::START_ATTRIBUTE, hrtime(true));
 
         return $next($request);
@@ -48,9 +55,80 @@ final class RecordRequestOutcome
                 'outcome' => $outcome,
                 'durationMs' => $durationMs,
             ]);
+
+            $this->recordMetrics($request, $response, $outcome, $code, $durationMs);
         } catch (Throwable $e) {
             Log::warning('Failed to record request outcome: '.$e->getMessage());
         }
+    }
+
+    private function recordMetrics(
+        Request $request,
+        Response $response,
+        string $outcome,
+        ?string $code,
+        float $durationMs
+    ): void {
+        $isBooking = $this->isBookingRoute($request);
+        $isReplay = $this->isIdempotentReplay($response);
+
+        if ($isBooking) {
+            if ($isReplay) {
+                $this->metricService->recordReplay();
+            } else {
+                $this->metricService->recordOutcome($outcome);
+                $this->metricService->recordDuration($durationMs / 1000.0);
+            }
+        } elseif ($isReplay) {
+            $this->metricService->recordReplay();
+        }
+
+        $retries = $this->requestMetrics->getAllocationRetriesCount();
+        if ($retries > 0) {
+            $this->metricService->recordAllocationRetries($retries);
+        }
+
+        if ($code === 'APPOINTMENT_MODIFIED' || $this->requestMetrics->hasAppointmentModified()) {
+            $this->metricService->recordAppointmentModified();
+        }
+
+        if ($this->isSignInRoute($request) && in_array($code, ['INVALID_CREDENTIALS', 'TOO_MANY_ATTEMPTS'], true)) {
+            $this->metricService->recordSignInFailure();
+        }
+    }
+
+    private function isBookingRoute(Request $request): bool
+    {
+        if ($request->isMethod('POST') && (
+            $request->is('api/v1/appointments') ||
+            $request->is('appointments') ||
+            $request->is('api/v1/_testing/appointments') ||
+            $request->is('_testing/appointments')
+        )) {
+            return true;
+        }
+
+        if (app()->environment('testing') && $request->is('*/_testing/fail')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function isIdempotentReplay(Response $response): bool
+    {
+        return $response->headers->get('Idempotent-Replayed') === 'true'
+            || $this->requestMetrics->hasReplayed();
+    }
+
+    private function isSignInRoute(Request $request): bool
+    {
+        return $request->isMethod('POST') && (
+            $request->is('api/v1/auth/customer/sign-in') ||
+            $request->is('api/v1/auth/staff/sign-in') ||
+            $request->is('*/auth/*/sign-in') ||
+            str_ends_with($request->path(), '/sign-in')
+        );
     }
 
     private function resolveRoute(Request $request): string
