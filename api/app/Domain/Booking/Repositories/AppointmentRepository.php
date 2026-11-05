@@ -435,6 +435,35 @@ class AppointmentRepository implements AppointmentRepositoryInterface
     /**
      * @return list<Appointment>
      */
+    public function listForBoard(
+        string $dealershipId,
+        CarbonImmutable $fromUtc,
+        CarbonImmutable $toUtc,
+        CarbonImmutable $now,
+    ): array {
+        return array_values(Appointment::query()
+            ->where('dealership_id', $dealershipId)
+            ->where('start_at', '>=', $fromUtc)
+            ->where('start_at', '<', $toUtc)
+            ->whereIn('status', [
+                AppointmentStatus::HELD->value,
+                AppointmentStatus::CONFIRMED->value,
+                AppointmentStatus::CHECKED_IN->value,
+                AppointmentStatus::IN_PROGRESS->value,
+                AppointmentStatus::COMPLETED->value,
+                AppointmentStatus::CANCELLED->value,
+            ])
+            ->where(function ($query) use ($now): void {
+                $query->where('status', '<>', AppointmentStatus::HELD->value)
+                    ->orWhere('expires_at', '>', $now);
+            })
+            ->with(['customer', 'serviceType', 'technician', 'bay'])
+            ->orderBy('start_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->get()
+            ->all());
+    }
+
     public function findActiveNeighbours(
         string $appointmentId,
         string $technicianId,

@@ -17,18 +17,17 @@ use App\Domain\Booking\Repositories\ResourceAllocationRepositoryInterface;
 use App\Domain\Booking\ResourceType;
 use App\Domain\Booking\Services\AppointmentEventRecorderInterface;
 use App\Domain\Booking\Services\AppointmentTransitionInterface;
+use App\Domain\Booking\Services\ExpiredHoldReleaserInterface;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\Workshop\Exceptions\NeedsReschedule;
 use App\Domain\Workshop\Exceptions\NoShowBeforeStart;
 use App\Domain\Workshop\Exceptions\NotServiceDay;
 use App\Models\Appointment;
-use App\Models\Bay;
 use App\Models\Dealership;
-use App\Models\DealershipOpeningHour;
-use App\Models\Technician;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use DateTimeZone;
+use Illuminate\Database\DeadlockException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -45,6 +44,7 @@ class WorkshopService implements WorkshopServiceInterface
         private ReassignerInterface $reassigner,
         private AllocationSnapshotRepositoryInterface $allocationSnapshotRepository,
         private MasterDataRepositoryInterface $masterDataRepository,
+        private ExpiredHoldReleaserInterface $expiredHoldReleaser,
     ) {}
 
     public function checkIn(User $actor, string $appointmentId, int $expectedVersion, CarbonImmutable $now): Appointment
@@ -183,6 +183,14 @@ class WorkshopService implements WorkshopServiceInterface
             $oldEnd = CarbonImmutable::parse($appointment->end_at);
             $newEnd = $oldEnd->addMinutes($minutes);
             $extRange = TimeRange::of($oldEnd, $newEnd);
+
+            // Core rule 5: an expired hold whose allocations are still active is expired, not moved or flagged
+            $this->expiredHoldReleaser->releaseBlocking(
+                dealershipId: (string) $appointment->dealership_id,
+                range: $extRange,
+                vehicleId: null,
+                now: $now,
+            );
 
             $neighbours = $this->appointmentRepository->findActiveNeighbours(
                 $appointmentId,
@@ -328,39 +336,25 @@ class WorkshopService implements WorkshopServiceInterface
                 if ($e->appointmentId === $appointmentId) {
                     throw $e;
                 }
-
-                if ($attempt < 2) {
-                    continue;
-                }
-
-                throw new NoAvailability(
-                    reason: 'SLOT_TAKEN',
-                    requestedStart: CarbonImmutable::parse($appointment->start_at),
-                    requestedEnd: $newEnd,
-                    dealershipId: (string) $appointment->dealership_id,
-                );
+            } catch (NoAvailability|DeadlockException) {
+                // A neighbour that cannot move, or a deadlock in a neighbour's nested transaction (R-12.2)
             } catch (QueryException $e) {
-                if ($e->getCode() === '23P01') {
-                    if ($attempt < 2) {
-                        continue;
-                    }
-
-                    throw new NoAvailability(
-                        reason: 'SLOT_TAKEN',
-                        requestedStart: CarbonImmutable::parse($appointment->start_at),
-                        requestedEnd: $newEnd,
-                        dealershipId: (string) $appointment->dealership_id,
-                    );
+                if (! in_array($e->getCode(), ['23P01', '40P01', '40001'], true)) {
+                    throw $e;
                 }
-
-                throw $e;
-            } catch (NoAvailability $e) {
-                if ($attempt < 2) {
-                    continue;
-                }
-
-                throw $e;
             }
+
+            // Only a failed attempt gets here: retry once with fresh data, then 409
+            if ($attempt < 2) {
+                continue;
+            }
+
+            throw new NoAvailability(
+                reason: 'SLOT_TAKEN',
+                requestedStart: CarbonImmutable::parse($appointment->start_at),
+                requestedEnd: $newEnd,
+                dealershipId: (string) $appointment->dealership_id,
+            );
         }
     }
 
@@ -373,33 +367,21 @@ class WorkshopService implements WorkshopServiceInterface
         $toUtc = $toLocal->utc();
 
         $weekday = (int) $fromLocal->isoWeekday();
-        $oh = DealershipOpeningHour::query()
-            ->where('dealership_id', $dealership->id)
-            ->where('weekday', $weekday)
-            ->first();
+        $oh = null;
+        foreach ($this->masterDataRepository->openingHours($dealership->id) as $openingHour) {
+            if ((int) $openingHour->weekday === $weekday) {
+                $oh = $openingHour;
+                break;
+            }
+        }
 
         $opensAt = $oh !== null ? substr((string) $oh->opens_at, 0, 5) : '08:00';
         $closesAt = $oh !== null ? substr((string) $oh->closes_at, 0, 5) : '17:00';
 
-        $bays = Bay::query()
-            ->where('dealership_id', $dealership->id)
-            ->where('active', true)
-            ->orderBy('code')
-            ->get();
+        $bays = array_filter($this->masterDataRepository->bays($dealership->id), fn ($bay): bool => (bool) $bay->active);
+        $technicians = array_filter($this->masterDataRepository->technicians($dealership->id), fn ($tech): bool => (bool) $tech->active);
 
-        $technicians = Technician::query()
-            ->where('dealership_id', $dealership->id)
-            ->where('active', true)
-            ->orderBy('name')
-            ->get();
-
-        $appointments = Appointment::query()
-            ->where('dealership_id', $dealership->id)
-            ->where('start_at', '>=', $fromUtc)
-            ->where('start_at', '<', $toUtc)
-            ->with(['customer', 'serviceType', 'technician', 'bay'])
-            ->orderBy('start_at', 'asc')
-            ->get();
+        $appointments = $this->appointmentRepository->listForBoard($dealership->id, $fromUtc, $toUtc, $now);
 
         /** @var array<string, list<array<string, mixed>>> $baysBlocks */
         $baysBlocks = [];
@@ -413,16 +395,9 @@ class WorkshopService implements WorkshopServiceInterface
         $technicianHasOverrun = [];
 
         foreach ($appointments as $apt) {
-            // Cancelled and no-show appointments are hidden from the board (D-12.13)
-            if ($apt->status === AppointmentStatus::CANCELLED || $apt->status === AppointmentStatus::NO_SHOW) {
+            // Cancelled appointments are hidden from the board (D-12.13); they only feed nextBooking
+            if ($apt->status === AppointmentStatus::CANCELLED) {
                 continue;
-            }
-
-            // Expired holds are hidden
-            if ($apt->status === AppointmentStatus::HELD && $apt->expires_at !== null) {
-                if (CarbonImmutable::parse($apt->expires_at)->isBefore($now)) {
-                    continue;
-                }
             }
 
             $startLocal = CarbonImmutable::parse($apt->start_at)->setTimezone($tz);
@@ -464,8 +439,6 @@ class WorkshopService implements WorkshopServiceInterface
             }
 
             if ($isOverrun) {
-                $nextBooking = $this->findNextBooking($dealership->id, $apt, $toUtc, $tz);
-
                 $alerts[] = [
                     'type' => 'OVERRUN',
                     'appointmentId' => $apt->id,
@@ -475,7 +448,7 @@ class WorkshopService implements WorkshopServiceInterface
                     'customerName' => $apt->customer !== null ? $apt->customer->full_name : '',
                     'serviceName' => $apt->serviceType !== null ? $apt->serviceType->name : '',
                     'technicianName' => $apt->technician !== null ? $apt->technician->name : '',
-                    'nextBooking' => $nextBooking,
+                    'nextBooking' => $this->findNextBooking($apt, $appointments, $tz),
                 ];
             }
 
@@ -526,29 +499,51 @@ class WorkshopService implements WorkshopServiceInterface
     }
 
     /**
+     * The booking an extend of $current would touch first: the earliest later booking on its bay or
+     * technician that still holds a slot. A cancelled one is named only when no live booking follows,
+     * so the card can say the slot was freed. $dayAppointments is the board's list, oldest first.
+     *
+     * @param  list<Appointment>  $dayAppointments
      * @return array{appointmentId: string, start: string, status: string}|null
      */
-    private function findNextBooking(string $dealershipId, Appointment $current, CarbonImmutable $toUtc, DateTimeZone $tz): ?array
+    private function findNextBooking(Appointment $current, array $dayAppointments, DateTimeZone $tz): ?array
     {
-        /** @var Appointment|null $next */
-        $next = Appointment::query()
-            ->where('dealership_id', $dealershipId)
-            ->where('id', '!=', $current->id)
-            ->where(function ($query) use ($current) {
-                $query->where('bay_id', $current->bay_id);
-                if ($current->technician_id !== '') {
-                    $query->orWhere('technician_id', $current->technician_id);
-                }
-            })
-            ->where('start_at', '>=', $current->end_at)
-            ->where('start_at', '<', $toUtc)
-            ->orderBy('start_at', 'asc')
-            ->first();
+        $currentEnd = CarbonImmutable::parse($current->end_at);
+        $firstCancelled = null;
 
-        if ($next === null) {
-            return null;
+        foreach ($dayAppointments as $candidate) {
+            if ($candidate->id === $current->id) {
+                continue;
+            }
+
+            $sharesResource = $candidate->bay_id === $current->bay_id
+                || ($current->technician_id !== '' && $candidate->technician_id === $current->technician_id);
+            if (! $sharesResource || CarbonImmutable::parse($candidate->start_at)->isBefore($currentEnd)) {
+                continue;
+            }
+
+            if ($candidate->status === AppointmentStatus::CANCELLED) {
+                $firstCancelled ??= $candidate;
+
+                continue;
+            }
+
+            // A displaced booking holds no slot (D-12.9); COMPLETED cannot start after a running job
+            if ($candidate->contact_required_reason !== null || $candidate->status === AppointmentStatus::COMPLETED) {
+                continue;
+            }
+
+            return $this->nextBookingData($candidate, $tz);
         }
 
+        return $firstCancelled !== null ? $this->nextBookingData($firstCancelled, $tz) : null;
+    }
+
+    /**
+     * @return array{appointmentId: string, start: string, status: string}
+     */
+    private function nextBookingData(Appointment $next, DateTimeZone $tz): array
+    {
         return [
             'appointmentId' => $next->id,
             'start' => CarbonImmutable::parse($next->start_at)->setTimezone($tz)->toIso8601String(),
