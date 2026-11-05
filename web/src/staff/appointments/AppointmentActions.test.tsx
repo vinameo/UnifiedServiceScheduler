@@ -146,4 +146,30 @@ describe('AppointmentActions (TC-12-25, WEB-12.6)', () => {
       expect(capturedIdempotencyKey).toBeTruthy()
     })
   })
+
+  it('a 412 on an action shows who changed what and offers a reload', async () => {
+    apiMock.post(`/appointments/${appointmentId}/complete`, [
+      412,
+      {
+        code: 'APPOINTMENT_MODIFIED',
+        status: 412,
+        title: 'Modified',
+        appointment: { ...inProgressAppointment, status: 'COMPLETED', version: 4 },
+      },
+      { etag: '"4"' },
+    ])
+
+    const user = userEvent.setup()
+    renderAppointmentActions({
+      appointment: inProgressAppointment,
+      etag: '"3"',
+      role: 'WORKSHOP_FOREMAN',
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Mark completed' }))
+
+    expect(await screen.findByText('This appointment was changed by someone else')).toBeInTheDocument()
+    expect(screen.getByText('Status: In progress → Completed')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Review and retry' })).toBeInTheDocument()
+  })
 })

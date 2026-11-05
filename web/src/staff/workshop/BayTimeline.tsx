@@ -39,8 +39,8 @@ const STATUS_BG: Record<string, string> = {
   COMPLETED: 'var(--mantine-color-green-6)',
 }
 
-const OVERRUN_HATCHED_BACKGROUND =
-  'repeating-linear-gradient(45deg, #fa5252 0px, #fa5252 6px, #c92a2a 6px, #c92a2a 12px)'
+export const OVERRUN_HATCHED_BACKGROUND =
+  'repeating-linear-gradient(45deg, var(--mantine-color-red-6) 0px, var(--mantine-color-red-6) 6px, var(--mantine-color-red-9) 6px, var(--mantine-color-red-9) 12px)'
 
 export function BayTimeline({
   board,
@@ -248,8 +248,11 @@ export function BayTimeline({
                       ? (overrunMinutes / totalBlockMinutes) * 100
                       : 0
 
-                    const label = block.technicianName || block.reference || 'Booking'
-                    const tooltipText = `${block.customerName || 'Customer'} · ${block.serviceName || 'Service'} · ${block.technicianName || 'Technician'} (${formatInZone(block.start, timeZone, 'time')}–${formatInZone(block.end, timeZone, 'time')})`
+                    const label = block.technicianName || block.reference
+                    const names = [block.customerName, block.serviceName, block.technicianName]
+                      .filter(Boolean)
+                      .join(' · ')
+                    const tooltipText = `${names} (${formatInZone(block.start, timeZone, 'time')}–${formatInZone(block.end, timeZone, 'time')})`
 
                     return (
                       <Tooltip key={block.appointmentId} label={tooltipText} withArrow>
@@ -280,7 +283,7 @@ export function BayTimeline({
                             style={{
                               width: `${scheduledWidthPercent}%`,
                               backgroundColor: STATUS_BG[block.status] ?? 'var(--mantine-color-blue-6)',
-                              color: '#ffffff',
+                              color: 'var(--mantine-color-white)',
                               padding: '2px 6px',
                               display: 'flex',
                               alignItems: 'center',

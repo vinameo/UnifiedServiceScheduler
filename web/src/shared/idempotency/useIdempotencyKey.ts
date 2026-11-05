@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 function generateUuid(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -136,4 +136,43 @@ export function useIdempotencyKey(actionInput?: unknown): UseIdempotencyKeyRetur
     reset,
     settle,
   }
+}
+
+export interface UseIdempotencyKeysReturn {
+  keyFor: (variant: string | number) => string
+  settle: (variant: string | number, result?: unknown) => void
+}
+
+/**
+ * One key per variant of an action, such as each extend duration: a different variant is a different
+ * action, so it never shares a key (README D-G.15). Same keep/reset rules as useIdempotencyKey.
+ * Keys live outside render state, so they survive a menu closing and reopening.
+ */
+export function useIdempotencyKeys(actionInput?: unknown): UseIdempotencyKeysReturn {
+  const serialized = stableStringify(actionInput)
+  const store = useRef<{ input: string; keys: Map<string, string> }>({ input: serialized, keys: new Map() })
+
+  const keysForInput = () => {
+    if (store.current.input !== serialized) {
+      store.current = { input: serialized, keys: new Map() }
+    }
+    return store.current.keys
+  }
+
+  const keyFor = (variant: string | number) => {
+    const keys = keysForInput()
+    const existing = keys.get(String(variant))
+    if (existing) return existing
+    const key = generateUuid()
+    keys.set(String(variant), key)
+    return key
+  }
+
+  const settle = (variant: string | number, result?: unknown) => {
+    if (store.current.input === serialized && !shouldKeepKey(result)) {
+      store.current.keys.delete(String(variant))
+    }
+  }
+
+  return { keyFor, settle }
 }

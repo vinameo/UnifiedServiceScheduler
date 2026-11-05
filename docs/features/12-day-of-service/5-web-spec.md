@@ -48,7 +48,8 @@ Võ Thị Chi      Level 4  180 min  Overrun
 | --- | --- | --- | --- |
 | WEB-12.1 | `useWorkshopBoard(date)` | `web/src/shared/api/workshop.ts` | `refetchInterval` 30 s; "updated {HH:mm}" from `data.now`. |
 | WEB-12.2 | `useAppointmentAction(id, action)` | same | `check-in`, `start`, `complete`, `no-show`: `If-Match` + key (`useIdempotencyKey({id, action, etag})`, settled after every answer, README D-G.15); 200 → `setAppointment`, invalidate board and lists. |
-| WEB-12.3 | `useExtend(id)` | same | Body `{minutes}`; shows `affected` in a notification ("Next booking moved to Bay 2" / "1 booking needs customer contact"). |
+| WEB-12.3 | `useExtend(id)` | same | Body `{minutes}`; shows `affected` in a notification ("Next booking moved to Bay 2" / "1 booking needs customer contact"). Each duration is its own action with its own key (`useIdempotencyKeys({id, action: 'extend', etag}).keyFor(minutes)`, D-G.15). |
+| WEB-12.7 | `describeActionError(error)` | `web/src/staff/appointments/actionError.ts` | Every F12 action (details page and board): 412 → `AppointmentModifiedAlert` with a reload; 409 `NO_AVAILABILITY` → `actions.extendFailed`; any other code → its README §5 sentence through `errorCopy`. |
 | WEB-12.5 | `BayTimeline` | `web/src/staff/workshop/BayTimeline.tsx` | Columns per hour from `opensAt` to `closesAt`; blocks positioned by minutes in the dealership zone; status colours as `AppointmentStatusBadge`; overrun part hatched red; a red line at `now`. Blocks link to details. |
 | WEB-12.6 | `AppointmentActions` | `web/src/staff/appointments/AppointmentActions.tsx` | Buttons by status and role (B3); plugs into `AppointmentDetailsLayout.actions` with F07/F09 buttons. |
 
@@ -85,6 +86,9 @@ Võ Thị Chi      Level 4  180 min  Overrun
 | `board.working` / `overrun` | Working / Overrun |
 | `board.level` | Level {n} |
 | `board.displaced` | Needs customer contact |
+| `board.displacedColumns` | Booking · Time · Reason |
+| `board.legendLabel` | Legend: |
+| `board.bookedMinutes` | {minutes} min |
 | `actions.checkIn` | Check in |
 | `actions.start` | Start work |
 | `actions.complete` | Mark completed |
@@ -95,6 +99,7 @@ Võ Thị Chi      Level 4  180 min  Overrun
 | `actions.extended` | Time extended to {time} |
 | `actions.movedNext` | Next booking {reference} moved to {technician}, {bay} |
 | `actions.flaggedNext` | Booking {reference} needs customer contact |
+| `actions.extendFailed` | The time was not extended: the next booking could not be moved to another bay or technician. Nothing was changed. |
 | `contact.banner` | Customer contact needed: {reason} |
 | `contact.displacedNote` | This booking no longer has a bay or technician. Reschedule it before checking in. |
 | `contact.reason.OVERRUN` | the previous job ran late |

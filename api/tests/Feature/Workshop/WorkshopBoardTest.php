@@ -280,6 +280,115 @@ class WorkshopBoardTest extends TestCase
         $this->assertSame([], $k1['blocks']);
     }
 
+    /**
+     * D-12.13: an EXPIRED hold is hidden and does not count towards the technician's booked minutes.
+     */
+    public function test_D_12_13_board_hides_expired_appointments(): void
+    {
+        $world = World::saigonD7();
+        $foreman = $world->foreman();
+
+        $now = CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        $customer = $world->customerWithVehicle();
+        $expired = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $world->technician('An'),
+            bay: $world->bay('K2'),
+            start: CarbonImmutable::parse('2026-11-02 14:00:00', 'Asia/Ho_Chi_Minh'),
+            end: CarbonImmutable::parse('2026-11-02 15:00:00', 'Asia/Ho_Chi_Minh'),
+            serviceType: $world->serviceType('OIL_CHANGE'),
+            customer: $customer['customer'],
+            vehicle: $customer['vehicle'],
+            status: AppointmentStatus::EXPIRED,
+            expiresAt: CarbonImmutable::parse('2026-11-02 09:55:00', 'Asia/Ho_Chi_Minh'),
+        );
+        app(ResourceAllocationRepositoryInterface::class)->deactivateFor($expired->id, $now);
+
+        $response = $this->actingAs($foreman)->getJson(
+            "/api/v1/dealerships/{$world->dealership->id}/workshop-board?date=2026-11-02"
+        );
+
+        $response->assertStatus(200);
+        /** @var array{bays: list<array{code: string, blocks: list<array<string, mixed>>}>, technicians: list<array{name: string, bookedMinutes: int}>} $data */
+        $data = $response->json('data');
+
+        $k2 = collect($data['bays'])->firstWhere('code', 'K2');
+        $this->assertNotNull($k2);
+        $this->assertSame([], $k2['blocks']);
+
+        $an = collect($data['technicians'])->firstWhere('name', $world->technician('An')->name);
+        $this->assertNotNull($an);
+        $this->assertSame(0, $an['bookedMinutes']);
+    }
+
+    /**
+     * D-12.4: nextBooking names the booking an extend would touch. A cancelled booking that comes
+     * earlier does not hide a live one on the same technician.
+     */
+    public function test_next_booking_skips_cancelled_when_a_live_booking_follows(): void
+    {
+        $world = World::saigonD7();
+        $foreman = $world->foreman();
+
+        $now = CarbonImmutable::parse('2026-11-02 10:50:00', 'Asia/Ho_Chi_Minh');
+        CarbonImmutable::setTestNow($now);
+
+        $techChi = $world->technician('Chi');
+        $customerX = $world->customerWithVehicle();
+        $customerC = $world->customerWithVehicle();
+        $customerB = $world->customerWithVehicle();
+
+        AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $techChi,
+            bay: $world->bay('K3'),
+            start: CarbonImmutable::parse('2026-11-02 09:00:00', 'Asia/Ho_Chi_Minh'),
+            end: CarbonImmutable::parse('2026-11-02 10:30:00', 'Asia/Ho_Chi_Minh'),
+            serviceType: $world->serviceType('MAINT_20K'),
+            customer: $customerX['customer'],
+            vehicle: $customerX['vehicle'],
+            status: AppointmentStatus::IN_PROGRESS,
+        );
+
+        // Cancelled booking in X's bay at 11:00
+        $cancelled = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $world->technician('Dũng'),
+            bay: $world->bay('K3'),
+            start: CarbonImmutable::parse('2026-11-02 11:00:00', 'Asia/Ho_Chi_Minh'),
+            end: CarbonImmutable::parse('2026-11-02 12:00:00', 'Asia/Ho_Chi_Minh'),
+            serviceType: $world->serviceType('OIL_CHANGE'),
+            customer: $customerC['customer'],
+            vehicle: $customerC['vehicle'],
+            status: AppointmentStatus::CANCELLED,
+        );
+        app(ResourceAllocationRepositoryInterface::class)->deactivateFor($cancelled->id, $now);
+
+        // Live booking for X's technician in another bay at 11:30
+        $live = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $techChi,
+            bay: $world->bay('K1'),
+            start: CarbonImmutable::parse('2026-11-02 11:30:00', 'Asia/Ho_Chi_Minh'),
+            end: CarbonImmutable::parse('2026-11-02 12:30:00', 'Asia/Ho_Chi_Minh'),
+            serviceType: $world->serviceType('OIL_CHANGE'),
+            customer: $customerB['customer'],
+            vehicle: $customerB['vehicle'],
+            status: AppointmentStatus::CONFIRMED,
+        );
+
+        $response = $this->actingAs($foreman)->getJson(
+            "/api/v1/dealerships/{$world->dealership->id}/workshop-board?date=2026-11-02"
+        );
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.alerts.0.nextBooking.appointmentId', $live->id);
+        $response->assertJsonPath('data.alerts.0.nextBooking.status', 'CONFIRMED');
+        $response->assertJsonPath('data.alerts.0.nextBooking.start', '2026-11-02T11:30:00+07:00');
+    }
+
     public function test_board_adversarial_invalid_date(): void
     {
         $world = World::saigonD7();

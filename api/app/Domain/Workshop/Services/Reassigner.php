@@ -7,6 +7,8 @@ use App\Domain\Allocation\CandidateFinderInterface;
 use App\Domain\Allocation\ResourceSnapshot;
 use App\Domain\Allocation\TimeRange;
 use App\Domain\Booking\AppointmentEventType;
+use App\Domain\Booking\AppointmentStatus;
+use App\Domain\Booking\Exceptions\NoAvailability;
 use App\Domain\Booking\Services\AppointmentWriterInterface;
 use App\Domain\MasterData\Repositories\MasterDataRepositoryInterface;
 use App\Domain\Notifications\OutboxEventType;
@@ -33,25 +35,14 @@ class Reassigner implements ReassignerInterface
             (string) $neighbour->service_type_id,
         );
 
-        if ($serviceType === null) {
-            $displaced = $this->appointmentWriter->displace(
-                appointmentId: $neighbour->id,
-                expectedVersion: $neighbour->version,
-                reason: 'OVERRUN',
-                now: $now,
-                actor: $actor,
-            );
-
-            return new ReassignmentResult(
-                appointment: $displaced,
-                outcome: 'CONTACT_REQUIRED',
-            );
-        }
-
         $range = TimeRange::of(
             CarbonImmutable::parse($neighbour->start_at),
             CarbonImmutable::parse($neighbour->end_at),
         );
+
+        if ($serviceType === null) {
+            return $this->displace($neighbour, $range, $now, $actor);
+        }
 
         $request = new AllocationRequest(
             dealershipId: (string) $neighbour->dealership_id,
@@ -66,18 +57,7 @@ class Reassigner implements ReassignerInterface
         $allocationResult = $this->candidateFinder->find($request, $snapshotWithExtension);
 
         if (empty($allocationResult->pairs)) {
-            $displaced = $this->appointmentWriter->displace(
-                appointmentId: $neighbour->id,
-                expectedVersion: $neighbour->version,
-                reason: 'OVERRUN',
-                now: $now,
-                actor: $actor,
-            );
-
-            return new ReassignmentResult(
-                appointment: $displaced,
-                outcome: 'CONTACT_REQUIRED',
-            );
+            return $this->displace($neighbour, $range, $now, $actor);
         }
 
         $updated = $this->appointmentWriter->moveTo(
@@ -86,7 +66,8 @@ class Reassigner implements ReassignerInterface
             newRange: $range,
             pairs: $allocationResult->pairs,
             event: AppointmentEventType::REASSIGNED,
-            outbox: OutboxEventType::AppointmentReassigned,
+            // A hold is not a booking yet: its customer gets no reassignment message
+            outbox: $neighbour->status === AppointmentStatus::HELD ? null : OutboxEventType::AppointmentReassigned,
             now: $now,
             actor: $actor,
         );
@@ -114,6 +95,39 @@ class Reassigner implements ReassignerInterface
             outcome: 'REASSIGNED',
             technician: $technicianData,
             bay: $bayData,
+        );
+    }
+
+    /**
+     * D-12.9: only a CONFIRMED booking may hold no slot. A held, checked-in or started neighbour
+     * that cannot be moved makes the whole extend fail (D-12.2: nothing runs without allocations).
+     */
+    private function displace(
+        Appointment $neighbour,
+        TimeRange $range,
+        CarbonImmutable $now,
+        ?User $actor,
+    ): ReassignmentResult {
+        if ($neighbour->status !== AppointmentStatus::CONFIRMED) {
+            throw new NoAvailability(
+                reason: 'SLOT_TAKEN',
+                requestedStart: $range->start,
+                requestedEnd: $range->end,
+                dealershipId: (string) $neighbour->dealership_id,
+            );
+        }
+
+        $displaced = $this->appointmentWriter->displace(
+            appointmentId: $neighbour->id,
+            expectedVersion: $neighbour->version,
+            reason: 'OVERRUN',
+            now: $now,
+            actor: $actor,
+        );
+
+        return new ReassignmentResult(
+            appointment: $displaced,
+            outcome: 'CONTACT_REQUIRED',
         );
     }
 }

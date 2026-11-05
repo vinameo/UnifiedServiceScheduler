@@ -85,6 +85,21 @@ interface AppointmentRepositoryInterface
     public function findReminderCandidates(CarbonImmutable $from, CarbonImmutable $to): Collection;
 
     /**
+     * The workshop board's appointments of one dealership day (D-12.13), oldest first:
+     * HELD holds still running, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, and CANCELLED
+     * (kept only to say that the next booking was cancelled). EXPIRED, NO_SHOW and holds
+     * past `expires_at` are left out.
+     *
+     * @return list<Appointment>
+     */
+    public function listForBoard(
+        string $dealershipId,
+        CarbonImmutable $fromUtc,
+        CarbonImmutable $toUtc,
+        CarbonImmutable $now,
+    ): array;
+
+    /**
      * Find active bookings on the given technician or bay whose period overlaps [startAt, endAt),
      * excluding the given appointment. Ordered by id ASC (lock order).
      *

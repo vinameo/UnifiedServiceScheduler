@@ -57,7 +57,7 @@ API-12.5 request `{ "minutes": 30 }`; response:
                 "nextBooking": { "appointmentId": "…", "start": "…", "status": "CANCELLED" } | null } ] } }
 ```
 
-`technicians` lists the dealership's **active** technicians (RQ D-12.16). `status`: `WORKING`, or `OVERRUN` when the technician has an overrunning job. `blocks[].version` and `alerts[].version` are the appointment's current version (RQ D-12.15).
+`nextBooking` follows RQ D-12.13. `technicians` lists the dealership's **active** technicians (RQ D-12.16). `status`: `WORKING`, or `OVERRUN` when the technician has an overrunning job. `blocks[].version` and `alerts[].version` are the appointment's current version (RQ D-12.15).
 
 ## B3. Error table
 

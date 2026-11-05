@@ -2,15 +2,23 @@
 
 namespace Tests\Feature\Workshop;
 
+use App\Domain\Allocation\ResourceSnapshot;
 use App\Domain\Booking\AppointmentEventType;
 use App\Domain\Booking\AppointmentStatus;
+use App\Domain\Workshop\Services\Reassigner;
+use App\Domain\Workshop\Services\ReassignerInterface;
+use App\Domain\Workshop\Services\ReassignmentResult;
 use App\Domain\Workshop\Services\WorkshopService;
 use App\Models\Appointment;
 use App\Models\AppointmentEvent;
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\DeadlockException;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Tests\Support\AppointmentFactory;
 use Tests\Support\AssertsNoOverlap;
 use Tests\Support\World;
@@ -803,5 +811,193 @@ class ExtendTest extends TestCase
 
         $this->assertNoOverlappingAllocations();
         $this->assertM042Passes();
+    }
+
+    /**
+     * D-12.2, D-12.9: only a CONFIRMED booking may be displaced. A CHECKED_IN neighbour that cannot
+     * be moved makes the extend fail; it never ends up checked in without a bay or technician.
+     */
+    public function test_D_12_9_checked_in_neighbour_is_never_displaced(): void
+    {
+        [$foreman, $x, $y] = $this->neighbourScenario(AppointmentStatus::CHECKED_IN, onlyK1Quick: true);
+
+        $response = $this->extendBy30($foreman, $x);
+
+        $response->assertStatus(409);
+        $response->assertJsonPath('code', 'NO_AVAILABILITY');
+        $response->assertJsonPath('reason', 'SLOT_TAKEN');
+
+        $x->refresh();
+        $y->refresh();
+        $this->assertSame(1, $x->version);
+        $this->assertSame(1, $y->version);
+        $this->assertSame(AppointmentStatus::CHECKED_IN, $y->status);
+        $this->assertNull($y->contact_required_reason);
+        $this->assertSame(3, DB::table('resource_allocations')->where('appointment_id', $y->id)->where('active', true)->count());
+
+        $this->assertNoOverlappingAllocations();
+        $this->assertM042Passes();
+    }
+
+    /**
+     * Core rule 5: a hold that expired but still has active allocations is expired by the extend,
+     * not reassigned (no SMS) or flagged for contact.
+     */
+    public function test_extend_expires_a_blocking_expired_hold_instead_of_moving_it(): void
+    {
+        [$foreman, $x, $hold] = $this->neighbourScenario(
+            AppointmentStatus::HELD,
+            holdExpiresAt: CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh'),
+        );
+
+        $response = $this->extendBy30($foreman, $x);
+
+        $response->assertStatus(200);
+        $this->assertSame([], $response->json('data.affected'));
+
+        $hold->refresh();
+        $this->assertSame(AppointmentStatus::EXPIRED, $hold->status);
+        $this->assertNull($hold->contact_required_reason);
+        $this->assertSame(0, DB::table('resource_allocations')->where('appointment_id', $hold->id)->where('active', true)->count());
+        $this->assertFalse(AppointmentEvent::where('appointment_id', $hold->id)
+            ->whereIn('type', [AppointmentEventType::REASSIGNED->value, AppointmentEventType::CONTACT_REQUIRED->value])
+            ->exists());
+
+        $this->assertNoOverlappingAllocations();
+        $this->assertM042Passes();
+    }
+
+    /**
+     * R-12.2: a deadlock inside a neighbour's move is retried once, like a 23P01.
+     */
+    public function test_R_12_2_deadlock_in_a_neighbour_move_retries_once(): void
+    {
+        [$foreman, $x, $y] = $this->neighbourScenario(AppointmentStatus::CONFIRMED);
+        $calls = $this->reassignerThatDeadlocks(times: 1);
+
+        $response = $this->extendBy30($foreman, $x);
+
+        $response->assertStatus(200);
+        $this->assertSame(2, $calls->count);
+        $response->assertJsonPath('data.affected.0.appointmentId', $y->id);
+        $response->assertJsonPath('data.affected.0.outcome', 'REASSIGNED');
+
+        $this->assertNoOverlappingAllocations();
+        $this->assertM042Passes();
+    }
+
+    /**
+     * R-12.2: a deadlock on both attempts answers 409 SLOT_TAKEN and changes nothing.
+     */
+    public function test_R_12_2_repeated_deadlock_returns_409_and_changes_nothing(): void
+    {
+        [$foreman, $x, $y] = $this->neighbourScenario(AppointmentStatus::CONFIRMED);
+        $calls = $this->reassignerThatDeadlocks(times: 2);
+
+        $response = $this->extendBy30($foreman, $x);
+
+        $response->assertStatus(409);
+        $response->assertJsonPath('code', 'NO_AVAILABILITY');
+        $response->assertJsonPath('reason', 'SLOT_TAKEN');
+        $this->assertSame(2, $calls->count);
+
+        $x->refresh();
+        $y->refresh();
+        $this->assertSame(1, $x->version);
+        $this->assertSame(1, $y->version);
+
+        $this->assertNoOverlappingAllocations();
+        $this->assertM042Passes();
+    }
+
+    /**
+     * X IN_PROGRESS on An/K1 09:00-10:00; neighbour Y on Dũng/K1 10:00-11:00; now 10:05.
+     *
+     * @return array{0: User, 1: Appointment, 2: Appointment}
+     */
+    private function neighbourScenario(
+        AppointmentStatus $neighbourStatus,
+        bool $onlyK1Quick = false,
+        ?CarbonImmutable $holdExpiresAt = null,
+    ): array {
+        $world = World::saigonD7();
+        if ($onlyK1Quick) {
+            $world->onlyBays(['K1', 'K3', 'K4']);
+        }
+
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-11-02 10:05:00', 'Asia/Ho_Chi_Minh'));
+
+        $customerX = $world->customerWithVehicle();
+        $customerY = $world->customerWithVehicle();
+
+        $x = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $world->technician('An'),
+            bay: $world->bay('K1'),
+            start: CarbonImmutable::parse('2026-11-02 09:00:00', 'Asia/Ho_Chi_Minh'),
+            end: CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh'),
+            serviceType: $world->serviceType('OIL_CHANGE'),
+            customer: $customerX['customer'],
+            vehicle: $customerX['vehicle'],
+            status: AppointmentStatus::IN_PROGRESS,
+        );
+
+        $y = AppointmentFactory::create(
+            dealership: $world->dealership,
+            technician: $world->technician('Dũng'),
+            bay: $world->bay('K1'),
+            start: CarbonImmutable::parse('2026-11-02 10:00:00', 'Asia/Ho_Chi_Minh'),
+            end: CarbonImmutable::parse('2026-11-02 11:00:00', 'Asia/Ho_Chi_Minh'),
+            serviceType: $world->serviceType('OIL_CHANGE'),
+            customer: $customerY['customer'],
+            vehicle: $customerY['vehicle'],
+            status: $neighbourStatus,
+            expiresAt: $holdExpiresAt,
+        );
+
+        return [$world->foreman(), $x, $y];
+    }
+
+    /**
+     * @return TestResponse<JsonResponse>
+     */
+    private function extendBy30(User $foreman, Appointment $x): TestResponse
+    {
+        return $this->actingAs($foreman)->postJson(
+            "/api/v1/appointments/{$x->id}/extend",
+            ['minutes' => 30],
+            [
+                'If-Match' => sprintf('"%d"', $x->version),
+                'Idempotency-Key' => (string) Str::uuid(),
+            ]
+        );
+    }
+
+    /**
+     * Binds a Reassigner whose first $times calls fail with the exception Laravel throws for a
+     * deadlock inside a nested transaction; later calls use the real Reassigner.
+     */
+    private function reassignerThatDeadlocks(int $times): \stdClass
+    {
+        $calls = new \stdClass;
+        $calls->count = 0;
+        $real = $this->app->make(Reassigner::class);
+
+        $this->app->instance(ReassignerInterface::class, new class($real, $calls, $times) implements ReassignerInterface
+        {
+            public function __construct(private Reassigner $real, private \stdClass $calls, private int $times) {}
+
+            public function reassign(Appointment $neighbour, ResourceSnapshot $snapshotWithExtension, CarbonImmutable $now, ?User $actor = null): ReassignmentResult
+            {
+                $this->calls->count++;
+                if ($this->calls->count <= $this->times) {
+                    throw new DeadlockException('SQLSTATE[40P01]: Deadlock detected');
+                }
+
+                return $this->real->reassign($neighbour, $snapshotWithExtension, $now, $actor);
+            }
+        });
+
+        return $calls;
     }
 }

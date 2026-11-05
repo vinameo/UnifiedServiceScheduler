@@ -19,7 +19,7 @@
 | M2 | Foreman → Start work → Mark completed | Completed; the board block turns green; the slot is bookable again | PASS (verified via `StatusActionsTest::test_AC_12_1_check_in_start_complete` asserting status moves to COMPLETED and allocations are deactivated, `AssertsNoOverlap` confirming slot freed, and `BayTimeline.test.tsx`) |
 | M3 | Foreman sets a job's end in the past (factory) → board | Alert "Bay 3 is running 20 minutes over" | PASS (verified via `WorkshopBoardTest::test_AC_12_12_board` generating OVERRUN alert with bayName and minutesOver, and `WorkshopBoardPage.test.tsx` asserting alert banner rendering) |
 | M4 | Booking B follows in the same bay; another STANDARD bay is free → Extend 30 min | Notification "Next booking … moved to …, Bay …"; B's details show the new bay | PASS (verified via `ExtendTest::test_AC_12_4_extend_moves_the_next_booking` moving B to free bay with outcome REASSIGNED and `AppointmentActions.test.tsx` asserting notification copy) |
-| M5 | No other bay free → Extend 30 min | B shows the "Customer contact needed: the previous job ran late" banner; B appears in the contact list | PASS (verified via `ExtendTest::test_AC_12_4_unplaceable_neighbour_is_displaced_not_cancelled` flagging B as OVERRUN with 0 active allocations, `ContactFlagTest::test_contact_list_filter`, and `AppointmentActions.test.tsx`) |
+| M5 | No other bay free → Extend 30 min | B shows the "Customer contact needed: the previous job ran late" banner; B appears in the contact list | PASS for the API (`ExtendTest::test_AC_12_4_unplaceable_neighbour_is_displaced_not_cancelled`, `ContactFlagTest::test_contact_list_filter`). The banner was missing until review 2026-11-05; now covered by TC-12-34 (`AppointmentDetailsPage.test.tsx`). Not re-run by hand. |
 | M6 | Board → Technicians today | Columns Technician · Level · Booked · Status; no "Report absence" or "Report bay out of service" buttons | PASS (verified via `WorkshopBoardTest::test_AC_12_12_board` returning active technicians with level, booked minutes, and WORKING/OVERRUN status, and `WorkshopBoardPage.test.tsx` asserting table structure without absence/outage buttons) |
 | M7 | Advisor opens the displaced booking from M5 → Check in | "This booking no longer has a bay or technician. Reschedule it before checking in." | PASS (verified via `ContactFlagTest::test_AC_12_14_displaced_booking_needs_reschedule_before_check_in` returning 422 NEEDS_RESCHEDULE and `AppointmentActions.test.tsx` displaying displaced note) |
 
@@ -68,6 +68,12 @@ Every TC green; M1–M7 pass.
 | D-12.14 | TC-12-21 |
 | AC-12.14, D-12.2 (displaced) | TC-12-27 |
 | AC-12.15, D-12.15 | TC-12-28 |
+| D-12.9 (only CONFIRMED displaced) | TC-12-29 |
+| D-12.4 (expired hold released) | TC-12-30 |
+| R-12.2 (deadlock retried) | TC-12-31 |
+| D-12.13 (EXPIRED hidden, nextBooking) | TC-12-32, TC-12-33 |
+| WEB-12.7, WEB §B3 banner | TC-12-34, TC-12-35 |
+| WEB-12.3 (key per duration) | TC-12-36 |
 | Roles (README §4) | TC-12-22 |
 | API §B4 | TC-12-23 |
 | WEB-12.5, WEB-12.6 | TC-12-24, TC-12-25 |
@@ -99,6 +105,14 @@ Backend in `api/tests/Feature/Workshop/`.
 | TC-12-26 | All | Manual | Stack running | M1–M7 | As A2 | — | Record in A2 |
 | TC-12-27 | AC-12.14, D-12.2 | Integration | As TC-12-09: Y displaced (`OVERRUN`, 0 allocations) | Advisor checks Y in; then reschedules Y to the same time (a bay is free again) and checks in | 422 `NEEDS_RESCHEDULE`, Y unchanged; reschedule 200 with 3 active allocations and the flag cleared; check-in 200 | Displaced booking runs with no allocations | `ContactFlagTest::test_AC_12_14_displaced_booking_needs_reschedule_before_check_in` |
 | TC-12-28 | AC-12.15, D-12.15 | Web component | Fake API: board with an alert for X `version 3`; extend → 412 with X `COMPLETED` (v4) | Tap "Extend 30 min" | The request has `If-Match: "3"`; the 412 alert shows "Status: In progress → Completed"; the board refetches | Board extends without `If-Match` or with a fetched-later version | `web/src/staff/workshop/WorkshopBoardPage.test.tsx` |
+| TC-12-29 | D-12.9, D-12.2 | Integration | As TC-12-09 but Y `CHECKED_IN` | Extend X by 30 | 409 `NO_AVAILABILITY` `SLOT_TAKEN`; X and Y unchanged, Y keeps 3 active allocations | Y displaced while checked in | `ExtendTest::test_D_12_9_checked_in_neighbour_is_never_displaced` |
+| TC-12-30 | D-12.4, core rule 5 | Integration | Y is a `HELD` hold on K1 10:00 that expired at 10:00, allocations still active | Extend X by 30 | 200, `affected` empty; Y `EXPIRED`, 0 active allocations, no `REASSIGNED`/`CONTACT_REQUIRED` row | Expired hold moved (SMS) or flagged | `ExtendTest::test_extend_expires_a_blocking_expired_hold_instead_of_moving_it` |
+| TC-12-31 | R-12.2 | Integration | As TC-12-04; the reassigner throws `DeadlockException` once / twice | Extend X by 30 | Once: 200, Y `REASSIGNED`; twice: 409 `SLOT_TAKEN`, nothing changed | 500 on a deadlock | `ExtendTest::test_R_12_2_*` |
+| TC-12-32 | D-12.13 | Integration | An `EXPIRED` appointment in K2 for An | GET board | K2 has no block; An `bookedMinutes 0` | Expired hold drawn or counted | `WorkshopBoardTest::test_D_12_13_board_hides_expired_appointments` |
+| TC-12-33 | D-12.13 | Integration | X overruns on Chi/K3; cancelled booking in K3 at 11:00; `CONFIRMED` booking for Chi in K1 at 11:30 | GET board | `nextBooking` is the 11:30 `CONFIRMED` booking | Card says "was cancelled" while extend would move a live booking | `WorkshopBoardTest::test_next_booking_skips_cancelled_when_a_live_booking_follows` |
+| TC-12-34 | WEB §B3, WEB-12.7, M5 | Web component | Advisor; booking `CONFIRMED` with `contactRequiredReason OVERRUN`; check-in answers 422 `NEEDS_RESCHEDULE` | Open details; tap Check in | Banner "Customer contact needed: the previous job ran late" with the note, the phone and Reschedule/Cancel; after check-in the `NEEDS_RESCHEDULE` sentence shows | Banner missing; error swallowed | `AppointmentDetailsPage.test.tsx` |
+| TC-12-35 | WEB-12.7 | Web component | Board alert; extend answers 409 `NO_AVAILABILITY` / an action answers 412 | Tap "Extend 30 min" / "Mark completed" | `actions.extendFailed` shows on the card / `AppointmentModifiedAlert` with the status change | Silent failure | `WorkshopBoardPage.test.tsx`, `AppointmentActions.test.tsx` |
+| TC-12-36 | WEB-12.3, D-G.15 | Web unit | `useIdempotencyKeys({id, action: 'extend', etag})` | Keys for 15 and 30; settle 15 with 503, 30 with 409; new ETag | 15 ≠ 30; 15 reused after 503; 30 renewed after 409; all renewed on a new ETag | One key shared by all durations (422 `IDEMPOTENCY_KEY_MISMATCH`) | `useIdempotencyKey.test.ts` |
 
 ## B3. Fixtures
 

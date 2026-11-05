@@ -180,7 +180,7 @@ Web seam: `web/src/shared/api/errorCopy.ts` (F00) maps `code` → copy; an unkno
 | `BookingTimeRules` (past, opening hours, 15-minute step, 90 days) | F02 | F06, F09 |
 | `AppointmentRepository::findVisibleTo(User, id)` + explicit route binding `{appointment}` that calls it (404 when not visible); the only way a route loads an appointment | F05 | F05, F07, F09, F10, F12 |
 | `AlternativeTimesFinder` | F06 | F02, F09 (409) |
-| Web: `useIdempotencyKey(actionInputs)` (D-G.15), `SubmitButton`, `IdempotentRetryPanel`, `AppointmentModifiedAlert` | F04 | every writing mutation |
+| Web: `useIdempotencyKey(actionInputs)` (D-G.15), `useIdempotencyKeys(actionInputs).keyFor(variant)` for one action with several variants (F12 extend durations), `SubmitButton`, `IdempotentRetryPanel`, `AppointmentModifiedAlert` | F04 | every writing mutation |
 | Web: `appointmentQuery` keeps the `ETag` + `withIfMatch()` | F05 | F07, F09, F10, F12 |
 | Web: `formatInZone(iso, timeZone)` | F02 | all |
 | Web: `RequireRole` route guard, `useMe()` | F00 | all |

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import axios from 'axios'
 import {
   Alert,
   Anchor,
@@ -18,14 +17,21 @@ import {
 import { Link } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMe } from '../../shared/auth/useMe'
+import { errorCopy } from '../../shared/api/errorCopy'
+import { toProblem } from '../../shared/api/problem'
 import { useExtend, useWorkshopBoard, type WorkshopAlert } from '../../shared/api/workshop'
 import { AppointmentModifiedAlert } from '../../shared/appointments/AppointmentModifiedAlert'
+import { statusMeta } from '../../shared/appointments/status'
 import type { AppointmentDiffInput } from '../../shared/appointments/diffAppointment'
 import { useIdempotencyKey } from '../../shared/idempotency/useIdempotencyKey'
 import { formatInZone } from '../../shared/format/time'
-import { appointmentCopy } from '../appointments/copy'
-import { BayTimeline } from './BayTimeline'
+import { describeActionError } from '../appointments/actionError'
+import { contactReasonLabel } from '../appointments/copy'
+import { BayTimeline, OVERRUN_HATCHED_BACKGROUND } from './BayTimeline'
 import { workshopCopy } from './copy'
+
+// Legend order follows `board.legend`; the last entry, Overrun, is drawn hatched
+const LEGEND_STATUSES = ['COMPLETED', 'IN_PROGRESS', 'CHECKED_IN', 'CONFIRMED', 'HELD'] as const
 
 interface OverrunAlertCardProps {
   alert: WorkshopAlert
@@ -48,8 +54,10 @@ function OverrunAlertCard({
   const extendInput = { id: alert.appointmentId, action: 'extend', etag }
   const { key: idempotencyKey, settle: settleExtend } = useIdempotencyKey(extendInput)
   const extendMutation = useExtend(alert.appointmentId)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handleExtend = () => {
+    setErrorMessage(null)
     extendMutation.mutate(
       {
         minutes: 30,
@@ -57,35 +65,31 @@ function OverrunAlertCard({
         idempotencyKey,
       },
       {
-        onSettled: () => settleExtend(),
+        onSuccess: () => settleExtend(200),
         onError: (err: unknown) => {
-          if (axios.isAxiosError(err) && err.response?.status === 412) {
-            const data = err.response.data as {
-              appointment?: AppointmentDiffInput
-              extra?: { appointment?: AppointmentDiffInput }
-            }
-            const latest = data.extra?.appointment ?? data.appointment
-            const resEtag = (err.response.headers['etag'] as string) || ''
-            if (latest) {
-              onConflict({
-                before: {
-                  id: alert.appointmentId,
-                  version: alert.version,
-                  status: 'IN_PROGRESS',
-                },
-                latest,
-                etag: resEtag,
-              })
-            }
+          settleExtend(err)
+          const actionError = describeActionError(err)
+          if (actionError.kind === 'modified') {
+            onConflict({
+              before: {
+                id: alert.appointmentId,
+                version: alert.version,
+                status: 'IN_PROGRESS',
+              },
+              latest: actionError.conflict.latest,
+              etag: actionError.conflict.etag,
+            })
+            return
           }
+          setErrorMessage(actionError.message)
         },
       },
     )
   }
 
-  const customer = alert.customerName ?? 'Customer'
-  const service = alert.serviceName ?? 'Service'
-  const technician = alert.technicianName ?? 'Technician'
+  const customer = alert.customerName ?? ''
+  const service = alert.serviceName ?? ''
+  const technician = alert.technicianName ?? ''
 
   let bodyText = workshopCopy.board.overrunBodyNone(customer, service, technician)
   if (alert.nextBooking) {
@@ -105,6 +109,11 @@ function OverrunAlertCard({
             {workshopCopy.board.overrunTitle(alert.bayName, alert.minutesOver)}
           </Text>
           <Text size="sm">{bodyText}</Text>
+          {errorMessage && (
+            <Text size="sm" c="red.7" role="alert">
+              {errorMessage}
+            </Text>
+          )}
         </Stack>
 
         {isForeman && (
@@ -149,9 +158,7 @@ export function WorkshopBoardPage() {
   if (error || !board) {
     return (
       <Container size="xl" py="lg">
-        <Alert color="red" title="Error">
-          Failed to load workshop board.
-        </Alert>
+        <Alert color="red">{errorCopy(toProblem(error)?.code)}</Alert>
       </Container>
     )
   }
@@ -214,47 +221,23 @@ export function WorkshopBoardPage() {
             <BayTimeline board={board} timeZone={timeZone} />
 
             {/* Legend */}
-            <Stack gap={4}>
-              <Text size="xs" c="dimmed" style={{ display: 'none' }}>
-                {workshopCopy.board.legend}
+            <Group gap="xs" wrap="wrap">
+              <Text size="xs" fw={600} c="dimmed">
+                {workshopCopy.board.legendLabel}
               </Text>
-              <Group gap="xs" wrap="wrap">
-                <Text size="xs" fw={600} c="dimmed">
-                  Legend:
-                </Text>
-                <Badge color="green" variant="filled" size="sm">
-                  Completed
+              {LEGEND_STATUSES.map((status) => (
+                <Badge key={status} color={statusMeta(status).color} variant="filled" size="sm">
+                  {statusMeta(status).label}
                 </Badge>
-                <Badge color="indigo" variant="filled" size="sm">
-                  In progress
-                </Badge>
-                <Badge color="cyan" variant="filled" size="sm">
-                  Checked in
-                </Badge>
-                <Badge color="blue" variant="filled" size="sm">
-                  Confirmed
-                </Badge>
-                <Badge color="yellow" variant="filled" size="sm">
-                  On hold
-                </Badge>
-                <Box
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    background:
-                      'repeating-linear-gradient(45deg, #fa5252 0px, #fa5252 4px, #c92a2a 4px, #c92a2a 8px)',
-                    color: '#ffffff',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    lineHeight: '16px',
-                  }}
-                >
-                  Overrun
-                </Box>
-              </Group>
-            </Stack>
+              ))}
+              <Badge
+                variant="filled"
+                size="sm"
+                style={{ background: OVERRUN_HATCHED_BACKGROUND }}
+              >
+                {workshopCopy.board.overrun}
+              </Badge>
+            </Group>
           </Stack>
         </Card>
 
@@ -268,9 +251,9 @@ export function WorkshopBoardPage() {
               <Table>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Booking</Table.Th>
-                    <Table.Th>Time</Table.Th>
-                    <Table.Th>Reason</Table.Th>
+                    <Table.Th>{workshopCopy.board.displacedColumns.booking}</Table.Th>
+                    <Table.Th>{workshopCopy.board.displacedColumns.time}</Table.Th>
+                    <Table.Th>{workshopCopy.board.displacedColumns.reason}</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -290,9 +273,7 @@ export function WorkshopBoardPage() {
                       </Table.Td>
                       <Table.Td>
                         <Badge color="yellow" variant="light">
-                          {item.reason === 'OVERRUN'
-                            ? appointmentCopy.contact.reason.OVERRUN
-                            : item.reason}
+                          {contactReasonLabel(item.reason)}
                         </Badge>
                       </Table.Td>
                     </Table.Tr>
@@ -311,10 +292,10 @@ export function WorkshopBoardPage() {
               <Table>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Technician</Table.Th>
-                    <Table.Th>Level</Table.Th>
-                    <Table.Th>Booked</Table.Th>
-                    <Table.Th>Status</Table.Th>
+                    <Table.Th>{workshopCopy.board.technicianColumns.technician}</Table.Th>
+                    <Table.Th>{workshopCopy.board.technicianColumns.level}</Table.Th>
+                    <Table.Th>{workshopCopy.board.technicianColumns.booked}</Table.Th>
+                    <Table.Th>{workshopCopy.board.technicianColumns.status}</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -324,7 +305,7 @@ export function WorkshopBoardPage() {
                         <Text fw={500}>{tech.name}</Text>
                       </Table.Td>
                       <Table.Td>{workshopCopy.board.level(tech.level)}</Table.Td>
-                      <Table.Td>{tech.bookedMinutes} min</Table.Td>
+                      <Table.Td>{workshopCopy.board.bookedMinutes(tech.bookedMinutes)}</Table.Td>
                       <Table.Td>
                         {tech.status === 'OVERRUN' ? (
                           <Badge color="red" variant="filled">
