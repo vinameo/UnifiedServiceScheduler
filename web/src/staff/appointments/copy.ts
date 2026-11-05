@@ -99,6 +99,8 @@ export const appointmentCopy = {
     movedNext: (reference: string, technician: string, bay: string) =>
       `Next booking ${reference} moved to ${technician}, ${bay}`,
     flaggedNext: (reference: string) => `Booking ${reference} needs customer contact`,
+    extendFailed:
+      'The time was not extended: the next booking could not be moved to another bay or technician. Nothing was changed.',
   },
   contact: {
     banner: (reason: string) => `Customer contact needed: ${reason}`,
@@ -124,4 +126,9 @@ export const historyTypeLabels: Record<string, string> = {
   EXTENDED: 'Time extended',
   REASSIGNED: 'Technician or bay changed',
   CONTACT_REQUIRED: 'Customer contact needed',
+}
+
+/** Copy for a `contactRequiredReason` code; an unknown code is shown as sent. */
+export function contactReasonLabel(reason: string): string {
+  return reason === 'OVERRUN' ? appointmentCopy.contact.reason.OVERRUN : reason
 }

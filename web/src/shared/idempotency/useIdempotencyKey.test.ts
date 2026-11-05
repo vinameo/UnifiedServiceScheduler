@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { shouldKeepKey, useIdempotencyKey } from './useIdempotencyKey'
+import { shouldKeepKey, useIdempotencyKey, useIdempotencyKeys } from './useIdempotencyKey'
 
 describe('useIdempotencyKey (TC-04-35, WEB-04.1)', () => {
   it('handles input changes, reset, and settling across different response statuses', () => {
@@ -125,3 +125,29 @@ describe('useIdempotencyKey (TC-04-35, WEB-04.1)', () => {
   })
 })
 
+describe('useIdempotencyKeys (D-G.15, F12 extend durations)', () => {
+  const extendInput = { id: 'apt-1', action: 'extend', etag: '"3"' }
+
+  it('gives each variant its own key and keeps it only for a resend after no answer, a 5xx or REQUEST_IN_PROGRESS', () => {
+    const { result, rerender } = renderHook(
+      ({ input }: { input: unknown }) => useIdempotencyKeys(input),
+      { initialProps: { input: extendInput } },
+    )
+
+    const key15 = result.current.keyFor(15)
+    const key30 = result.current.keyFor(30)
+    expect(key30).not.toBe(key15)
+
+    // 15 min timed out with a 503: resending 15 min reuses its key
+    result.current.settle(15, { response: { status: 503 } })
+    expect(result.current.keyFor(15)).toBe(key15)
+
+    // 30 min got a 409 NO_AVAILABILITY: that answer is final, trying again needs a new key
+    result.current.settle(30, { response: { status: 409, data: { code: 'NO_AVAILABILITY' } } })
+    expect(result.current.keyFor(30)).not.toBe(key30)
+
+    // A new ETag is a new action for every duration
+    rerender({ input: { ...extendInput, etag: '"4"' } })
+    expect(result.current.keyFor(15)).not.toBe(key15)
+  })
+})

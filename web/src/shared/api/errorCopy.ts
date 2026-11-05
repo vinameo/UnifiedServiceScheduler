@@ -11,14 +11,31 @@ const ERROR_MESSAGES: Record<string, string> = {
   WEAK_PASSWORD: 'Password must be at least 8 characters, with a letter and a number.',
   TOO_MANY_ATTEMPTS: 'Too many attempts. Please try again later.',
   OUTBOX_NOT_RETRYABLE: 'Only failed messages can be sent again.',
+  APPOINTMENT_NOT_FOUND: "We couldn't find this appointment.",
+  REQUEST_IN_PROGRESS: 'Your request is still being processed. Wait a moment, then check again.',
+  APPOINTMENT_MODIFIED:
+    'This appointment was changed by someone else. Review the latest details and try again.',
+  INVALID_STATUS_TRANSITION: 'This appointment is {status} and can no longer be changed this way.',
+  IDEMPOTENCY_KEY_MISMATCH: 'Something went wrong with this request. Please try again.',
+  PRECONDITION_REQUIRED: 'Something went wrong with this request. Please reload the page.',
+  NO_SHOW_BEFORE_START: 'You can mark a no-show only after the start time.',
+  NOT_SERVICE_DAY: 'You can check in only on the day of the appointment.',
+  NEEDS_RESCHEDULE:
+    'This booking no longer has a bay or technician. Reschedule it before checking in.',
   INTERNAL_ERROR: 'Something went wrong. Please try again.',
 }
 
-export function errorCopy(code: string | undefined): string {
+export interface ErrorCopyParams {
+  /** Status label for INVALID_STATUS_TRANSITION, e.g. "completed". */
+  status?: string
+}
+
+export function errorCopy(code: string | undefined, params: ErrorCopyParams = {}): string {
   if (!code) {
     return ERROR_MESSAGES.INTERNAL_ERROR
   }
-  return ERROR_MESSAGES[code] ?? ERROR_MESSAGES.INTERNAL_ERROR
+  const message = ERROR_MESSAGES[code] ?? ERROR_MESSAGES.INTERNAL_ERROR
+  return message.replace('{status}', params.status ?? 'closed')
 }
 
 export interface NoAvailabilityContext {

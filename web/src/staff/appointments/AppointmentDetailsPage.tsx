@@ -3,15 +3,19 @@ import { useNavigate, useParams } from 'react-router'
 import { Box, Button, Center, Loader, Stack, Text, Title } from '@mantine/core'
 import { useAppointment } from '../../shared/api/appointmentQuery'
 import { useAppointmentHistory } from '../../shared/api/appointments'
+import { isClosed } from '../../shared/appointments/status'
+import { useMe } from '../../shared/auth/useMe'
 import { AppointmentActions } from './AppointmentActions'
 import { AppointmentDetailsLayout } from './AppointmentDetailsLayout'
 import { AppointmentHistorySection } from './AppointmentHistorySection'
 import { CancelAppointmentModal } from './CancelAppointmentModal'
+import { ContactRequiredBanner } from './ContactRequiredBanner'
 import { appointmentCopy } from './copy'
 
 export function AppointmentDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { data: me } = useMe()
   const { data, isLoading, isError } = useAppointment(id ?? '')
   const { data: historyEvents, isLoading: isHistoryLoading } = useAppointmentHistory(id ?? '')
   const [cancelModalOpened, setCancelModalOpened] = useState(false)
@@ -41,19 +45,28 @@ export function AppointmentDetailsPage() {
   }
 
   const timeZone = data.appointment.dealership?.timezone ?? 'Asia/Ho_Chi_Minh'
+  const openReschedule = () => navigate(`/staff/appointments/${data.appointment.id}/reschedule`)
+  const contactBanner =
+    data.appointment.contactRequiredReason && !isClosed(data.appointment.status) ? (
+      <ContactRequiredBanner
+        appointment={data.appointment}
+        canChange={me?.role === 'SERVICE_ADVISOR'}
+        onRescheduleClick={openReschedule}
+        onCancelClick={() => setCancelModalOpened(true)}
+      />
+    ) : undefined
 
   return (
     <>
       <AppointmentDetailsLayout
         appointment={data.appointment}
+        banner={contactBanner}
         actions={
           <AppointmentActions
             appointment={data.appointment}
             etag={data.etag}
             onCancelClick={() => setCancelModalOpened(true)}
-            onRescheduleClick={() =>
-              navigate(`/staff/appointments/${data.appointment.id}/reschedule`)
-            }
+            onRescheduleClick={openReschedule}
           />
         }
         history={

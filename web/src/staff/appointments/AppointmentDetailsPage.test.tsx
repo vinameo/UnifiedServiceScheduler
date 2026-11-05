@@ -170,6 +170,43 @@ describe('AppointmentDetailsPage', () => {
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument()
   })
 
+  it('M5, WEB §B3: a booking displaced by an overrun shows the contact banner; check-in answers NEEDS_RESCHEDULE with its sentence', async () => {
+    const displaced: Appointment = {
+      ...baseAppointment,
+      version: 2,
+      contactRequiredReason: 'OVERRUN',
+    }
+
+    apiMock.get(`/appointments/${appointmentId}`, [200, displaced, { etag: '"2"' }])
+    apiMock.get(`/appointments/${appointmentId}/history`, [200, []])
+    apiMock.post(`/appointments/${appointmentId}/check-in`, [
+      422,
+      { code: 'NEEDS_RESCHEDULE', status: 422, title: 'Needs reschedule' },
+    ])
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderRoute(`/staff/appointments/${appointmentId}`)
+
+    expect(
+      await screen.findByText('Customer contact needed: the previous job ran late'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('This booking no longer has a bay or technician. Reschedule it before checking in.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '0903123218' })).toHaveAttribute('href', 'tel:0903123218')
+    // Banner and action bar both offer Reschedule to the advisor
+    expect(screen.getAllByRole('button', { name: 'Reschedule' })).toHaveLength(2)
+
+    await user.click(screen.getByRole('button', { name: 'Check in' }))
+
+    // The same sentence now also appears in the error alert
+    await waitFor(() => {
+      expect(
+        screen.getAllByText('This booking no longer has a bay or technician. Reschedule it before checking in.'),
+      ).toHaveLength(2)
+    })
+  })
+
   it('shows not found error view when appointment does not exist or user lacks permission', async () => {
     apiMock.get(`/appointments/${appointmentId}`, [
       404,

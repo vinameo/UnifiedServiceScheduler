@@ -230,4 +230,24 @@ describe('WorkshopBoardPage (TC-12-28, AC-12.15, D-12.15)', () => {
     expect(screen.getByText('Level 4')).toBeInTheDocument()
     expect(screen.getByText('180 min')).toBeInTheDocument()
   })
+
+  it('extend answering 409 NO_AVAILABILITY tells the foreman the time was not extended', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    apiMock.get(new RegExp(`/dealerships/${dealershipId}/workshop-board`), [200, mockBoardData])
+    apiMock.post(new RegExp(`/appointments/${appointmentId}/extend`), [
+      409,
+      { code: 'NO_AVAILABILITY', status: 409, title: 'No availability', reason: 'SLOT_TAKEN' },
+    ])
+
+    renderRoute('/staff/workshop')
+
+    await user.click(await screen.findByRole('button', { name: 'Extend 30 min' }))
+
+    expect(
+      await screen.findByText(
+        'The time was not extended: the next booking could not be moved to another bay or technician. Nothing was changed.',
+      ),
+    ).toBeInTheDocument()
+  })
 })

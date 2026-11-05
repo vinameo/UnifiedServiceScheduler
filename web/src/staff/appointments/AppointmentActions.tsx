@@ -1,12 +1,17 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Box, Button, Group, Menu, Tooltip } from '@mantine/core'
+import { Alert, Box, Button, Group, Menu, Stack, Tooltip } from '@mantine/core'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Appointment } from '../../shared/api/appointments'
 import { useAppointmentAction, useExtend } from '../../shared/api/workshop'
+import { AppointmentModifiedAlert } from '../../shared/appointments/AppointmentModifiedAlert'
 import { useMe } from '../../shared/auth/useMe'
 import { formatInZone } from '../../shared/format/time'
-import { useIdempotencyKey } from '../../shared/idempotency/useIdempotencyKey'
+import { useIdempotencyKey, useIdempotencyKeys } from '../../shared/idempotency/useIdempotencyKey'
+import { describeActionError, type ActionError } from './actionError'
 import { appointmentCopy } from './copy'
+
+const EXTEND_MINUTES = [15, 30, 45, 60, 90, 120] as const
 
 export interface AppointmentActionsProps {
   appointment: Appointment
@@ -14,6 +19,11 @@ export interface AppointmentActionsProps {
   role?: string
   onCancelClick?: () => void
   onRescheduleClick?: () => void
+}
+
+interface ActionCallbacks {
+  onSuccess: () => void
+  onError: (error: unknown) => void
 }
 
 export function AppointmentActions({
@@ -24,7 +34,9 @@ export function AppointmentActions({
   onRescheduleClick,
 }: AppointmentActionsProps) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { data: me } = useMe()
+  const [actionError, setActionError] = useState<ActionError | null>(null)
 
   const role = roleProp ?? me?.role
   const isAdvisor = role === 'SERVICE_ADVISOR'
@@ -59,17 +71,30 @@ export function AppointmentActions({
   )
   const { key: noShowKey, settle: settleNoShow } = useIdempotencyKey(noShowInput)
 
+  // One key per duration: 15 min and 30 min are different actions (D-G.15)
   const extendInput = useMemo(
     () => ({ id: appointment.id, action: 'extend', etag }),
     [appointment.id, etag],
   )
-  const { key: extendKey, settle: settleExtend } = useIdempotencyKey(extendInput)
+  const extendKeys = useIdempotencyKeys(extendInput)
 
   const checkInMutation = useAppointmentAction(appointment.id, 'check-in')
   const startMutation = useAppointmentAction(appointment.id, 'start')
   const completeMutation = useAppointmentAction(appointment.id, 'complete')
   const noShowMutation = useAppointmentAction(appointment.id, 'no-show')
   const extendMutation = useExtend(appointment.id)
+
+  // Settle the key with the answer (README D-G.15) and show what went wrong, by code
+  const callbacks = (settle: (result?: unknown) => void): ActionCallbacks => ({
+    onSuccess: () => {
+      settle(200)
+      setActionError(null)
+    },
+    onError: (error: unknown) => {
+      settle(error)
+      setActionError(describeActionError(error))
+    },
+  })
 
   const renderNoShowButton = () => {
     if (isBeforeStart) {
@@ -89,10 +114,7 @@ export function AppointmentActions({
         variant="default"
         loading={noShowMutation.isPending}
         onClick={() =>
-          noShowMutation.mutate(
-            { etag, idempotencyKey: noShowKey },
-            { onSettled: () => settleNoShow() },
-          )
+          noShowMutation.mutate({ etag, idempotencyKey: noShowKey }, callbacks(settleNoShow))
         }
       >
         {appointmentCopy.actions.noShow}
@@ -108,13 +130,13 @@ export function AppointmentActions({
         </Button>
       </Menu.Target>
       <Menu.Dropdown>
-        {[15, 30, 45, 60, 90, 120].map((minutes) => (
+        {EXTEND_MINUTES.map((minutes) => (
           <Menu.Item
             key={minutes}
             onClick={() =>
               extendMutation.mutate(
-                { minutes, etag, idempotencyKey: extendKey },
-                { onSettled: () => settleExtend() },
+                { minutes, etag, idempotencyKey: extendKeys.keyFor(minutes) },
+                callbacks((result) => extendKeys.settle(minutes, result)),
               )
             }
           >
@@ -125,24 +147,25 @@ export function AppointmentActions({
     </Menu>
   )
 
+  const checkInButton = (
+    <Button
+      key="check-in"
+      color="blue"
+      loading={checkInMutation.isPending}
+      onClick={() =>
+        checkInMutation.mutate({ etag, idempotencyKey: checkInKey }, callbacks(settleCheckIn))
+      }
+    >
+      {appointmentCopy.actions.checkIn}
+    </Button>
+  )
+
   const actionButtons: React.ReactNode[] = []
 
   if (appointment.status === 'CONFIRMED') {
     if (isAdvisor) {
       actionButtons.push(
-        <Button
-          key="check-in"
-          color="blue"
-          loading={checkInMutation.isPending}
-          onClick={() =>
-            checkInMutation.mutate(
-              { etag, idempotencyKey: checkInKey },
-              { onSettled: () => settleCheckIn() },
-            )
-          }
-        >
-          {appointmentCopy.actions.checkIn}
-        </Button>,
+        checkInButton,
         <Button
           key="reschedule"
           onClick={() => {
@@ -166,22 +189,7 @@ export function AppointmentActions({
         <Box key="no-show">{renderNoShowButton()}</Box>,
       )
     } else if (isForeman) {
-      actionButtons.push(
-        <Button
-          key="check-in"
-          color="blue"
-          loading={checkInMutation.isPending}
-          onClick={() =>
-            checkInMutation.mutate(
-              { etag, idempotencyKey: checkInKey },
-              { onSettled: () => settleCheckIn() },
-            )
-          }
-        >
-          {appointmentCopy.actions.checkIn}
-        </Button>,
-        <Box key="no-show">{renderNoShowButton()}</Box>,
-      )
+      actionButtons.push(checkInButton, <Box key="no-show">{renderNoShowButton()}</Box>)
     }
   } else if (appointment.status === 'CHECKED_IN') {
     if (isForeman) {
@@ -191,10 +199,7 @@ export function AppointmentActions({
           color="blue"
           loading={startMutation.isPending}
           onClick={() =>
-            startMutation.mutate(
-              { etag, idempotencyKey: startKey },
-              { onSettled: () => settleStart() },
-            )
+            startMutation.mutate({ etag, idempotencyKey: startKey }, callbacks(settleStart))
           }
         >
           {appointmentCopy.actions.start}
@@ -210,10 +215,7 @@ export function AppointmentActions({
           color="green"
           loading={completeMutation.isPending}
           onClick={() =>
-            completeMutation.mutate(
-              { etag, idempotencyKey: completeKey },
-              { onSettled: () => settleComplete() },
-            )
+            completeMutation.mutate({ etag, idempotencyKey: completeKey }, callbacks(settleComplete))
           }
         >
           {appointmentCopy.actions.complete}
@@ -247,9 +249,30 @@ export function AppointmentActions({
     )
   }
 
-  if (actionButtons.length === 0) {
+  if (actionButtons.length === 0 && actionError === null) {
     return null
   }
 
-  return <Group>{actionButtons}</Group>
+  return (
+    <Stack gap="sm">
+      {actionError?.kind === 'modified' && (
+        <AppointmentModifiedAlert
+          before={{ ...appointment }}
+          latest={actionError.conflict.latest}
+          etag={actionError.conflict.etag}
+          onReview={() => {
+            setActionError(null)
+            // Reload: the page gets the latest appointment and its ETag
+            void queryClient.invalidateQueries({ queryKey: ['appointment', appointment.id] })
+          }}
+        />
+      )}
+      {actionError?.kind === 'message' && (
+        <Alert color="red" withCloseButton onClose={() => setActionError(null)}>
+          {actionError.message}
+        </Alert>
+      )}
+      {actionButtons.length > 0 && <Group>{actionButtons}</Group>}
+    </Stack>
+  )
 }
